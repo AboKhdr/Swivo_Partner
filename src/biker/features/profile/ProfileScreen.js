@@ -1,118 +1,87 @@
-import React, {useRef, useEffect, useState} from 'react';
-import {Animated, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Colors} from '../../../shared/constants/colors';
+import React, {useState} from 'react';
+import {
+  Platform, ScrollView, StatusBar, StyleSheet,
+  Switch, Text, TouchableOpacity, View,
+} from 'react-native';
+import {
+  ChevronLeft, Star, User, Wallet,
+  Moon, Globe, Headphones, FileText, LogOut,
+} from 'lucide-react-native';
+import {useTheme} from '../../../shared/context/ThemeContext';
+import {useI18n} from '../../../shared/i18n/I18nContext';
 import {MOCK_USER} from '../../../shared/data/mockData';
 
-function InfoRow({emoji, label, value}) {
+function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, colors}) {
   return (
-    <View style={s.infoRow}>
-      <Text style={s.infoEmoji}>{emoji}</Text>
-      <View style={s.infoText}>
-        <Text style={s.infoLabel}>{label}</Text>
-        <Text style={s.infoValue}>{value}</Text>
+    <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7}>
+      <View style={[s.navIcon, {backgroundColor: iconBg}]}>
+        <Icon size={18} color={iconColor} strokeWidth={2} />
       </View>
-    </View>
-  );
-}
-
-function ActionRow({emoji, label, onPress, danger}) {
-  return (
-    <TouchableOpacity style={s.actionRow} onPress={onPress} activeOpacity={0.7}>
-      <Text style={s.actionEmoji}>{emoji}</Text>
-      <Text style={[s.actionLabel, danger && {color: Colors.danger}]}>{label}</Text>
-      <Text style={[s.actionArrow, danger && {color: Colors.danger}]}>‹</Text>
+      <View style={s.navText}>
+        <Text style={[s.navLabel, {color: danger ? '#EF4444' : colors.textPrimary}]}>{label}</Text>
+        {sub ? <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text> : null}
+      </View>
+      {right !== undefined ? right : (
+        <ChevronLeft size={18} color={danger ? '#EF4444' : colors.textSecondary} strokeWidth={2} />
+      )}
     </TouchableOpacity>
   );
 }
 
-export default function ProfileScreen() {
-  const headerY = useRef(new Animated.Value(-30)).current;
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-  const avatarScale = useRef(new Animated.Value(0.7)).current;
-  const avatarOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(headerOpacity, {toValue: 1, duration: 400, useNativeDriver: true}),
-      Animated.spring(headerY, {toValue: 0, useNativeDriver: true, tension: 60, friction: 9}),
-      Animated.spring(avatarScale, {toValue: 1, delay: 100, useNativeDriver: true, tension: 60, friction: 8}),
-      Animated.timing(avatarOpacity, {toValue: 1, duration: 350, delay: 100, useNativeDriver: true}),
-    ]).start();
-  }, [avatarOpacity, avatarScale, headerOpacity, headerY]);
-
-  const stars = Math.round(MOCK_USER.rating);
+export default function ProfileScreen({onNavigate}) {
+  const {colors, isDark, toggleTheme} = useTheme();
+  const {t} = useI18n();
+  const darkMode = isDark;
 
   return (
-    <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.card} />
+    <View style={[s.root, {backgroundColor: colors.bg}]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.card} />
+      <View style={[s.header, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
+        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('profile.title')}</Text>
+      </View>
 
-      <Animated.View style={[s.header, {opacity: headerOpacity, transform: [{translateY: headerY}]}]}>
-        <Text style={s.headerTitle}>الملف الشخصي</Text>
-      </Animated.View>
+      <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={s.heroCard}>
-          <Animated.View style={[s.avatarWrap, {opacity: avatarOpacity, transform: [{scale: avatarScale}]}]}>
-            <View style={s.avatar}>
-              <Text style={s.avatarText}>{MOCK_USER.firstName.charAt(0)}</Text>
-            </View>
-            <View style={s.onlineDot} />
-          </Animated.View>
-          <Text style={s.heroName}>{MOCK_USER.firstName} {MOCK_USER.lastName}</Text>
-          <View style={s.ratingRow}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <Text key={i} style={[s.star, {color: i <= stars ? '#F59E0B' : Colors.border}]}>★</Text>
-            ))}
-            <Text style={s.ratingNum}>{MOCK_USER.rating}</Text>
+        <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('profile.personalSettings')}</Text>
+        <TouchableOpacity style={[s.ratingCard, {backgroundColor: colors.card, borderColor: '#F59E0B55'}]} onPress={() => onNavigate('info')} activeOpacity={0.85}>
+          <View style={s.ratingRight}>
+            <Text style={[s.ratingLabel, {color: colors.textSecondary}]}>{t('profile.rating')}</Text>
+            <Text style={[s.ratingValue, {color: colors.textPrimary}]}>{MOCK_USER.rating} / 5</Text>
           </View>
-          <View style={s.statsRow}>
-            <View style={s.statItem}>
-              <Text style={s.statValue}>﷼ {MOCK_USER.wallet.monthlyEarnings.toFixed(0)}</Text>
-              <Text style={s.statLabel}>هذا الشهر</Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statItem}>
-              <Text style={s.statValue}>﷼ {MOCK_USER.wallet.weeklyEarnings.toFixed(0)}</Text>
-              <Text style={s.statLabel}>هذا الأسبوع</Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statItem}>
-              <Text style={s.statValue}>﷼ {MOCK_USER.wallet.balance.toFixed(0)}</Text>
-              <Text style={s.statLabel}>الرصيد</Text>
-            </View>
-          </View>
+          <Star size={22} color="#F59E0B" fill="#F59E0B" strokeWidth={0} />
+        </TouchableOpacity>
+
+        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <NavRow Icon={User} iconColor={colors.primary} iconBg={colors.primary + '18'} label={t('profile.personalInfo')} sub={t('profile.personalInfoSub')} onPress={() => onNavigate('info')} colors={colors} />
+          <View style={[s.divider, {backgroundColor: colors.border}]} />
+          <NavRow Icon={Wallet} iconColor="#10B981" iconBg="#10B98118" label={t('profile.wallet')} sub={`${t('wallet.balance')} ${MOCK_USER.wallet.balance.toFixed(0)} ﷼`} onPress={() => onNavigate('wallet')} colors={colors} />
         </View>
 
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>المعلومات الشخصية</Text>
-          <View style={s.sectionCard}>
-            <InfoRow emoji="👤" label="الاسم الأول" value={MOCK_USER.firstName} />
-            <View style={s.divider} />
-            <InfoRow emoji="👤" label="اسم العائلة" value={MOCK_USER.lastName} />
-            <View style={s.divider} />
-            <InfoRow emoji="📱" label="رقم الهاتف" value="+966 50 123 4567" />
-            <View style={s.divider} />
-            <InfoRow emoji="📍" label="المدينة" value="الرياض" />
-          </View>
+        <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('profile.options')}</Text>
+        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <NavRow
+            Icon={Moon} iconColor="#6366F1" iconBg="#6366F118"
+            label={t('profile.appearance')} sub={darkMode ? t('profile.darkMode') : t('profile.lightMode')}
+            onPress={toggleTheme} colors={colors}
+            right={
+              <Switch
+                value={darkMode}
+                onValueChange={toggleTheme}
+                trackColor={{false: colors.border, true: colors.primary + '66'}}
+                thumbColor={darkMode ? colors.primary : '#fff'}
+              />
+            }
+          />
+          <View style={[s.divider, {backgroundColor: colors.border}]} />
+          <NavRow Icon={Globe} iconColor="#F59E0B" iconBg="#F59E0B18" label={t('profile.language')} sub={t('profile.languageSub')} onPress={() => onNavigate('language')} colors={colors} />
+          <View style={[s.divider, {backgroundColor: colors.border}]} />
+          <NavRow Icon={Headphones} iconColor="#8B5CF6" iconBg="#8B5CF618" label={t('profile.support')} sub={t('profile.supportSub')} onPress={() => onNavigate('support')} colors={colors} />
+          <View style={[s.divider, {backgroundColor: colors.border}]} />
+          <NavRow Icon={FileText} iconColor="#64748B" iconBg="#64748B18" label={t('profile.terms')} sub={t('profile.termsSub')} onPress={() => onNavigate('terms')} colors={colors} />
         </View>
 
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>الإعدادات</Text>
-          <View style={s.sectionCard}>
-            <ActionRow emoji="🔔" label="الإشعارات" onPress={() => {}} />
-            <View style={s.divider} />
-            <ActionRow emoji="🔒" label="تغيير كلمة المرور" onPress={() => {}} />
-            <View style={s.divider} />
-            <ActionRow emoji="🌐" label="اللغة" onPress={() => {}} />
-            <View style={s.divider} />
-            <ActionRow emoji="❓" label="المساعدة والدعم" onPress={() => {}} />
-          </View>
-        </View>
-
-        <View style={s.section}>
-          <View style={s.sectionCard}>
-            <ActionRow emoji="🚪" label="تسجيل الخروج" onPress={() => {}} danger />
-          </View>
+        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <NavRow Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.logout')} sub={t('profile.logoutSub')} onPress={() => {}} danger colors={colors} />
         </View>
 
         <View style={{height: 16}} />
@@ -122,36 +91,57 @@ export default function ProfileScreen() {
 }
 
 const s = StyleSheet.create({
-  root: {flex: 1, backgroundColor: Colors.bg},
-  header: {paddingTop: Platform.OS === 'ios' ? 56 : 48, paddingBottom: 16, paddingHorizontal: 24, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, alignItems: 'center'},
-  headerTitle: {fontSize: 20, fontWeight: '800', color: Colors.textPrimary},
+  root: {flex: 1},
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 56 : 48,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+  },
+  headerTitle: {fontSize: 20, fontWeight: '800'},
+  headerIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
   scroll: {flex: 1},
-  scrollContent: {padding: 16, gap: 16},
-  heroCard: {backgroundColor: Colors.card, borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: Colors.border, shadowColor: Colors.primary, shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.1, shadowRadius: 12, elevation: 4},
-  avatarWrap: {position: 'relative', marginBottom: 12},
-  avatar: {width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center'},
-  avatarText: {fontSize: 32, fontWeight: '900', color: '#fff'},
-  onlineDot: {position: 'absolute', bottom: 2, right: 2, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.success, borderWidth: 2, borderColor: '#fff'},
-  heroName: {fontSize: 22, fontWeight: '800', color: Colors.textPrimary, marginBottom: 6},
-  ratingRow: {flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 16},
-  star: {fontSize: 16},
-  ratingNum: {fontSize: 14, fontWeight: '700', color: Colors.textSecondary, marginLeft: 4},
-  statsRow: {flexDirection: 'row', width: '100%', justifyContent: 'space-around'},
-  statItem: {alignItems: 'center', gap: 4},
-  statValue: {fontSize: 16, fontWeight: '800', color: Colors.textPrimary},
-  statLabel: {fontSize: 11, color: Colors.textSecondary},
-  statDivider: {width: 1, height: 32, backgroundColor: Colors.border},
-  section: {gap: 8},
-  sectionTitle: {fontSize: 13, fontWeight: '700', color: Colors.textSecondary, paddingHorizontal: 4},
-  sectionCard: {backgroundColor: Colors.card, borderRadius: 18, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden'},
-  divider: {height: 1, backgroundColor: Colors.border, marginHorizontal: 16},
-  infoRow: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12},
-  infoEmoji: {fontSize: 18, width: 24, textAlign: 'center'},
-  infoText: {flex: 1},
-  infoLabel: {fontSize: 11, color: Colors.textSecondary, marginBottom: 2},
-  infoValue: {fontSize: 14, fontWeight: '600', color: Colors.textPrimary},
-  actionRow: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, gap: 12},
-  actionEmoji: {fontSize: 18, width: 24, textAlign: 'center'},
-  actionLabel: {flex: 1, fontSize: 14, fontWeight: '600', color: Colors.textPrimary},
-  actionArrow: {fontSize: 18, color: Colors.textSecondary, transform: [{rotate: '180deg'}]},
+  content: {padding: 16, gap: 12},
+  sectionTitle: {
+    fontSize: 13, fontWeight: '700',
+    paddingHorizontal: 4, marginTop: 4,
+  },
+  ratingCard: {
+    borderRadius: 18,
+    borderWidth: 1.5,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ratingRight: {gap: 2},
+  ratingLabel: {fontSize: 12},
+  ratingValue: {fontSize: 22, fontWeight: '900'},
+  card: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  divider: {height: 1, marginHorizontal: 16},
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  navIcon: {
+    width: 38, height: 38, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  navText: {flex: 1, gap: 2},
+  navLabel: {fontSize: 14, fontWeight: '600'},
+  navSub: {fontSize: 12},
 });

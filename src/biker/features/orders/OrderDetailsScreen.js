@@ -6,7 +6,8 @@ import {
 } from 'react-native';
 import {launchCamera} from 'react-native-image-picker';
 import {ChevronLeft, Camera, X} from 'lucide-react-native';
-import {Colors} from '../../../shared/constants/colors';
+import {useTheme} from '../../../shared/context/ThemeContext';
+import {useI18n} from '../../../shared/i18n/I18nContext';
 import StatusTracker from '../../../shared/components/StatusTracker';
 
 const SWIPE_WIDTH = 300;
@@ -61,64 +62,58 @@ function SwipeButton({label, color, onComplete, loading}) {
   );
 }
 
-const STEP_GUIDES = {
-  ASSIGNED: {
-    img: require('../../../assets/steps/1.png'),
-    title: 'بدء العملية ؟',
-    desc: 'عند استعدادك، اضغط "أنا في الطريق" لإبلاغ العميل ببدء الخدمة والتوجه للموقع.',
-  },
-  ON_THE_WAY: {
-    img: require('../../../assets/steps/2.png'),
-    title: 'وصلت إلى موقع العميل ؟',
-    desc: 'تحقّق من السيارة وتأكد من مطابقتها واضغط "بدء الغسيل" عند الاستعداد.',
-  },
-  ARRIVED: {
-    img: require('../../../assets/steps/3.png'),
-    title: 'لنبدأ الغسيل الان',
-    desc: 'تحقق من كل الأدوات الخاصة للغسيل أنها جاهزة، وابدأ الغسيل فوراً.',
-  },
-  STARTED: {
-    img: require('../../../assets/steps/4.png'),
-    title: 'إننا نغسل السيارة ✨',
-    desc: 'تأكّد من جودة الخدمة ونظافة السيارة. ثم اضغط "انهاء الغسيل".',
-  },
-  COMPLETED: {
-    img: require('../../../assets/steps/5.png'),
-    title: 'انتهاء الطلب ✨',
-    desc: 'تم إنهاء الخدمة بنجاح. الرجاء إرسال نتائج الغسيل إلى الزبون.',
-  },
+const STEP_IMGS = {
+  ASSIGNED:   require('../../../assets/steps/1.png'),
+  ON_THE_WAY: require('../../../assets/steps/2.png'),
+  ARRIVED:    require('../../../assets/steps/3.png'),
+  STARTED:    require('../../../assets/steps/4.png'),
+  COMPLETED:  require('../../../assets/steps/5.png'),
 };
 
-const ACTION_MAP = {
-  ASSIGNED:   {label: 'أنا في الطريق',     nextStatus: 'ON_THE_WAY'},
-  ON_THE_WAY: {label: 'وصلت — ابدأ الخدمة', nextStatus: 'ARRIVED'},
-  ARRIVED:    {label: 'ابدأ الغسيل',        nextStatus: 'STARTED'},
-  STARTED:    {label: 'انتهيت — رفع الصور', nextStatus: 'COMPLETED'},
-  COMPLETED:  null,
-  CANCELLED:  null,
+const ACTION_NEXT = {
+  ASSIGNED:   'ON_THE_WAY',
+  ON_THE_WAY: 'ARRIVED',
+  ARRIVED:    'STARTED',
+  STARTED:    'COMPLETED',
 };
 
 export default function OrderDetailsScreen({order, onBack}) {
+  const {colors, isDark} = useTheme();
+  const {t} = useI18n();
   const [currentStatus, setCurrentStatus] = useState(order.status);
   const [actionLoading, setActionLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showImageUpload, setShowImageUpload] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState('before'); // 'before' | 'after'
   const [photos, setPhotos] = useState([]);
   const [cancelReason, setCancelReason] = useState('');
+  const [showSkipModal, setShowSkipModal] = useState(false);
+  const [skipReason, setSkipReason] = useState('');
 
   const canCancel = currentStatus === 'ASSIGNED' || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED';
-  const action = ACTION_MAP[currentStatus];
+  const actionNextStatus = ACTION_NEXT[currentStatus] ?? null;
+  const action = actionNextStatus ? {label: t(`orderDetails.actions.${currentStatus}`), nextStatus: actionNextStatus} : null;
 
   const actionBgColor =
-    currentStatus === 'ASSIGNED'   ? Colors.primary  :
-    currentStatus === 'ON_THE_WAY' ? Colors.success  :
-    currentStatus === 'ARRIVED'    ? Colors.primary  :
-    currentStatus === 'STARTED'    ? Colors.purple   : Colors.border;
+    currentStatus === 'ASSIGNED'   ? colors.primary  :
+    currentStatus === 'ON_THE_WAY' ? colors.success  :
+    currentStatus === 'ARRIVED'    ? colors.primary  :
+    currentStatus === 'STARTED'    ? colors.purple   : colors.border;
 
   const handleAction = () => {
     if (!action) return;
-    if (currentStatus === 'STARTED') { setShowImageUpload(true); return; }
+    if (currentStatus === 'ARRIVED') {
+      setUploadPhase('before');
+      setPhotos([]);
+      setShowImageUpload(true);
+      return;
+    }
+    if (currentStatus === 'STARTED') {
+      setUploadPhase('after');
+      setPhotos([]);
+      setShowImageUpload(true);
+      return;
+    }
     setActionLoading(true);
     // TODO: PATCH /api/biker/order/:id/status
     setTimeout(() => { setCurrentStatus(action.nextStatus); setActionLoading(false); }, 900);
@@ -131,10 +126,10 @@ export default function OrderDetailsScreen({order, onBack}) {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.CAMERA,
           {
-            title: 'صلاحية الكاميرا',
-            message: 'التطبيق يحتاج صلاحية الكاميرا لالتقاط صور الإثبات',
-            buttonPositive: 'سماح',
-            buttonNegative: 'رفض',
+            title: t('orderDetails.camera.permissionTitle'),
+            message: t('orderDetails.camera.permissionMsg'),
+            buttonPositive: t('orderDetails.camera.allow'),
+            buttonNegative: t('orderDetails.camera.deny'),
           },
         );
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
@@ -159,11 +154,28 @@ export default function OrderDetailsScreen({order, onBack}) {
     if (photos.length === 0) return;
     setShowImageUpload(false);
     setActionLoading(true);
-    setTimeout(() => {
-      setCurrentStatus('COMPLETED');
-      setActionLoading(false);
-      setShowCompletionModal(true);
-    }, 1000);
+    if (uploadPhase === 'before') {
+      // TODO: POST /api/biker/order/:id/photos?phase=before
+      setTimeout(() => { setCurrentStatus('STARTED'); setActionLoading(false); }, 900);
+    } else {
+      // TODO: POST /api/biker/order/:id/photos?phase=after
+      setTimeout(() => { setCurrentStatus('COMPLETED'); setActionLoading(false); }, 1000);
+    }
+  };
+
+  const handleSkipConfirm = () => {
+    if (!skipReason.trim()) return;
+    setShowSkipModal(false);
+    setShowImageUpload(false);
+    setSkipReason('');
+    setActionLoading(true);
+    if (uploadPhase === 'before') {
+      // TODO: POST /api/biker/order/:id/skip-photos?phase=before with reason
+      setTimeout(() => { setCurrentStatus('STARTED'); setActionLoading(false); }, 900);
+    } else {
+      // TODO: POST /api/biker/order/:id/skip-photos?phase=after with reason
+      setTimeout(() => { setCurrentStatus('COMPLETED'); setActionLoading(false); }, 1000);
+    }
   };
 
   const handleCancel = () => {
@@ -174,78 +186,68 @@ export default function OrderDetailsScreen({order, onBack}) {
   };
 
   return (
-    <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.card} />
-      <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={onBack} hitSlop={{top:12,bottom:12,left:12,right:12}}>
-          <Text style={s.backArrow}>‹</Text>
+    <View style={[s.root, {backgroundColor: colors.bg}]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.card} />
+      <View style={[s.header, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
+        <TouchableOpacity style={[s.backBtn, {backgroundColor: colors.bg}]} onPress={onBack} hitSlop={{top:12,bottom:12,left:12,right:12}}>
+          <Text style={[s.backArrow, {color: colors.textPrimary}]}>‹</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle}>تفاصيل الطلب</Text>
-        <View style={s.headerNum}>
-          <Text style={s.headerNumText}>#{order.orderNumber}</Text>
+        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('orderDetails.title')}</Text>
+        <View style={[s.headerNum, {backgroundColor: colors.primary + '15'}]}>
+          <Text style={[s.headerNumText, {color: colors.primary}]}>#{order.orderNumber}</Text>
         </View>
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Status */}
         <View style={s.section}>
           <StatusTracker status={currentStatus} />
         </View>
 
-        {/* Step Guide */}
-        {STEP_GUIDES[currentStatus] && (() => {
-          const g = STEP_GUIDES[currentStatus];
-          return (
-            <View style={s.guideCard}>
-              <Image source={g.img} style={s.guideImg} resizeMode="contain" />
-              <Text style={s.guideTitle}>{g.title}</Text>
-              <Text style={s.guideDesc}>{g.desc}</Text>
-            </View>
-          );
-        })()}
+        {STEP_IMGS[currentStatus] && (
+          <View style={[s.guideCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+            <Image source={STEP_IMGS[currentStatus]} style={s.guideImg} resizeMode="contain" />
+            <Text style={[s.guideTitle, {color: colors.textPrimary}]}>{t(`orderDetails.steps.${currentStatus}.title`)}</Text>
+            <Text style={[s.guideDesc, {color: colors.textSecondary}]}>{t(`orderDetails.steps.${currentStatus}.desc`)}</Text>
+          </View>
+        )}
 
-        {/* Order card */}
-        <View style={s.detailCard}>
-          {/* Client name */}
-          <Text style={s.clientName}>
+        <View style={[s.detailCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <Text style={[s.clientName, {color: colors.textPrimary}]}>
             {order.client.firstName} {order.client.lastName}
           </Text>
 
-          {/* 2×2 info grid */}
           <View style={s.infoGrid}>
             <View style={s.infoCell}>
-              <Text style={s.infoLabel}>نوع السيارة</Text>
-              <Text style={s.infoValue}>{order.car.brand} {order.car.model}</Text>
+              <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.carType')}</Text>
+              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{order.car.brand} {order.car.model}</Text>
             </View>
             <View style={s.infoCell}>
-              <Text style={s.infoLabel}>الموقع</Text>
+              <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.location')}</Text>
               <View style={s.locationRow}>
-                <View style={s.locationDot} />
-                <Text style={s.infoValue} numberOfLines={1}>{order.address}</Text>
+                <View style={[s.locationDot, {backgroundColor: colors.primary}]} />
+                <Text style={[s.infoValue, {color: colors.textPrimary}]} numberOfLines={1}>{order.address}</Text>
               </View>
             </View>
             <View style={s.infoCell}>
-              <Text style={s.infoLabel}>نوع الغسيل</Text>
-              <Text style={s.infoValue}>{order.service.name}</Text>
+              <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.washType')}</Text>
+              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{order.service.name}</Text>
             </View>
             <View style={s.infoCell}>
-              <Text style={s.infoLabel}>اللوحة</Text>
-              <Text style={s.infoValue}>{order.car.plateNumber}</Text>
+              <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.plate')}</Text>
+              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{order.car.plateNumber}</Text>
             </View>
           </View>
 
-          {/* Divider */}
-          <View style={s.divider} />
+          <View style={[s.divider, {backgroundColor: colors.border}]} />
 
-          {/* Extras */}
           {order.extras && order.extras.length > 0 && (
             <View>
-              <Text style={s.extrasTitle}>الاضافات</Text>
+              <Text style={[s.extrasTitle, {color: colors.textPrimary}]}>{t('orders.fields.extras')}</Text>
               <View style={s.extrasRow}>
                 {order.extras.map((ex, i) => (
                   <View key={i} style={s.extraChip}>
                     <Text style={s.extraChipStar}>✦</Text>
-                    <Text style={s.extraChipText}>{ex}</Text>
+                    <Text style={[s.extraChipText, {color: colors.textPrimary}]}>{ex}</Text>
                   </View>
                 ))}
               </View>
@@ -268,31 +270,32 @@ export default function OrderDetailsScreen({order, onBack}) {
         <View style={{height: 24}} />
       </ScrollView>
 
-      {/* Cancel Modal */}
       <Modal visible={showCancelModal} transparent animationType="fade" onRequestClose={() => setShowCancelModal(false)}>
         <View style={ms.overlay}>
-          <View style={ms.box}>
+          <View style={[ms.box, {backgroundColor: colors.card}]}>
             <Text style={ms.warningIcon}>⚠️</Text>
-            <Text style={ms.boxTitle}>إلغاء الطلب</Text>
-            <Text style={ms.boxBody}>هل أنت متأكد من إلغاء الطلب؟{'\n'}هذا الإجراء لا يمكن التراجع عنه</Text>
-            <TextInput style={ms.reasonInput} placeholder="سبب الإلغاء (اختياري)" placeholderTextColor={Colors.textSecondary} value={cancelReason} onChangeText={setCancelReason} textAlign="right" />
+            <Text style={[ms.boxTitle, {color: colors.textPrimary}]}>{t('orderDetails.cancel.button')}</Text>
+            <Text style={[ms.boxBody, {color: colors.textSecondary}]}>{t('orderDetails.cancel.confirm')}</Text>
+            <TextInput style={[ms.reasonInput, {borderColor: colors.border, color: colors.textPrimary}]} placeholder={t('orderDetails.cancel.reason')} placeholderTextColor={colors.textSecondary} value={cancelReason} onChangeText={setCancelReason} textAlign="right" />
             <View style={ms.btnRow}>
-              <TouchableOpacity style={ms.secondaryBtn} onPress={() => setShowCancelModal(false)}><Text style={ms.secondaryBtnText}>تراجع</Text></TouchableOpacity>
-              <TouchableOpacity style={ms.dangerBtn} onPress={handleCancel}><Text style={ms.dangerBtnText}>نعم، إلغاء</Text></TouchableOpacity>
+              <TouchableOpacity style={[ms.secondaryBtn, {backgroundColor: colors.bg, borderColor: colors.border}]} onPress={() => setShowCancelModal(false)}><Text style={[ms.secondaryBtnText, {color: colors.textPrimary}]}>{t('orderDetails.cancel.back')}</Text></TouchableOpacity>
+              <TouchableOpacity style={ms.dangerBtn} onPress={handleCancel}><Text style={ms.dangerBtnText}>{t('orderDetails.cancel.yes')}</Text></TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Image Upload Modal */}
       <Modal visible={showImageUpload} transparent animationType="slide" onRequestClose={() => setShowImageUpload(false)}>
         <View style={ms.slideOverlay}>
-          <View style={ms.slideSheet}>
-            <View style={ms.slideHandle} />
-            <Text style={ms.slideTitle}>صور الإثبات</Text>
-            <Text style={ms.slideSubtitle}>التقط حتى 4 صور — صورة واحدة على الأقل مطلوبة</Text>
+          <View style={[ms.slideSheet, {backgroundColor: colors.card}]}>
+            <View style={[ms.slideHandle, {backgroundColor: colors.border}]} />
+            <Text style={[ms.slideTitle, {color: colors.textPrimary}]}>
+              {uploadPhase === 'before' ? t('orderDetails.camera.beforeTitle') : t('orderDetails.camera.afterTitle')}
+            </Text>
+            <Text style={[ms.slideSubtitle, {color: colors.textSecondary}]}>
+              {uploadPhase === 'before' ? t('orderDetails.camera.beforeHint') : t('orderDetails.camera.afterHint')}
+            </Text>
 
-            {/* 2×2 photo grid */}
             <View style={ms.imgGrid}>
               {[0, 1, 2, 3].map(i => {
                 const uri = photos[i];
@@ -306,143 +309,143 @@ export default function OrderDetailsScreen({order, onBack}) {
                 ) : (
                   <TouchableOpacity
                     key={i}
-                    style={ms.imgSlot}
+                    style={[ms.imgSlot, {borderColor: colors.border, backgroundColor: colors.bg}]}
                     onPress={handleTakePhoto}
                     disabled={photos.length >= 4}
                     activeOpacity={0.7}>
-                    <Camera size={26} color={Colors.textSecondary} strokeWidth={1.5} />
+                    <Camera size={26} color={colors.textSecondary} strokeWidth={1.5} />
                   </TouchableOpacity>
                 );
               })}
             </View>
 
             {photos.length > 0 && (
-              <Text style={ms.photoCount}>{photos.length} / 4 صور</Text>
+              <Text style={[ms.photoCount, {color: colors.textSecondary}]}>{photos.length} / 4 {t('orderDetails.camera.photos')}</Text>
             )}
 
             <TouchableOpacity
-              style={[ms.confirmBtn, photos.length === 0 && {opacity: 0.4}]}
+              style={[ms.confirmBtn, {backgroundColor: colors.primary}, photos.length === 0 && {opacity: 0.4}]}
               onPress={handleCompleteWithPhotos}
               disabled={photos.length === 0}>
-              <Text style={ms.confirmBtnText}>تأكيد الإتمام</Text>
+              <Text style={ms.confirmBtnText}>{t('orderDetails.camera.confirmDone')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={ms.skipBtn}
+              onPress={() => { setSkipReason(''); setShowSkipModal(true); }}
+              activeOpacity={0.7}>
+              <Text style={[ms.skipBtnText, {color: colors.textSecondary}]}>{t('orderDetails.camera.skip')}</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Completion Modal */}
-      <Modal visible={showCompletionModal} transparent animationType="fade" onRequestClose={() => { setShowCompletionModal(false); onBack(); }}>
+      <Modal visible={showSkipModal} transparent animationType="fade" onRequestClose={() => setShowSkipModal(false)}>
         <View style={ms.overlay}>
-          <View style={ms.box}>
-            <Text style={ms.successIcon}>✅</Text>
-            <Text style={ms.boxTitle}>أحسنت! الطلب مكتمل</Text>
-            <Text style={ms.earningLine}>أرباحك من هذا الطلب</Text>
-            <Text style={ms.earningAmount}>﷼ {order.bikerEarning.toFixed(2)}</Text>
-            <TouchableOpacity style={ms.confirmBtn} onPress={() => { setShowCompletionModal(false); onBack(); }}>
-              <Text style={ms.confirmBtnText}>العودة للطلبات</Text>
-            </TouchableOpacity>
+          <View style={[ms.box, {backgroundColor: colors.card}]}>
+            <Text style={ms.warningIcon}>📝</Text>
+            <Text style={[ms.boxTitle, {color: colors.textPrimary}]}>{t('orderDetails.camera.skipTitle')}</Text>
+            <Text style={[ms.boxBody, {color: colors.textSecondary}]}>{t('orderDetails.camera.skipBody')}</Text>
+            <TextInput
+              style={[ms.reasonInput, {borderColor: skipReason.trim() ? colors.primary : colors.border, color: colors.textPrimary}]}
+              placeholder={t('orderDetails.camera.skipPlaceholder')}
+              placeholderTextColor={colors.textSecondary}
+              value={skipReason}
+              onChangeText={setSkipReason}
+              textAlign="right"
+              multiline
+              numberOfLines={3}
+            />
+            <View style={ms.btnRow}>
+              <TouchableOpacity
+                style={[ms.secondaryBtn, {backgroundColor: colors.bg, borderColor: colors.border}]}
+                onPress={() => setShowSkipModal(false)}>
+                <Text style={[ms.secondaryBtnText, {color: colors.textPrimary}]}>{t('orderDetails.cancel.back')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[ms.dangerBtn, !skipReason.trim() && {opacity: 0.4}]}
+                onPress={handleSkipConfirm}
+                disabled={!skipReason.trim()}>
+                <Text style={ms.dangerBtnText}>{t('orderDetails.camera.skipConfirm')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
+
+      {currentStatus === 'COMPLETED' && (
+        <View style={[s.backBtnWrap, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
+          <TouchableOpacity style={[s.backToListBtn, {backgroundColor: colors.primary}]} onPress={onBack}>
+            <Text style={s.backToListText}>{t('orderDetails.backToOrders')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root: {flex: 1, backgroundColor: Colors.bg},
-  header: {flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 56 : 48, paddingBottom: 16, paddingHorizontal: 16, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 10},
-  backBtn: {width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center'},
-  backArrow: {fontSize: 26, color: Colors.textPrimary, lineHeight: 30},
-  headerTitle: {flex: 1, fontSize: 16, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center'},
-  headerNum: {backgroundColor: Colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8},
-  headerNumText: {fontSize: 12, fontWeight: '700', color: Colors.primary},
+  root: {flex: 1},
+  header: {flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'ios' ? 56 : 48, paddingBottom: 16, paddingHorizontal: 16, borderBottomWidth: 1, gap: 10},
+  backBtn: {width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center'},
+  backArrow: {fontSize: 26, lineHeight: 30},
+  headerTitle: {flex: 1, fontSize: 16, fontWeight: '700', textAlign: 'center'},
+  headerNum: {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8},
+  headerNumText: {fontSize: 12, fontWeight: '700'},
   scroll: {flex: 1},
   scrollContent: {padding: 16, gap: 4},
   section: {marginBottom: 14},
-  detailCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 14,
-  },
-  clientName: {fontSize: 18, fontWeight: '800', color: Colors.textPrimary},
+  detailCard: {borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, gap: 14},
+  clientName: {fontSize: 18, fontWeight: '800'},
   infoGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 12},
   infoCell: {width: '47%', gap: 4},
-  infoLabel: {fontSize: 11, color: Colors.textSecondary},
-  infoValue: {fontSize: 13, fontWeight: '700', color: Colors.textPrimary},
+  infoLabel: {fontSize: 11},
+  infoValue: {fontSize: 13, fontWeight: '700'},
   locationRow: {flexDirection: 'row', alignItems: 'center', gap: 5},
-  locationDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.primary},
-  divider: {height: 1, backgroundColor: Colors.border},
-  extrasTitle: {fontSize: 13, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8, },
+  locationDot: {width: 8, height: 8, borderRadius: 4},
+  divider: {height: 1},
+  extrasTitle: {fontSize: 13, fontWeight: '700', marginBottom: 8},
   extrasRow: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
-  extraChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderWidth: 1.5, borderColor: '#F59E0B',
-    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7,
-  },
+  extraChip: {flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderColor: '#F59E0B', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7},
   extraChipStar: {fontSize: 10, color: '#F59E0B'},
-  extraChipText: {fontSize: 12, fontWeight: '600', color: Colors.textPrimary},
+  extraChipText: {fontSize: 12, fontWeight: '600'},
   swipeWrap: {alignItems: 'center', marginBottom: 12},
-  cancelBtn: {borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1.5, borderColor: Colors.danger + '50', backgroundColor: '#FEF2F2'},
-  cancelBtnText: {color: Colors.danger, fontSize: 14, fontWeight: '700'},
-  guideCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 10,
-  },
+  guideCard: {borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 14, borderWidth: 1, gap: 10},
   guideImg: {width: 180, height: 140},
-  guideTitle: {fontSize: 17, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center'},
-  guideDesc: {fontSize: 13, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20},
+  guideTitle: {fontSize: 17, fontWeight: '800', textAlign: 'center'},
+  guideDesc: {fontSize: 13, textAlign: 'center', lineHeight: 20},
+  backBtnWrap: {padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16, borderTopWidth: 1},
+  backToListBtn: {paddingVertical: 16, borderRadius: 14, alignItems: 'center'},
+  backToListText: {color: '#fff', fontSize: 16, fontWeight: '700'},
 });
 
 const ms = StyleSheet.create({
   overlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24},
-  box: {backgroundColor: Colors.card, borderRadius: 24, padding: 28, width: '100%', alignItems: 'center'},
+  box: {borderRadius: 24, padding: 28, width: '100%', alignItems: 'center'},
   warningIcon: {fontSize: 44, marginBottom: 10},
-  successIcon: {fontSize: 56, marginBottom: 10},
-  boxTitle: {fontSize: 20, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 10},
-  boxBody: {fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 16},
-  earningLine: {fontSize: 14, color: Colors.textSecondary, marginBottom: 4},
-  earningAmount: {fontSize: 38, fontWeight: '800', color: Colors.success, marginBottom: 20},
-  reasonInput: {width: '100%', borderWidth: 1.5, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: Colors.textPrimary, marginBottom: 16, },
+  boxTitle: {fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 10},
+  boxBody: {fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 16},
+  reasonInput: {width: '100%', borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, marginBottom: 16},
   btnRow: {flexDirection: 'row', gap: 10, width: '100%'},
-  secondaryBtn: {flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border, alignItems: 'center'},
-  secondaryBtnText: {fontSize: 14, fontWeight: '700', color: Colors.textPrimary},
-  dangerBtn: {flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: Colors.danger, alignItems: 'center'},
+  secondaryBtn: {flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, alignItems: 'center'},
+  secondaryBtnText: {fontSize: 14, fontWeight: '700'},
+  dangerBtn: {flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#EF4444', alignItems: 'center'},
   dangerBtnText: {fontSize: 14, fontWeight: '700', color: '#fff'},
-  confirmBtn: {width: '100%', paddingVertical: 16, borderRadius: 14, backgroundColor: Colors.primary, alignItems: 'center', marginTop: 8},
+  confirmBtn: {width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 8},
   confirmBtnText: {color: '#fff', fontSize: 16, fontWeight: '700'},
   slideOverlay: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)'},
-  slideSheet: {backgroundColor: Colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40},
-  slideHandle: {width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20},
-  slideTitle: {fontSize: 18, fontWeight: '800', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8},
-  slideSubtitle: {fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20},
+  slideSheet: {borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40},
+  slideHandle: {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20},
+  slideTitle: {fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8},
+  slideSubtitle: {fontSize: 13, textAlign: 'center', marginBottom: 20},
   imgGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 12},
-  imgSlot: {
-    width: 120, height: 120, borderRadius: 16,
-    borderWidth: 2, borderColor: Colors.border, borderStyle: 'dashed',
-    alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bg,
-  },
-  imgSlotFilled: {
-    width: 120, height: 120, borderRadius: 16,
-    overflow: 'hidden', position: 'relative',
-  },
+  imgSlot: {width: 120, height: 120, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center'},
+  imgSlotFilled: {width: 120, height: 120, borderRadius: 16, overflow: 'hidden', position: 'relative'},
   imgPreview: {width: '100%', height: '100%'},
-  removeBtn: {
-    position: 'absolute', top: 6, right: 6,
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  photoCount: {fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 8},
+  removeBtn: {position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center'},
+  photoCount: {fontSize: 13, textAlign: 'center', marginBottom: 8},
+  skipBtn: {alignSelf: 'center', marginTop: 12, paddingVertical: 8, paddingHorizontal: 20},
+  skipBtnText: {fontSize: 13, fontWeight: '600', textDecorationLine: 'underline'},
 });
 
 const sw = StyleSheet.create({

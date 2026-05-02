@@ -1,20 +1,23 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {Home, ClipboardList, Star, User} from 'lucide-react-native';
-import {Colors} from '../../shared/constants/colors';
+import {useTheme} from '../../shared/context/ThemeContext';
+import {useI18n} from '../../shared/i18n/I18nContext';
 import HomeScreen from '../features/home/HomeScreen';
 import OrdersNavigator from '../features/orders/OrdersNavigator';
 import ReviewsScreen from '../features/reviews/ReviewsScreen';
-import ProfileScreen from '../features/profile/ProfileScreen';
+import ProfileNavigator from '../features/profile/ProfileNavigator';
 
-const TABS = [
-  {key: 'home',    label: 'الرئيسية', Icon: Home,          Screen: HomeScreen},
-  {key: 'orders',  label: 'الطلبات',  Icon: ClipboardList, Screen: OrdersNavigator},
-  {key: 'reviews', label: 'التقييم',  Icon: Star,          Screen: ReviewsScreen},
-  {key: 'profile', label: 'حسابي',   Icon: User,          Screen: ProfileScreen},
+const TAB_KEYS = [
+  {key: 'home',    labelKey: 'nav.home',    Icon: Home,          Screen: HomeScreen},
+  {key: 'orders',  labelKey: 'nav.orders',  Icon: ClipboardList, Screen: OrdersNavigator},
+  {key: 'reviews', labelKey: 'nav.reviews', Icon: Star,          Screen: ReviewsScreen},
+  {key: 'profile', labelKey: 'nav.profile', Icon: User,          Screen: ProfileNavigator},
 ];
 
 export default function AppNavigator() {
+  const {colors} = useTheme();
+  const {t} = useI18n();
   const [activeTab, setActiveTab] = useState('home');
   const [history, setHistory]     = useState(['home']);
   const [mounted, setMounted]     = useState({home: true});
@@ -40,9 +43,9 @@ export default function AppNavigator() {
   }, [history]);
 
   return (
-    <View style={s.root} >
+    <View style={[s.root, {backgroundColor: colors.bg}]}>
       <View style={s.screen}>
-        {TABS.map(({key, Screen}) =>
+        {TAB_KEYS.map(({key, Screen}) =>
           mounted[key] ? (
             <View key={key} style={[s.page, activeTab !== key && s.hidden]}>
               <Screen />
@@ -50,8 +53,8 @@ export default function AppNavigator() {
           ) : null
         )}
       </View>
-      <View style={s.tabBar}>
-        {TABS.map(({key, label, Icon}) => {
+      <View style={[s.tabBar, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
+        {TAB_KEYS.map(({key, labelKey, Icon}) => {
           const isActive = key === activeTab;
           return (
             <TouchableOpacity
@@ -59,9 +62,9 @@ export default function AppNavigator() {
               style={s.tabItem}
               onPress={() => handleTabPress(key)}
               activeOpacity={0.7}>
-              <Icon size={22} color={isActive ? Colors.primary : '#B0BEC5'} strokeWidth={isActive ? 2.5 : 1.8} />
-              <Text style={[s.tabLabel, isActive && s.tabLabelActive]}>{label}</Text>
-              {isActive && <View style={s.activeDot} />}
+              <Icon size={22} color={isActive ? colors.primary : colors.textSecondary} strokeWidth={isActive ? 2.5 : 1.8} />
+              <Text style={[s.tabLabel, {color: isActive ? colors.primary : colors.textSecondary}, isActive && s.tabLabelActive]}>{t(labelKey)}</Text>
+              {isActive && <View style={[s.activeDot, {backgroundColor: colors.primary}]} />}
             </TouchableOpacity>
           );
         })}
@@ -71,15 +74,13 @@ export default function AppNavigator() {
 }
 
 const s = StyleSheet.create({
-  root:   {flex: 1, backgroundColor: '#F5F7FA', direction : "rtl"},
+  root:   {flex: 1},
   screen: {flex: 1},
   page:   {flex: 1},
   hidden: {display: 'none'},
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#EEF2F7',
     paddingBottom: Platform.OS === 'ios' ? 26 : 8,
     paddingTop: 10,
     elevation: 10,
@@ -89,7 +90,7 @@ const s = StyleSheet.create({
     shadowRadius: 12,
   },
   tabItem:        {flex: 1, alignItems: 'center', gap: 4},
-  tabLabel:       {fontSize: 10, fontWeight: '600', color: '#B0BEC5'},
-  tabLabelActive: {color: Colors.primary, fontWeight: '800'},
-  activeDot:      {position: 'absolute', bottom: Platform.OS === 'ios' ? -26 : -8, width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.primary},
+  tabLabel:       {fontSize: 10, fontWeight: '600'},
+  tabLabelActive: {fontWeight: '800'},
+  activeDot:      {position: 'absolute', bottom: Platform.OS === 'ios' ? -26 : -8, width: 4, height: 4, borderRadius: 2},
 });

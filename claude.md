@@ -26,51 +26,78 @@ npm test
 ## Architecture & Current State
 
 ### App Entry Point
-`index.js` → `App.tsx` → `src/navigation/AppNavigator.js`. `App.tsx` is minimal: it handles auth state and renders either `LoginScreen` or `AppNavigator`.
+`index.js` → `App.tsx` → `src/biker/navigation/AppNavigator.js`. `App.tsx` is minimal: it handles auth state and renders either `LoginScreen` or `AppNavigator`.
 
-### Feature-Based Structure (required — always follow this pattern)
+### Folder Structure
 ```
 /src
-  /features
-    /auth        — LoginScreen.js
-    /home        — HomeScreen.js, components/OrderCard.js, components/StatCard.js
-    /orders      — OrdersScreen.js, OrderDetailsScreen.js, components/OrderListCard.js
-    /reviews     — ReviewsScreen.js
-    /profile     — ProfileScreen.js
-    /<feature>   — one folder per feature; screens at root, sub-components in components/
-  /navigation
-    AppNavigator.js   — custom bottom tab bar (no @react-navigation/bottom-tabs)
-  /shared
-    /constants   — colors.js, status.js
-    /data        — mockData.js
-    /components  — reusable components (e.g. StatusTracker.js)
-    /types       — JSDoc typedefs (index.js)
-  /assets        — images and static files
-  /hooks         — custom hooks
-  /services      — API call functions (fetch + AbortController)
-  /store         — Zustand/Redux state
+  /biker                         — active biker app (use this)
+    /features
+      /home        — HomeScreen.js, components/OrderCard.js, components/StatCard.js
+      /orders      — OrdersNavigator.js, OrdersScreen.js, OrderDetailsScreen.js,
+                     OrderMapScreen.js, components/OrderListCard.js
+      /reviews     — ReviewsScreen.js
+      /profile     — ProfileScreen.js
+    /navigation
+      AppNavigator.js            — hand-rolled bottom tab bar
+  /features                      — legacy scaffold (auth still used)
+    /auth          — LoginScreen.js (active)
+    /home, /orders, /profile, /reviews — OUTDATED duplicates, not used
+  /shared                        — used by both
+    /components    — MapContainer.js, StatusTracker.js
+    /constants     — colors.js, status.js
+    /data          — mockData.js
+    /types         — JSDoc typedefs (index.js)
+  /assets
+    /steps         — 1.png–5.png (step guide illustrations)
+  /hooks, /services, /store      — planned, not yet created
 ```
 
 **Rules:**
-- Every new screen goes in `src/features/<feature>/ScreenName.js`
-- Sub-components used only within a feature go in `src/features/<feature>/components/`
-- Shared components used across features go in `src/shared/components/`
-- Never add screens or logic back to `App.tsx`
+- New biker screens go in `src/biker/features/<feature>/ScreenName.js`
+- Sub-components used only within a feature go in `src/biker/features/<feature>/components/`
+- Shared components go in `src/shared/components/`
+- Auth screen stays in `src/features/auth/LoginScreen.js`
+- Never add screens or logic to `App.tsx`
 
 ### Navigation
-`@react-navigation/native` + `@react-navigation/native-stack` are installed. The bottom tab bar is hand-rolled in `src/navigation/AppNavigator.js` using `useState` + `Animated` — do NOT install `@react-navigation/bottom-tabs`.
+Two levels, both hand-rolled (no `@react-navigation/bottom-tabs`):
+
+1. **`AppNavigator`** (`src/biker/navigation/AppNavigator.js`) — bottom tab bar using `useState`. Tabs: Home, Orders, Reviews, Profile. Uses `display:'none'` + lazy mount for tab switching. Root has `direction:'rtl'`.
+
+2. **`OrdersNavigator`** (`src/biker/features/orders/OrdersNavigator.js`) — mini-stack inside the Orders tab managing 3 screens: list → detail → map. Uses `display:'none'` + `BackHandler`. Reuse this pattern for any other nested stacks.
+
+### Order Status Flow
+5-step linear flow in `src/shared/constants/status.js`:
+```
+ASSIGNED → ON_THE_WAY → ARRIVED → STARTED → COMPLETED
+```
+`ACTION_MAP` in `OrderDetailsScreen.js` maps each status to its next action label and next status. ARRIVED is a transitional step (no swipe action needed there).
+
+### SwipeButton Pattern
+`OrderDetailsScreen.js` contains an inline `SwipeButton` component using `PanResponder` + `Animated.Value` for swipe-to-confirm (right→left). Always add `key={currentStatus}` on `SwipeButton` to force remount and reset on each step transition.
+
+### StatusTracker
+`src/shared/components/StatusTracker.js` — 5 icon boxes (Play, MapPin, UserCheck, Droplets, Camera) with separator lines. Uses `React.Fragment` with sibling `View` separators (not `position:absolute`). Root has `direction:'rtl'` and `justifyContent:'center'`. Active box shows a pulse indicator.
+
+### Camera & Image Upload
+`OrderDetailsScreen.js` photo upload modal:
+- Runtime: `PermissionsAndroid.request(CAMERA)` before calling `launchCamera`
+- `launchCamera({mediaType:'photo', quality:0.8})` from `react-native-image-picker`
+- Android requires `FileProvider` in `AndroidManifest.xml` + `android/app/src/main/res/xml/file_provider_paths.xml`
+- `CAMERA`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` permissions in manifest
 
 ### API Layer
-No HTTP client is wired up yet. Screens use mock data and `setTimeout` placeholders. Planned base URL: `https://<domain>/api/biker`. Auth uses a JWT passed as `Authorization: Bearer <token>`. When implementing, create service functions in `/src/services` using `fetch` + `AbortController` for cancellation.
+No HTTP client wired up. Screens use mock data from `src/shared/data/mockData.js` and `setTimeout` placeholders. Planned base URL: `https://<domain>/api/biker`. Auth uses JWT as `Authorization: Bearer <token>`. When implementing, create service functions in `/src/services` using `fetch` + `AbortController`.
+
+### MapContainer
+`src/shared/components/MapContainer.js` — intended to show Google Maps via WebView. `react-native-webview` is NOT installed. MapContainer is non-functional until WebView is installed.
 
 ### Styling
-NativeWind v4 is installed but **not configured** — `babel.config.js` does not include the NativeWind preset and there is no `tailwind.config.js`. **Do not configure it without explicit instruction.** All existing screens use `StyleSheet.create` — continue using `StyleSheet.create` for all new screens until NativeWind is explicitly enabled.
+NativeWind v4 is installed but **not configured** — `babel.config.js` does not include the NativeWind preset and there is no `tailwind.config.js`. **Do not configure it without explicit instruction.** All screens use `StyleSheet.create`.
 
 ### Localization
-All UI text is currently hardcoded in Arabic. No i18n library is set up.
-
-### Planned Screens (see `/tickets/`)
-Auth, Home, Orders, Order Details, Wallet, Notifications, Reviews, Profile, Settings, Reports — all defined in `/tickets/0X_*.md` with API contracts and UI specs.
+All UI text is hardcoded in Arabic. No i18n library is set up.
 
 ---
 
@@ -86,11 +113,12 @@ Auth, Home, Orders, Order Details, Wallet, Notifications, Reviews, Profile, Sett
 - Use: `View`, `Text`, `TextInput`, `TouchableOpacity`, `ScrollView`, `FlatList`
 - Never: `<button>`, `<input>`, `<form>`
 - Every text must be inside a `<Text>` component — never raw strings in JSX
-- All styles use `StyleSheet.create` (NativeWind is not yet configured)
+- All styles use `StyleSheet.create`
 
 ### Navigation
 - Use `@react-navigation/native` + `@react-navigation/native-stack` only
 - Bottom tabs are hand-rolled — do NOT install `@react-navigation/bottom-tabs`
+- Nested stacks use the `OrdersNavigator` pattern (`display:'none'` + BackHandler)
 - Never mix navigation libraries
 
 ### Icons
@@ -127,6 +155,7 @@ Auth, Home, Orders, Order Details, Wallet, Notifications, Reviews, Profile, Sett
 - Navigation: `@react-navigation/native` + `@react-navigation/native-stack`
 - Icons: `lucide-react-native` + `react-native-svg` (pinned at `15.11.2`)
 - Styling: `StyleSheet.create` (NativeWind installed but not configured)
+- Camera/Images: `react-native-image-picker` v7.1.2
 
 ## Forbidden
 - Expo or any Expo SDK
@@ -136,4 +165,6 @@ Auth, Home, Orders, Order Details, Wallet, Notifications, Reviews, Profile, Sett
 - `lucide-react` (web version)
 - Installing new packages without explicit user request
 - Modifying `node_modules`
-- Adding screens or logic to `App.tsx` (keep it minimal)
+- Adding screens or logic to `App.tsx`
+- `@react-navigation/bottom-tabs`
+- `react-native-maps` or `react-native-webview` (not installed)

@@ -1,10 +1,11 @@
 import React, {useRef, useEffect, useCallback} from 'react';
 import {Animated, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Colors} from '../../../../shared/constants/colors';
 import {STATUS_MAP, STATUS_COLORS} from '../../../../shared/constants/status';
+import {useTheme} from '../../../../shared/context/ThemeContext';
 
 export default function OrderCard({order, index}) {
-  const st = STATUS_MAP[order.status] ?? {label: order.status, color: Colors.textSecondary};
+  const {colors} = useTheme();
+  const st = STATUS_MAP[order.status] ?? {label: order.status, color: colors.textSecondary};
   const sc = STATUS_COLORS[order.status] ?? {bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8'};
 
   const scale = useRef(new Animated.Value(0.88)).current;
@@ -28,33 +29,34 @@ export default function OrderCard({order, index}) {
 
   return (
     <Animated.View style={{transform: [{scale: Animated.multiply(scale, pressScale)}], opacity, marginLeft: 16}}>
-      <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} style={s.card}>
+      <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut}
+        style={[s.card, {backgroundColor: colors.card, shadowColor: colors.primary, borderColor: colors.border}]}>
         <View style={s.header}>
           <View style={s.headerLeft}>
             <View style={[s.dot, {backgroundColor: sc.dot}]} />
-            <Text style={s.orderNum}>{order.orderNumber}</Text>
+            <Text style={[s.orderNum, {color: colors.textSecondary}]}>{order.orderNumber}</Text>
           </View>
           <View style={[s.badge, {backgroundColor: sc.bg}]}>
             <View style={[s.dot, {backgroundColor: sc.dot}]} />
             <Text style={[s.badgeText, {color: sc.text}]}>{st.label}</Text>
           </View>
         </View>
-        <Text style={s.carName}>{order.car.brand} {order.car.model}</Text>
-        <Text style={s.carSub}>{order.car.color} · {order.car.plateNumber}</Text>
-        <View style={s.divider} />
+        <Text style={[s.carName, {color: colors.textPrimary}]}>{order.car.brand} {order.car.model}</Text>
+        <Text style={[s.carSub, {color: colors.textSecondary}]}>{order.car.color} · {order.car.plateNumber}</Text>
+        <View style={[s.divider, {backgroundColor: colors.border}]} />
         <View style={s.infoRow}>
           <Text style={s.emoji}>📍</Text>
-          <Text style={s.infoText} numberOfLines={1}>{order.address}</Text>
+          <Text style={[s.infoText, {color: colors.textSecondary}]} numberOfLines={1}>{order.address}</Text>
         </View>
         <View style={s.infoRow}>
           <Text style={s.emoji}>🕐</Text>
-          <Text style={s.infoText}>{order.scheduledAt}</Text>
-          <View style={s.servicePill}>
-            <Text style={s.serviceText}>{order.service.name}</Text>
+          <Text style={[s.infoText, {color: colors.textSecondary}]}>{order.scheduledAt}</Text>
+          <View style={[s.servicePill, {backgroundColor: colors.primary + '18'}]}>
+            <Text style={[s.serviceText, {color: colors.primary}]}>{order.service.name}</Text>
           </View>
         </View>
-        <View style={s.footer}>
-          <Text style={s.client}>👤 {order.client.firstName}</Text>
+        <View style={[s.footer, {borderTopColor: colors.border}]}>
+          <Text style={[s.client, {color: colors.textSecondary}]}>👤 {order.client.firstName}</Text>
           <Text style={s.earning}>﷼ {order.bikerEarning.toFixed(0)}</Text>
         </View>
       </TouchableOpacity>
@@ -64,26 +66,26 @@ export default function OrderCard({order, index}) {
 
 const s = StyleSheet.create({
   card: {
-    width: 272, backgroundColor: Colors.card, borderRadius: 20, padding: 16,
-    borderWidth: 1, borderColor: '#F1F5F9',
-    shadowColor: Colors.primary, shadowOffset: {width: 0, height: 6},
+    width: 272, borderRadius: 20, padding: 16,
+    borderWidth: 1,
+    shadowOffset: {width: 0, height: 6},
     shadowOpacity: 0.10, shadowRadius: 16, elevation: 5,
   },
   header: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12},
   headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 6},
   dot: {width: 6, height: 6, borderRadius: 3},
-  orderNum: {fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5},
+  orderNum: {fontSize: 11, fontWeight: '700', letterSpacing: 0.5},
   badge: {flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20},
   badgeText: {fontSize: 11, fontWeight: '700'},
-  carName: {fontSize: 15, fontWeight: '800', color: '#1E293B', marginBottom: 2},
-  carSub: {fontSize: 12, color: '#94A3B8', marginBottom: 12},
-  divider: {height: 1, backgroundColor: '#F1F5F9', marginBottom: 10},
+  carName: {fontSize: 15, fontWeight: '800', marginBottom: 2},
+  carSub: {fontSize: 12, marginBottom: 12},
+  divider: {height: 1, marginBottom: 10},
   infoRow: {flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6},
   emoji: {fontSize: 12},
-  infoText: {fontSize: 12, color: '#64748B', flex: 1},
-  servicePill: {backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6},
-  serviceText: {fontSize: 11, fontWeight: '600', color: '#2563EB'},
-  footer: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9'},
-  client: {fontSize: 11, color: '#94A3B8'},
+  infoText: {fontSize: 12, flex: 1},
+  servicePill: {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6},
+  serviceText: {fontSize: 11, fontWeight: '600'},
+  footer: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1},
+  client: {fontSize: 11},
   earning: {fontSize: 14, fontWeight: '800', color: '#059669'},
 });
