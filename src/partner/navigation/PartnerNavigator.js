@@ -1,6 +1,6 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {LayoutDashboard, ClipboardList, Settings, User} from 'lucide-react-native';
+import {Home, ClipboardList, Settings, User} from 'lucide-react-native';
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
 import DashboardScreen from '../features/dashboard/DashboardScreen';
@@ -9,10 +9,10 @@ import OperationsNavigator from '../features/operations/OperationsNavigator';
 import PartnerProfileNavigator from '../features/profile/PartnerProfileNavigator';
 
 const TAB_KEYS = [
-  {key: 'dashboard',  labelKey: 'partner.nav.dashboard',  Icon: LayoutDashboard, Screen: DashboardScreen},
-  {key: 'orders',     labelKey: 'partner.nav.orders',     Icon: ClipboardList,   Screen: OrdersNavigator},
-  {key: 'operations', labelKey: 'partner.nav.operations', Icon: Settings,        Screen: OperationsNavigator},
-  {key: 'profile',    labelKey: 'partner.nav.profile',    Icon: User,            Screen: PartnerProfileNavigator},
+  {key: 'dashboard',  labelKey: 'partner.nav.dashboard',  Icon: Home,          Screen: DashboardScreen},
+  {key: 'orders',     labelKey: 'partner.nav.orders',     Icon: ClipboardList, Screen: OrdersNavigator},
+  {key: 'operations', labelKey: 'partner.nav.operations', Icon: Settings,      Screen: OperationsNavigator},
+  {key: 'profile',    labelKey: 'partner.nav.profile',    Icon: User,          Screen: PartnerProfileNavigator},
 ];
 
 export default function PartnerNavigator() {
@@ -53,7 +53,8 @@ export default function PartnerNavigator() {
           ) : null
         )}
       </View>
-      <View style={[s.tabBar, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
+
+      <View style={[s.tabBar, {backgroundColor: colors.card}]}>
         {TAB_KEYS.map(({key, labelKey, Icon}) => {
           const isActive = key === activeTab;
           return (
@@ -61,12 +62,17 @@ export default function PartnerNavigator() {
               key={key}
               style={s.tabItem}
               onPress={() => handleTabPress(key)}
-              activeOpacity={0.7}>
-              <Icon size={22} color={isActive ? colors.primary : colors.textSecondary} strokeWidth={isActive ? 2.5 : 1.8} />
-              <Text style={[s.tabLabel, {color: isActive ? colors.primary : colors.textSecondary}, isActive && s.tabLabelActive]}>
+              activeOpacity={0.8}>
+              <View style={[s.iconWrap, isActive && {backgroundColor: colors.primary , borderRadius : 50}]}>
+                <Icon
+                  size={22}
+                  color={isActive ? '#fff' : colors.textSecondary}
+                  strokeWidth={isActive ? 2.5 : 1.8}
+                />
+              </View>
+              <Text style={[s.tabLabel, {color: colors.textSecondary}]}>
                 {t(labelKey)}
               </Text>
-              {isActive && <View style={[s.activeDot, {backgroundColor: colors.primary}]} />}
             </TouchableOpacity>
           );
         })}
@@ -76,23 +82,22 @@ export default function PartnerNavigator() {
 }
 
 const s = StyleSheet.create({
-  root:   {flex: 1},
-  screen: {flex: 1},
-  page:   {flex: 1},
-  hidden: {display: 'none'},
+  root:     {flex: 1},
+  screen:   {flex: 1},
+  page:     {flex: 1},
+  hidden:   {display: 'none'},
   tabBar: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingBottom: Platform.OS === 'ios' ? 26 : 8,
-    paddingTop: 10,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: -4},
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
+    flexDirection:  'row',
+    paddingBottom:  Platform.OS === 'ios' ? 28 : 10,
+    paddingTop:     10,
+    paddingHorizontal: 8,
+    elevation:      12,
+    shadowColor:    '#000',
+    shadowOffset:   {width: 0, height: -3},
+    shadowOpacity:  0.06,
+    shadowRadius:   10,
   },
-  tabItem:        {flex: 1, alignItems: 'center', gap: 4},
-  tabLabel:       {fontSize: 10, fontWeight: '600'},
-  tabLabelActive: {fontWeight: '800'},
-  activeDot:      {position: 'absolute', bottom: Platform.OS === 'ios' ? -26 : -8, width: 4, height: 4, borderRadius: 2},
+  tabItem:  {flex: 1, alignItems: 'center', gap: 5},
+  iconWrap: {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
+  tabLabel: {fontSize: 10, fontWeight: '500'},
 });

@@ -1,68 +1,70 @@
 import React, {useState, useCallback} from 'react';
-import {FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {ClipboardList, Clock, CheckCircle, Users, ChevronLeft} from 'lucide-react-native';
+import {FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {Bell, Info, Car, Phone, MapPin} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import IncomingOrderScreen from '../orders/IncomingOrderScreen';
 
-const MOCK_STATS = {
-  todayOrders:    12,
-  pendingOrders:   3,
-  completedToday:  8,
-  bikersOnDuty:    4,
+const MOCK_BRANCH = {
+  name: 'مغسلة الكروية',
+  managerName: 'خالد',
+  todayRevenue: '285.00',
+  totalOrders: 6,
+  activeOrders: 4,
+  pendingOrders: 4,
 };
 
-const MOCK_RECENT = [
-  {id: '1', customerName: 'أحمد محمد',    service: 'غسيل خارجي',   status: 'PENDING_PARTNER', time: 'منذ دقيقتين'},
-  {id: '2', customerName: 'سارة العمري',  service: 'غسيل كامل',    status: 'ON_THE_WAY',      time: 'منذ 15 دقيقة'},
-  {id: '3', customerName: 'خالد الغامدي', service: 'تلميع',         status: 'COMPLETED',       time: 'منذ ساعة'},
-  {id: '4', customerName: 'منى السعيد',   service: 'غسيل داخلي',   status: 'STARTED',         time: 'منذ 30 دقيقة'},
-  {id: '5', customerName: 'فيصل الحربي',  service: 'غسيل خارجي',   status: 'ASSIGNED',        time: 'منذ 45 دقيقة'},
+const MOCK_PENDING = [
+  {id: '1', service: 'غسيل داخلي + خارجي', location: 'حي الملقا، الرياض', price: '120', time: 'قبل 2 دقيقة',  status: 'PENDING_PARTNER'},
+  {id: '2', service: 'غسيل خارجي',          location: 'حي الملقا، الرياض', price: '80',  time: 'قبل 10 دقيقة', status: 'PENDING_PARTNER'},
+  {id: '3', service: 'غسيل كامل - تشحيم',   location: 'حي الملقا، الرياض', price: '50',  time: 'قبل 24 دقيقة', status: 'PENDING_PARTNER'},
 ];
 
-const STATUS_LABELS = {
-  PENDING_PARTNER: {label: 'بانتظار القبول', color: '#F59E0B'},
-  ACCEPTED:        {label: 'مقبول',          color: '#3B9EFF'},
-  ASSIGNED:        {label: 'تم التعيين',     color: '#8B5CF6'},
-  ON_THE_WAY:      {label: 'في الطريق',      color: '#1B7BF5'},
-  STARTED:         {label: 'جاري التنفيذ',   color: '#F59E0B'},
-  COMPLETED:       {label: 'مكتمل',          color: '#22C55E'},
-  REJECTED:        {label: 'مرفوض',          color: '#EF4444'},
-  CANCELLED:       {label: 'ملغي',           color: '#EF4444'},
-};
+const MOCK_BIKERS = [
+  {id: '1', name: 'يحيى الصفدي',       status: 'متاح', dotColor: '#F59E0B'},
+  {id: '2', name: 'غيث الكفرسوسائي', status: 'متاح', dotColor: '#22C55E'},
+];
 
-function StatCard({icon: Icon, label, value, color, colors}) {
-  return (
-    <View style={[s.statCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-      <View style={[s.statIcon, {backgroundColor: color + '18'}]}>
-        <Icon size={20} color={color} />
-      </View>
-      <Text style={[s.statValue, {color: colors.textPrimary}]}>{value}</Text>
-      <Text style={[s.statLabel, {color: colors.textSecondary}]}>{label}</Text>
-    </View>
-  );
-}
-
-function RecentOrderCard({item, colors, onPress}) {
-  const st = STATUS_LABELS[item.status] || {label: item.status, color: '#64748B'};
+function OrderCard({item, colors, onPress}) {
   return (
     <TouchableOpacity
-      style={[s.orderCard, {backgroundColor: colors.card, borderColor: colors.border}]}
+      style={[s.pendingCard, {backgroundColor: colors.card, borderColor: colors.border}]}
       onPress={() => onPress(item)}
       activeOpacity={0.75}>
-      <View style={s.orderCardRow}>
-        <View style={s.orderCardInfo}>
-          <Text style={[s.orderCustomer, {color: colors.textPrimary}]}>{item.customerName}</Text>
-          <Text style={[s.orderService, {color: colors.textSecondary}]}>{item.service}</Text>
+      <View style={[s.pendingBadge, {backgroundColor: '#F59E0B18'}]}>
+        <Text style={[s.pendingBadgeText, {color: '#F59E0B'}]}>• قيد الانتظار</Text>
+      </View>
+      <View style={s.pendingRow}>
+        <View style={[s.carIconBox, {backgroundColor: colors.bg}]}>
+          <Car size={22} color={colors.textSecondary} />
         </View>
-        <View style={s.orderCardRight}>
-          <View style={[s.statusBadge, {backgroundColor: st.color + '18'}]}>
-            <Text style={[s.statusText, {color: st.color}]}>{st.label}</Text>
-          </View>
-          <Text style={[s.orderTime, {color: colors.textSecondary}]}>{item.time}</Text>
+        <View style={s.pendingInfo}>
+          <Text style={[s.pendingService, {color: colors.textPrimary}]}>{item.service}</Text>
+          <Text style={[s.pendingLocation, {color: colors.textSecondary}]}><MapPin color={"gray"} size={16}/> {item.location}</Text>
+        </View>
+        <View style={s.pendingPriceCol}>
+          <Text style={[s.pendingPrice, {color: colors.primary}]}> {item.price}</Text>
+          <Text style={[s.pendingTime, {color: colors.textSecondary}]}>{item.time}</Text>
         </View>
       </View>
     </TouchableOpacity>
+  );
+}
+
+function BikerCard({item, colors}) {
+  return (
+    <View style={[s.bikerCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+      <View style={s.bikerTextCol}>
+        <View style={s.bikerNameRow}>
+          {/* <View style={[s.statusDot, {backgroundColor: item.dotColor}]} /> */}
+          <Text style={[s.bikerName, {color: colors.textPrimary}]}>{item.name}</Text>
+        </View>
+        <Text style={[s.bikerStatus, {color: colors.textSecondary}]}>{item.status}</Text>
+      </View>
+      <TouchableOpacity style={[s.bikerActionBtn, {backgroundColor: colors.bg, borderColor: colors.border}]} activeOpacity={0.75}>
+        <Phone size={18} color={colors.textSecondary} />
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -83,13 +85,8 @@ export default function DashboardScreen() {
     }
   }, []);
 
-  const handleAccept = useCallback(() => {
-    setIncomingOrder(null);
-  }, []);
-
-  const handleReject = useCallback(() => {
-    setIncomingOrder(null);
-  }, []);
+  const handleAccept = useCallback(() => setIncomingOrder(null), []);
+  const handleReject = useCallback(() => setIncomingOrder(null), []);
 
   if (incomingOrder) {
     return (
@@ -103,13 +100,16 @@ export default function DashboardScreen() {
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
-      <View style={[s.header, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
-        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>لوحة التحكم</Text>
-        <View style={[s.pendingBadge, {backgroundColor: colors.danger + '18'}]}>
-          <Text style={[s.pendingBadgeText, {color: colors.danger}]}>
-            {MOCK_STATS.pendingOrders} معلق
-          </Text>
+      <View style={[s.topBar]}>
+        <TouchableOpacity style={s.topBarBtn} activeOpacity={0.75}>
+          <Bell size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View>
+          <Image source={require('../../../../public/logo.png')} style={{width: 40, height: 40}} />
         </View>
+        <TouchableOpacity style={s.topBarBtn} activeOpacity={0.75}>
+          <Text style={{color: colors.warning}} >أ</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -117,22 +117,45 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}>
 
-        <View style={s.statsGrid}>
-          <StatCard icon={ClipboardList} label="طلبات اليوم"    value={MOCK_STATS.todayOrders}    color={colors.primary}  colors={colors} />
-          <StatCard icon={Clock}         label="بانتظار القرار" value={MOCK_STATS.pendingOrders}  color={colors.warning}  colors={colors} />
-          <StatCard icon={CheckCircle}   label="مكتملة اليوم"  value={MOCK_STATS.completedToday} color={colors.success}  colors={colors} />
-          <StatCard icon={Users}         label="بايكر نشط"      value={MOCK_STATS.bikersOnDuty}   color={colors.purple}   colors={colors} />
+        <View style={{paddingHorizontal: 16, paddingTop: 20}}>
+        <Text style={s.heroGreeting}>مرحباً، {MOCK_BRANCH.managerName}</Text>
+        <Text style={s.heroBranchName}>{MOCK_BRANCH.name}</Text>
+        </View>
+        <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
+          <Text style={s.heroRevenueLabel}>إيرادات اليوم</Text>
+          <Text style={s.heroRevenue}> {MOCK_BRANCH.todayRevenue}</Text>
+          <View style={s.heroStats}>
+            <View style={s.heroStatItem}>
+              <Text style={s.heroStatValue}>{MOCK_BRANCH.pendingOrders}</Text>
+              <Text style={s.heroStatLabel}>قيد الانتظار</Text>
+            </View>
+            <View style={s.heroStatItem}>
+              <Text style={s.heroStatValue}>{MOCK_BRANCH.activeOrders}</Text>
+              <Text style={s.heroStatLabel}>فعال</Text>
+            </View>
+            <View style={s.heroStatItem}>
+              <Text style={s.heroStatValue}>{MOCK_BRANCH.totalOrders}</Text>
+              <Text style={s.heroStatLabel}>الطلبات</Text>
+            </View>
+          </View>
         </View>
 
         <View style={s.section}>
-          <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>آخر الطلبات</Text>
-          {MOCK_RECENT.map(item => (
-            <RecentOrderCard
-              key={item.id}
-              item={item}
-              colors={colors}
-              onPress={handleOrderPress}
-            />
+          <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>طلبات قيد الانتظار</Text>
+          {MOCK_PENDING.map(item => (
+            <OrderCard key={item.id} item={item} colors={colors} onPress={handleOrderPress} />
+          ))}
+        </View>
+
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>البايكرز النشطين</Text>
+            <TouchableOpacity activeOpacity={0.75}>
+              <Text style={[s.viewAll, {color: colors.primary}]}>عرض الكل</Text>
+            </TouchableOpacity>
+          </View>
+          {MOCK_BIKERS.map(item => (
+            <BikerCard key={item.id} item={item} colors={colors} />
           ))}
         </View>
 
@@ -144,26 +167,44 @@ export default function DashboardScreen() {
 
 const s = StyleSheet.create({
   root:             {flex: 1},
-  header:           {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1},
-  headerTitle:      {fontSize: 22, fontWeight: '800'},
-  pendingBadge:     {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12},
-  pendingBadgeText: {fontSize: 12, fontWeight: '700'},
+  topBar:           {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12},
+  topBarBtn:        {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
+  logoText:         {fontSize: 20, fontWeight: '900', letterSpacing: -0.5},
+  logoPlusBadge:    {paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginLeft: 2},
+  logoPlusText:     {fontSize: 10, color: '#fff', fontWeight: '900'},
   scroll:           {flex: 1},
-  statsGrid:        {flexDirection: 'row', flexWrap: 'wrap', padding: 16, gap: 12},
-  statCard:         {width: '47%', borderRadius: 16, padding: 16, borderWidth: 1, gap: 8},
-  statIcon:         {width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
-  statValue:        {fontSize: 28, fontWeight: '800'},
-  statLabel:        {fontSize: 12, fontWeight: '500'},
-  section:          {paddingHorizontal: 16, paddingTop: 8},
+  heroCard:         {marginHorizontal: 16, marginBottom: 8, borderRadius: 20, padding: 20, gap: 4},
+  heroGreeting:     {fontSize: 12, color: '#9CA3AF', fontWeight: '500'},
+  heroBranchName:   {fontSize: 18, fontWeight: '800', marginBottom: 4},
+  heroRevenueLabel: {fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 2},
+  heroRevenue:      {fontSize: 38, color: '#fff', fontWeight: '900', marginBottom: 20},
+  heroStats:        {flexDirection: 'row', justifyContent: 'space-between', gap: 10},
+  heroStatItem:     {flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 14, paddingVertical: 12, gap: 4},
+  heroStatValue:    {fontSize: 20, color: '#fff', fontWeight: '800'},
+  heroStatLabel:    {fontSize: 12, color: 'rgba(255,255,255,0.8)'},
+  section:          {paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4},
+  sectionHeader:    {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12},
   sectionTitle:     {fontSize: 16, fontWeight: '700', marginBottom: 12},
-  orderCard:        {borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 10},
-  orderCardRow:     {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
-  orderCardInfo:    {gap: 4, flex: 1},
-  orderCustomer:    {fontSize: 14, fontWeight: '700'},
-  orderService:     {fontSize: 12, fontWeight: '400'},
-  orderCardRight:   {alignItems: 'flex-end', gap: 4},
-  statusBadge:      {paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8},
-  statusText:       {fontSize: 11, fontWeight: '700'},
-  orderTime:        {fontSize: 11},
+  viewAll:          {fontSize: 13, fontWeight: '600'},
+  pendingCard:      {borderRadius: 14, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 14, borderWidth: 1, marginBottom: 10, gap: 10},
+  pendingBadge:     {alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20},
+  pendingBadgeText: {fontSize: 11, fontWeight: '700'},
+  pendingRow:       {flexDirection: 'row', alignItems: 'center', gap: 10},
+  carIconBox:       {width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
+  pendingInfo:      {flex: 1, gap: 5},
+  pendingService:   {fontSize: 15, fontWeight: '700', },
+  pendingLocation:  {fontSize: 12 , display : "flex", alignItems : "center", gap: 1},
+  pendingPriceCol:  {alignItems: 'flex-start', gap: 4, minWidth: 56},
+  pendingPrice:     {fontSize: 14, textAlign:"center" ,fontWeight: '800'},
+  pendingTime:      {fontSize: 11},
+  bikerCard:        {flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 10, gap: 10},
+  bikerInfoBox:     {justifyContent: 'center'},
+  bikerInfoBtn:     {width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1},
+  bikerTextCol:     {flex: 1, gap: 4},
+  bikerNameRow:     {flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 8},
+  bikerName:        {fontSize: 15, fontWeight: '700'},
+  statusDot:        {width: 10, height: 10, borderRadius: 5},
+  bikerStatus:      {fontSize: 12, },
+  bikerActionBtn:   {width: 36, height: 36, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 1},
   bottomPad:        {height: 24},
 });

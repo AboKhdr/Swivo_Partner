@@ -131,6 +131,8 @@ NativeWind v4 is installed but **not configured** — `babel.config.js` does not
 ### Localization (i18n)
 `src/shared/i18n/I18nContext.js` — provides `{ lang, setLang, t, isRTL }` via `useI18n()`. Supports `ar`, `en`, `hi`. Locale JSON files in `src/shared/i18n/locales/`. Persists to AsyncStorage. Use `t('key')` for all UI text — do NOT hardcode Arabic strings in new screens. Supports dot-notation keys (`t('orders.title')`) and `{{param}}` interpolation.
 
+**RTL rule:** `App.tsx` sets `direction: isRTL ? 'rtl' : 'ltr'` on the root View — this handles all layout and text direction automatically. Never use `textAlign: 'right'`, `textAlign: 'left'`, `alignItems: 'flex-end'`, `justifyContent: 'flex-end'`, or `alignSelf: 'flex-end'` as RTL overrides in `StyleSheet.create`. Exception: `TextInput` does not inherit `direction` on Android — use `textAlign={isRTL ? 'right' : 'left'}` as a prop directly on `<TextInput>`.
+
 ### Profile Navigator (Biker)
 `src/biker/features/profile/ProfileNavigator.js` — sub-screens: `PersonalInfoScreen`, `WalletScreen`, `LanguageScreen`, `SupportScreen`, `TermsScreen`. Navigation via `onNavigate(screenName)` / `onBack()` props.
 
