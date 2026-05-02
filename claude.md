@@ -26,27 +26,45 @@ npm test
 ## Architecture & Current State
 
 ### App Entry Point
-`index.js` → `App.tsx` → `src/biker/navigation/AppNavigator.js`. `App.tsx` is minimal: it handles auth state and renders either `LoginScreen` or `AppNavigator`.
+`index.js` → `App.tsx`. After login, `App.tsx` routes by role (`Role = 'biker' | 'manager' | null`):
+- `role === 'biker'` → `src/biker/navigation/AppNavigator.js`
+- `role === 'manager'` → `src/partner/navigation/PartnerNavigator.js`
+- `role === null` → `src/features/auth/LoginScreen.js`
+
+The two apps are **fully isolated** — no shared screens or navigators between `src/biker/` and `src/partner/`. Both share `src/shared/` only.
 
 ### Folder Structure
 ```
 /src
-  /biker                         — active biker app (use this)
+  /biker                         — biker app (role: 'biker')
     /features
-      /home        — HomeScreen.js, components/OrderCard.js, components/StatCard.js
+      /home        — HomeScreen.js, NotificationsScreen.js, components/OrderCard.js
       /orders      — OrdersNavigator.js, OrdersScreen.js, OrderDetailsScreen.js,
                      OrderMapScreen.js, components/OrderListCard.js
       /reviews     — ReviewsScreen.js
-      /profile     — ProfileScreen.js
+      /profile     — ProfileNavigator.js, ProfileScreen.js, PersonalInfoScreen.js,
+                     WalletScreen.js, LanguageScreen.js, SupportScreen.js, TermsScreen.js
     /navigation
-      AppNavigator.js            — hand-rolled bottom tab bar
+      AppNavigator.js            — hand-rolled bottom tab bar (Home, Orders, Reviews, Profile)
+  /partner                       — partner/manager app (role: 'manager')
+    /features
+      /dashboard   — DashboardScreen.js (stats + recent orders + opens IncomingOrderScreen)
+      /orders      — OrdersNavigator.js, OrdersScreen.js, OrderDetailsScreen.js,
+                     IncomingOrderScreen.js, AssignBikerScreen.js, SkipReviewScreen.js
+      /operations  — OperationsNavigator.js, ServicesScreen.js, PackagesScreen.js,
+                     StaffScreen.js, BranchesScreen.js
+      /profile     — PartnerProfileNavigator.js
+    /navigation
+      PartnerNavigator.js        — hand-rolled bottom tab bar (Dashboard, Orders, Operations, Profile)
   /features                      — legacy scaffold (auth still used)
     /auth          — LoginScreen.js (active)
     /home, /orders, /profile, /reviews — OUTDATED duplicates, not used
-  /shared                        — used by both
+  /shared                        — used by biker AND partner
     /components    — MapContainer.js, StatusTracker.js
-    /constants     — colors.js, status.js
+    /constants     — colors.js (LightColors/DarkColors), status.js
+    /context       — ThemeContext.js
     /data          — mockData.js
+    /i18n          — I18nContext.js, locales/ar.json, en.json, hi.json
     /types         — JSDoc typedefs (index.js)
   /assets
     /steps         — 1.png–5.png (step guide illustrations)
@@ -55,17 +73,28 @@ npm test
 
 **Rules:**
 - New biker screens go in `src/biker/features/<feature>/ScreenName.js`
-- Sub-components used only within a feature go in `src/biker/features/<feature>/components/`
+- New partner/manager screens go in `src/partner/features/<feature>/ScreenName.js`
+- Sub-components used only within a feature go in the feature's own `components/` subfolder
 - Shared components go in `src/shared/components/`
 - Auth screen stays in `src/features/auth/LoginScreen.js`
 - Never add screens or logic to `App.tsx`
+- Never import anything from `src/biker/` inside `src/partner/` or vice versa
 
 ### Navigation
-Two levels, both hand-rolled (no `@react-navigation/bottom-tabs`):
+All navigation is hand-rolled (no `@react-navigation/bottom-tabs`). Two parallel top-level navigators:
 
-1. **`AppNavigator`** (`src/biker/navigation/AppNavigator.js`) — bottom tab bar using `useState`. Tabs: Home, Orders, Reviews, Profile. Uses `display:'none'` + lazy mount for tab switching. Root has `direction:'rtl'`.
+**Biker side:**
+1. **`AppNavigator`** (`src/biker/navigation/AppNavigator.js`) — bottom tab bar. Tabs: Home, Orders, Reviews, Profile. Uses `display:'none'` + lazy mount.
+2. **`OrdersNavigator`** (`src/biker/features/orders/OrdersNavigator.js`) — stack: list → detail → map. Uses `display:'none'` + `BackHandler`.
+3. **`ProfileNavigator`** (`src/biker/features/profile/ProfileNavigator.js`) — same pattern, 5 sub-screens via `onNavigate(name)` / `onBack()`.
 
-2. **`OrdersNavigator`** (`src/biker/features/orders/OrdersNavigator.js`) — mini-stack inside the Orders tab managing 3 screens: list → detail → map. Uses `display:'none'` + `BackHandler`. Reuse this pattern for any other nested stacks.
+**Partner side:**
+4. **`PartnerNavigator`** (`src/partner/navigation/PartnerNavigator.js`) — bottom tab bar. Tabs: Dashboard, Orders, Operations, Profile.
+5. **`OrdersNavigator`** (`src/partner/features/orders/OrdersNavigator.js`) — stack: list → details (with AssignBiker nested inside OrderDetailsScreen).
+6. **`OperationsNavigator`** (`src/partner/features/operations/OperationsNavigator.js`) — menu-style navigator for: Services, Packages, Staff, Branches, SkipReview.
+7. **`PartnerProfileNavigator`** (`src/partner/features/profile/PartnerProfileNavigator.js`) — same `display:'none'` + BackHandler pattern.
+
+The **standard nested-stack pattern** for all navigators: `display:'none'` + `BackHandler` + conditional mount. Reuse this for any new stacks.
 
 ### Order Status Flow
 5-step linear flow in `src/shared/constants/status.js`:
@@ -96,8 +125,48 @@ No HTTP client wired up. Screens use mock data from `src/shared/data/mockData.js
 ### Styling
 NativeWind v4 is installed but **not configured** — `babel.config.js` does not include the NativeWind preset and there is no `tailwind.config.js`. **Do not configure it without explicit instruction.** All screens use `StyleSheet.create`.
 
-### Localization
-All UI text is hardcoded in Arabic. No i18n library is set up.
+### Theme System
+`src/shared/context/ThemeContext.js` — provides `{ isDark, colors, toggleTheme }` via `useTheme()`. Persists to AsyncStorage. Wraps the app in `App.tsx`. Always use `colors` from `useTheme()` instead of hardcoding color values. `LightColors`/`DarkColors` are exported from `src/shared/constants/colors.js`.
+
+### Localization (i18n)
+`src/shared/i18n/I18nContext.js` — provides `{ lang, setLang, t, isRTL }` via `useI18n()`. Supports `ar`, `en`, `hi`. Locale JSON files in `src/shared/i18n/locales/`. Persists to AsyncStorage. Use `t('key')` for all UI text — do NOT hardcode Arabic strings in new screens. Supports dot-notation keys (`t('orders.title')`) and `{{param}}` interpolation.
+
+### Profile Navigator (Biker)
+`src/biker/features/profile/ProfileNavigator.js` — sub-screens: `PersonalInfoScreen`, `WalletScreen`, `LanguageScreen`, `SupportScreen`, `TermsScreen`. Navigation via `onNavigate(screenName)` / `onBack()` props.
+
+---
+
+## Partner App (role: 'manager')
+
+Completely separate from the biker app. Same shared context (Theme, i18n, colors). Entry: `src/partner/navigation/PartnerNavigator.js`.
+
+### Partner Screens & Their Purpose
+
+**Dashboard tab (`src/partner/features/dashboard/`)**
+- `DashboardScreen` — 4 stat cards (today's orders, pending, completed, bikers on duty) + recent orders list. Tapping a `PENDING_PARTNER` order opens `IncomingOrderScreen` inline (replaces the whole screen).
+
+**Orders tab (`src/partner/features/orders/`)**
+- `IncomingOrderScreen` — full-screen ring UI with 60-second countdown. Auto-calls `onReject('AUTO_TIMEOUT')` when timer hits 0. Reject requires selecting a reason (enum); if "أخرى" is selected, a note field becomes mandatory.
+- `OrdersScreen` — filterable list by status (PENDING_PARTNER, ACCEPTED, ASSIGNED, ON_THE_WAY, STARTED, COMPLETED).
+- `OrderDetailsScreen` — shows customer info, service, timeline, biker assignment. Contains a "تعيين بايكر" button that mounts `AssignBikerScreen` inline (only shown when `status === 'ACCEPTED'` and no biker assigned).
+- `AssignBikerScreen` — lists bikers where `isOnDuty=true`, shows `activeOrdersCount` per biker. Confirm triggers assignment.
+- `SkipReviewScreen` — list of pending skip-photo requests. Manager can Approve or Reject each; rejection removes it from pending. Also accessible from `OperationsNavigator`.
+
+**Operations tab (`src/partner/features/operations/`)**
+- `OperationsNavigator` — menu screen listing 5 sections as tappable rows; navigates to each screen using `display:'none'` + BackHandler pattern.
+- `ServicesScreen` — list of services with S/M/L pricing, category badge, active toggle.
+- `PackagesScreen` — list of packages with included services, S/M/L pricing, uses count, validity days, active toggle.
+- `StaffScreen` — tabbed (Bikers / Managers). Each row shows duty status toggle and active order count.
+- `BranchesScreen` — list of branches with working hours per day (closed days shown greyed), slot duration, buffer time.
+
+### Partner Order State Machine
+```
+PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER → ACCEPTED → ASSIGNED → ON_THE_WAY → STARTED → COMPLETED
+```
+Rejection only from `PENDING_PARTNER`. Cancellation from `ACCEPTED / ASSIGNED / ON_THE_WAY / STARTED`.
+
+### Inline Screen Pattern (Partner)
+`IncomingOrderScreen` and `AssignBikerScreen` are not separate navigator screens — they are mounted **inline** inside their parent screen using a local `useState` flag. This keeps them tightly coupled to the order context without needing navigator props.
 
 ---
 
@@ -156,6 +225,7 @@ All UI text is hardcoded in Arabic. No i18n library is set up.
 - Icons: `lucide-react-native` + `react-native-svg` (pinned at `15.11.2`)
 - Styling: `StyleSheet.create` (NativeWind installed but not configured)
 - Camera/Images: `react-native-image-picker` v7.1.2
+- Storage: `@react-native-async-storage/async-storage` (used by ThemeContext and I18nContext)
 
 ## Forbidden
 - Expo or any Expo SDK

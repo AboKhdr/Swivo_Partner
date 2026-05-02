@@ -5,6 +5,14 @@
     "reviews": "Reviews",
     "profile": "Account"
   },
+  "partner": {
+    "nav": {
+      "dashboard": "Dashboard",
+      "orders": "Orders",
+      "operations": "Operations",
+      "profile": "Account"
+    }
+  },
   "auth": {
     "welcome": "Welcome!",
     "tagline": "Log in and manage your customer services in Swivo — your personal guide to car washing delivered to your door!",

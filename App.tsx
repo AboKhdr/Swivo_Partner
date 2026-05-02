@@ -3,19 +3,26 @@ import {View} from 'react-native';
 import {ThemeProvider} from './src/shared/context/ThemeContext';
 import {I18nProvider, useI18n} from './src/shared/i18n/I18nContext';
 import LoginScreen from './src/features/auth/LoginScreen';
-import AppNavigator from './src/biker/navigation/AppNavigator';
+import BikerNavigator from './src/biker/navigation/AppNavigator';
+import PartnerNavigator from './src/partner/navigation/PartnerNavigator';
+
+type Role = 'biker' | 'manager' | null;
 
 function AppRoot() {
-  const [authed, setAuthed] = useState(false);
+  const [role, setRole] = useState<Role>('manager');
   const {isRTL} = useI18n();
 
   return (
     <View style={{flex: 1, direction: isRTL ? 'rtl' : 'ltr'}}>
       <ThemeProvider>
-        {authed
-          ? <AppNavigator />
-          : <LoginScreen onLogin={() => setAuthed(true)} onGuest={() => setAuthed(true)} />
-        }
+        {role === 'biker'   && <BikerNavigator />}
+        {role === 'manager' && <PartnerNavigator />}
+        {role === null && (
+          <LoginScreen
+            onLogin={(userRole: Role) => setRole(userRole || 'biker')}
+            onGuest={() => setRole('biker')}
+          />
+        )}
       </ThemeProvider>
     </View>
   );
