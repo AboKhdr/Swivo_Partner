@@ -1,96 +1,215 @@
 import React, {useCallback, useState} from 'react';
-import {FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Plus, ToggleLeft, ToggleRight} from 'lucide-react-native';
+import {
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
+import {ArrowRight, Plus, Bike, Star, Phone, UserX, PauseCircle, Trash2, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-
-const TABS = [{key: 'bikers', label: 'البايكرز'}, {key: 'managers', label: 'المديرون'}];
+import {useI18n} from '../../../shared/i18n/I18nContext';
 
 const MOCK_STAFF = {
   bikers: [
-    {id: 'b1', name: 'محمد علي',     phone: '0501111111', branch: 'الفرع الرئيسي', isOnDuty: true,  activeOrders: 1},
-    {id: 'b2', name: 'أنس كريم',     phone: '0502222222', branch: 'الفرع الرئيسي', isOnDuty: true,  activeOrders: 0},
-    {id: 'b3', name: 'يوسف إبراهيم', phone: '0503333333', branch: 'فرع العليا',    isOnDuty: false, activeOrders: 0},
+    {id: 'b1', name: 'خالد العتيبي',     phone: '0501111111', trips: 25, rating: 4.8, isOnDuty: true,  status: 'active'},
+    {id: 'b2', name: 'محمد الشمري',      phone: '0502222222', trips: 18, rating: 4.6, isOnDuty: true,  status: 'active'},
+    {id: 'b3', name: 'عبدالرحمن السعدي', phone: '0503333333', trips: 40, rating: 4.9, isOnDuty: false, status: 'suspended'},
+    {id: 'b4', name: 'فيصل القحطاني',    phone: '0504444444', trips: 12, rating: 4.3, isOnDuty: false, status: 'active'},
   ],
   managers: [
-    {id: 'm1', name: 'سالم العتيبي',  phone: '0504444444', branch: 'الفرع الرئيسي', isOnDuty: true,  activeOrders: 0},
-    {id: 'm2', name: 'عبدالله الزهراني', phone: '0505555555', branch: 'فرع العليا', isOnDuty: false, activeOrders: 0},
+    {id: 'm1', name: 'سالم العتيبي',     phone: '0505555555', trips: 0, rating: 5.0, isOnDuty: true,  status: 'active'},
+    {id: 'm2', name: 'عبدالله الزهراني', phone: '0506666666', trips: 0, rating: 4.7, isOnDuty: false, status: 'active'},
   ],
 };
 
-function StaffCard({item, colors, onToggleDuty}) {
+function buildStopOptions(t) {
+  return [
+    {key: 'suspend',  label: t('partner.bikers.actions.suspend'),    sub: t('partner.bikers.actions.suspendSub'),    Icon: PauseCircle, color: '#F59E0B'},
+    {key: 'deactive', label: t('partner.bikers.actions.deactivate'), sub: t('partner.bikers.actions.deactivateSub'), Icon: UserX,       color: '#EF4444'},
+    {key: 'delete',   label: t('partner.bikers.actions.delete'),     sub: t('partner.bikers.actions.deleteSub'),     Icon: Trash2,      color: '#EF4444'},
+  ];
+}
+
+function AvatarPlaceholder({size, colors}) {
   return (
-    <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-      <View style={s.cardRow}>
-        <View style={[s.avatar, {backgroundColor: colors.primary + '18'}]}>
-          <Text style={[s.avatarText, {color: colors.primary}]}>{item.name[0]}</Text>
-        </View>
-        <View style={s.info}>
-          <Text style={[s.name, {color: colors.textPrimary}]}>{item.name}</Text>
-          <Text style={[s.phone, {color: colors.textSecondary}]}>{item.phone}</Text>
-          <Text style={[s.branch, {color: colors.textSecondary}]}>{item.branch}</Text>
-        </View>
-        <View style={s.right}>
-          <TouchableOpacity onPress={() => onToggleDuty(item)}>
-            {item.isOnDuty
-              ? <ToggleRight size={28} color={colors.success} />
-              : <ToggleLeft  size={28} color={colors.textSecondary} />
-            }
-          </TouchableOpacity>
-          <View style={[s.dutyBadge, {backgroundColor: item.isOnDuty ? colors.success + '18' : colors.bg, borderColor: item.isOnDuty ? colors.success : colors.border}]}>
-            <Text style={[s.dutyText, {color: item.isOnDuty ? colors.success : colors.textSecondary}]}>
-              {item.isOnDuty ? 'نشط' : 'غير نشط'}
-            </Text>
-          </View>
-        </View>
-      </View>
-      {item.isOnDuty && item.activeOrders > 0 && (
-        <View style={[s.ordersRow, {borderTopColor: colors.border}]}>
-          <Text style={[s.ordersText, {color: colors.textSecondary}]}>{item.activeOrders} طلب نشط حالياً</Text>
-        </View>
-      )}
+    <View style={[ap.wrap, {width: size, height: size, borderRadius: size / 2, backgroundColor: colors.primary + '15'}]}>
+      <View style={[ap.head, {backgroundColor: colors.primary + '40', width: size * 0.38, height: size * 0.38, borderRadius: size * 0.19}]} />
+      <View style={[ap.body, {backgroundColor: colors.primary + '40', width: size * 0.58, height: size * 0.3, borderRadius: size * 0.08}]} />
     </View>
   );
 }
 
-export default function StaffScreen() {
-  const {colors} = useTheme();
-  const [activeTab, setActiveTab] = useState('bikers');
-  const [staff, setStaff] = useState(MOCK_STAFF);
+const ap = StyleSheet.create({
+  wrap: {alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden', paddingBottom: 0},
+  head: {marginBottom: 2},
+  body: {},
+});
 
-  const handleToggleDuty = useCallback((item) => {
-    setStaff(prev => ({
-      ...prev,
-      [activeTab]: prev[activeTab].map(s => s.id === item.id ? {...s, isOnDuty: !s.isOnDuty} : s),
-    }));
+function StopSheet({visible, biker, onClose, onAction, colors, t}) {
+  if (!biker) return null;
+  const stopOptions = buildStopOptions(t);
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={ss.overlay} />
+      </TouchableWithoutFeedback>
+      <View style={ss.sheet}>
+        <View style={[ss.card, {backgroundColor: colors.card}]}>
+          <View style={[ss.handle, {backgroundColor: colors.border}]} />
+
+          <View style={ss.bikerRow}>
+            <AvatarPlaceholder size={40} colors={colors} />
+            <View style={ss.bikerInfo}>
+              <Text style={[ss.bikerName, {color: colors.textPrimary}]}>{biker.name}</Text>
+              <Text style={[ss.bikerSub,  {color: colors.textSecondary}]}>{biker.trips} {t('partner.bikers.trips')}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={ss.closeBtn}>
+              <X size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={[ss.divider, {backgroundColor: colors.border}]} />
+
+          {stopOptions.map((opt, i) => (
+            <View key={opt.key}>
+              <TouchableOpacity
+                style={ss.optRow}
+                onPress={() => { onAction(opt.key, biker); onClose(); }}
+                activeOpacity={0.75}>
+                <View style={[ss.optIcon, {backgroundColor: opt.color + '15'}]}>
+                  <opt.Icon size={18} color={opt.color} />
+                </View>
+                <View style={ss.optText}>
+                  <Text style={[ss.optLabel, {color: opt.color}]}>{opt.label}</Text>
+                  <Text style={[ss.optSub,   {color: colors.textSecondary}]}>{opt.sub}</Text>
+                </View>
+              </TouchableOpacity>
+              {i < stopOptions.length - 1 && (
+                <View style={[ss.divider, {backgroundColor: colors.border}]} />
+              )}
+            </View>
+          ))}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const ss = StyleSheet.create({
+  overlay:   {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)'},
+  sheet:     {flex: 1, justifyContent: 'flex-end'},
+  card:      {borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32},
+  handle:    {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8},
+  bikerRow:  {flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14},
+  bikerInfo: {flex: 1},
+  bikerName: {fontSize: 16, fontWeight: '800'},
+  bikerSub:  {fontSize: 12, marginTop: 2},
+  closeBtn:  {width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
+  divider:   {height: 1},
+  optRow:    {flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 16},
+  optIcon:   {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center'},
+  optText:   {flex: 1, gap: 2},
+  optLabel:  {fontSize: 15, fontWeight: '700'},
+  optSub:    {fontSize: 12},
+});
+
+function BikerCard({item, colors, tripsLabel, onOptions}) {
+  return (
+    <TouchableOpacity
+      style={[s.card, {backgroundColor: colors.card}]}
+      onPress={() => onOptions(item)}
+      activeOpacity={0.85}>
+
+      <View style={[s.phoneBtn, {backgroundColor: colors.bg}]}>
+        <Phone size={18} color={colors.textSecondary} />
+      </View>
+
+      <View style={s.info}>
+        <Text style={[s.name, {color: colors.textPrimary}]}>{item.name}</Text>
+        <View style={s.statsRow}>
+          <Bike size={14} color="#F59E0B" />
+          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{item.trips} {tripsLabel}</Text>
+          <Star size={13} color="#F59E0B" fill="#F59E0B" />
+          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{item.rating}</Text>
+        </View>
+      </View>
+
+      <AvatarPlaceholder size={56} colors={colors} />
+    </TouchableOpacity>
+  );
+}
+
+export default function StaffScreen({onBack}) {
+  const {colors} = useTheme();
+  const {t} = useI18n();
+  const [activeTab,  setActiveTab]  = useState('bikers');
+  const [staff,      setStaff]      = useState(MOCK_STAFF);
+  const [sheetBiker, setSheetBiker] = useState(null);
+
+  const tabs = [
+    {key: 'bikers',   label: t('partner.staff.bikers')},
+    {key: 'managers', label: t('partner.staff.managers')},
+  ];
+
+  const handleOptions = useCallback(item => setSheetBiker(item), []);
+
+  const handleAction = useCallback((action, biker) => {
+    if (action === 'delete') {
+      setStaff(prev => ({
+        ...prev,
+        [activeTab]: prev[activeTab].filter(b => b.id !== biker.id),
+      }));
+    } else if (action === 'suspend' || action === 'deactive') {
+      setStaff(prev => ({
+        ...prev,
+        [activeTab]: prev[activeTab].map(b =>
+          b.id === biker.id ? {...b, isOnDuty: false, status: action === 'suspend' ? 'suspended' : 'deactive'} : b,
+        ),
+      }));
+    }
   }, [activeTab]);
 
+  const tripsLabel = t('partner.bikers.trips');
   const renderItem = useCallback(({item}) => (
-    <StaffCard item={item} colors={colors} onToggleDuty={handleToggleDuty} />
-  ), [colors, handleToggleDuty]);
+    <BikerCard item={item} colors={colors} tripsLabel={tripsLabel} onOptions={handleOptions} />
+  ), [colors, tripsLabel, handleOptions]);
 
   const keyExtractor = useCallback(item => item.id, []);
 
+  const totalActive = staff[activeTab].filter(st => st.isOnDuty).length;
+  const tabLabel    = activeTab === 'bikers' ? t('partner.staff.bikers') : t('partner.staff.managers');
+
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
-      <View style={[s.header, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
-        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>الموظفون</Text>
-        <TouchableOpacity style={[s.addBtn, {backgroundColor: colors.primary}]}>
-          <Plus size={18} color="#FFF" />
-          <Text style={s.addBtnText}>إضافة</Text>
+      <View style={[s.header, {backgroundColor: colors.bg}]}>
+        <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
+          <ArrowRight size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={s.headerText}>
+          <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{tabLabel}</Text>
+          <Text style={[s.headerSub, {color: colors.textSecondary}]}>
+            {totalActive} {t('partner.operations.menu.bikersSub').split(' - ')[0].replace(/\d+ /, '')} - {staff[activeTab].length}
+          </Text>
+        </View>
+        <TouchableOpacity style={[s.addBtn, {backgroundColor: colors.primary}]} activeOpacity={0.85}>
+          <Plus size={20} color="#FFF" />
         </TouchableOpacity>
       </View>
 
-      <View style={[s.tabs, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
-        {TABS.map(tab => (
+      <View style={[s.tabs, {borderBottomColor: colors.border}]}>
+        {tabs.map(tab => (
           <TouchableOpacity
             key={tab.key}
             style={[s.tab, activeTab === tab.key && {borderBottomColor: colors.primary, borderBottomWidth: 2}]}
             onPress={() => setActiveTab(tab.key)}>
-            <Text style={[s.tabText, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
+            <Text style={[s.tabTxt, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
               {tab.label}
             </Text>
-            <View style={[s.tabCount, {backgroundColor: activeTab === tab.key ? colors.primary + '18' : colors.bg}]}>
-              <Text style={[s.tabCountText, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
+            <View style={[s.tabBadge, {backgroundColor: activeTab === tab.key ? colors.primary + '18' : colors.card}]}>
+              <Text style={[s.tabBadgeTxt, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
                 {staff[tab.key].length}
               </Text>
             </View>
@@ -103,34 +222,55 @@ export default function StaffScreen() {
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={s.list}
+        showsVerticalScrollIndicator={false}
+      />
+
+      <StopSheet
+        visible={!!sheetBiker}
+        biker={sheetBiker}
+        onClose={() => setSheetBiker(null)}
+        onAction={handleAction}
+        colors={colors}
+        t={t}
       />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  root:         {flex: 1},
-  header:       {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1},
-  headerTitle:  {fontSize: 22, fontWeight: '800'},
-  addBtn:       {flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12},
-  addBtnText:   {color: '#FFF', fontSize: 13, fontWeight: '700'},
-  tabs:         {flexDirection: 'row', borderBottomWidth: 1},
-  tab:          {flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14},
-  tabText:      {fontSize: 14, fontWeight: '700'},
-  tabCount:     {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10},
-  tabCountText: {fontSize: 12, fontWeight: '700'},
-  list:         {padding: 16, gap: 10},
-  card:         {borderRadius: 16, borderWidth: 1, overflow: 'hidden'},
-  cardRow:      {flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12},
-  avatar:       {width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center'},
-  avatarText:   {fontSize: 18, fontWeight: '800'},
-  info:         {flex: 1, gap: 2},
-  name:         {fontSize: 15, fontWeight: '700'},
-  phone:        {fontSize: 12},
-  branch:       {fontSize: 12},
-  right:        {alignItems: 'center', gap: 4},
-  dutyBadge:    {paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1},
-  dutyText:     {fontSize: 10, fontWeight: '700'},
-  ordersRow:    {paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1},
-  ordersText:   {fontSize: 12},
+  root:        {flex: 1},
+  header:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16},
+  backBtn:     {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
+  addBtn:      {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},
+  headerText:  {flex: 1, gap: 2, paddingHorizontal: 8},
+  headerTitle: {fontSize: 26, fontWeight: '900'},
+  headerSub:   {fontSize: 13},
+
+  tabs:        {flexDirection: 'row', borderBottomWidth: 1},
+  tab:         {flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14},
+  tabTxt:      {fontSize: 14, fontWeight: '700'},
+  tabBadge:    {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10},
+  tabBadgeTxt: {fontSize: 12, fontWeight: '700'},
+
+  list:        {paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 12},
+
+  card:        {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            12,
+    borderRadius:   20,
+    paddingVertical:   14,
+    paddingHorizontal: 16,
+    elevation:      2,
+    shadowColor:    '#000',
+    shadowOpacity:  0.05,
+    shadowRadius:   10,
+    shadowOffset:   {width: 0, height: 2},
+  },
+
+  phoneBtn:    {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center'},
+  info:        {flex: 1, gap: 4, alignItems: 'center'},
+  name:        {fontSize: 16, fontWeight: '800'},
+  statsRow:    {flexDirection: 'row', alignItems: 'center', gap: 4},
+  statTxt:     {fontSize: 12, fontWeight: '500'},
 });

@@ -3,7 +3,7 @@ import {FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, Touchable
 import {Bell, Info, Car, Phone, MapPin} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import IncomingOrderScreen from '../orders/IncomingOrderScreen';
+import NotificationsScreen from './NotificationsScreen';
 
 const MOCK_BRANCH = {
   name: 'مغسلة الكروية',
@@ -25,14 +25,14 @@ const MOCK_BIKERS = [
   {id: '2', name: 'غيث الكفرسوسائي', status: 'متاح', dotColor: '#22C55E'},
 ];
 
-function OrderCard({item, colors, onPress}) {
+function OrderCard({item, colors, t, onPress}) {
   return (
     <TouchableOpacity
       style={[s.pendingCard, {backgroundColor: colors.card, borderColor: colors.border}]}
       onPress={() => onPress(item)}
       activeOpacity={0.75}>
       <View style={[s.pendingBadge, {backgroundColor: '#F59E0B18'}]}>
-        <Text style={[s.pendingBadgeText, {color: '#F59E0B'}]}>• قيد الانتظار</Text>
+        <Text style={[s.pendingBadgeText, {color: '#F59E0B'}]}>• {t('partner.dashboard.pending')}</Text>
       </View>
       <View style={s.pendingRow}>
         <View style={[s.carIconBox, {backgroundColor: colors.bg}]}>
@@ -71,37 +71,22 @@ function BikerCard({item, colors}) {
 export default function DashboardScreen() {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [refreshing, setRefreshing] = useState(false);
-  const [incomingOrder, setIncomingOrder] = useState(null);
+  const [refreshing, setRefreshing]       = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1200);
   }, []);
 
-  const handleOrderPress = useCallback((order) => {
-    if (order.status === 'PENDING_PARTNER') {
-      setIncomingOrder(order);
-    }
-  }, []);
-
-  const handleAccept = useCallback(() => setIncomingOrder(null), []);
-  const handleReject = useCallback(() => setIncomingOrder(null), []);
-
-  if (incomingOrder) {
-    return (
-      <IncomingOrderScreen
-        order={incomingOrder}
-        onAccept={handleAccept}
-        onReject={handleReject}
-      />
-    );
+  if (showNotifications) {
+    return <NotificationsScreen onBack={() => setShowNotifications(false)} />;
   }
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <View style={[s.topBar]}>
-        <TouchableOpacity style={s.topBarBtn} activeOpacity={0.75}>
+        <TouchableOpacity style={s.topBarBtn} activeOpacity={0.75} onPress={() => setShowNotifications(true)}>
           <Bell size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View>
@@ -118,40 +103,40 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}>
 
         <View style={{paddingHorizontal: 16, paddingTop: 20}}>
-        <Text style={s.heroGreeting}>مرحباً، {MOCK_BRANCH.managerName}</Text>
-        <Text style={s.heroBranchName}>{MOCK_BRANCH.name}</Text>
+          <Text style={s.heroGreeting}>{t('partner.dashboard.title')}، {MOCK_BRANCH.managerName}</Text>
+          <Text style={s.heroBranchName}>{MOCK_BRANCH.name}</Text>
         </View>
         <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
-          <Text style={s.heroRevenueLabel}>إيرادات اليوم</Text>
+          <Text style={s.heroRevenueLabel}>{t('partner.dashboard.revenue')}</Text>
           <Text style={s.heroRevenue}> {MOCK_BRANCH.todayRevenue}</Text>
           <View style={s.heroStats}>
             <View style={s.heroStatItem}>
               <Text style={s.heroStatValue}>{MOCK_BRANCH.pendingOrders}</Text>
-              <Text style={s.heroStatLabel}>قيد الانتظار</Text>
+              <Text style={s.heroStatLabel}>{t('partner.dashboard.pending')}</Text>
             </View>
             <View style={s.heroStatItem}>
               <Text style={s.heroStatValue}>{MOCK_BRANCH.activeOrders}</Text>
-              <Text style={s.heroStatLabel}>فعال</Text>
+              <Text style={s.heroStatLabel}>{t('partner.dashboard.active')}</Text>
             </View>
             <View style={s.heroStatItem}>
               <Text style={s.heroStatValue}>{MOCK_BRANCH.totalOrders}</Text>
-              <Text style={s.heroStatLabel}>الطلبات</Text>
+              <Text style={s.heroStatLabel}>{t('partner.dashboard.orders')}</Text>
             </View>
           </View>
         </View>
 
         <View style={s.section}>
-          <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>طلبات قيد الانتظار</Text>
+          <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.pendingOrders')}</Text>
           {MOCK_PENDING.map(item => (
-            <OrderCard key={item.id} item={item} colors={colors} onPress={handleOrderPress} />
+            <OrderCard key={item.id} item={item} colors={colors} t={t} onPress={() => {}} />
           ))}
         </View>
 
         <View style={s.section}>
           <View style={s.sectionHeader}>
-            <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>البايكرز النشطين</Text>
+            <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.activeBikers')}</Text>
             <TouchableOpacity activeOpacity={0.75}>
-              <Text style={[s.viewAll, {color: colors.primary}]}>عرض الكل</Text>
+              <Text style={[s.viewAll, {color: colors.primary}]}>{t('partner.dashboard.viewAll')}</Text>
             </TouchableOpacity>
           </View>
           {MOCK_BIKERS.map(item => (

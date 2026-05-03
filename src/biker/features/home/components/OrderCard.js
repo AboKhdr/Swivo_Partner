@@ -6,7 +6,7 @@ import {useTheme} from '../../../../shared/context/ThemeContext';
 export default function OrderCard({order, index}) {
   const {colors} = useTheme();
   const st = STATUS_MAP[order.status] ?? {label: order.status, color: colors.textSecondary};
-  const sc = STATUS_COLORS[order.status] ?? {bg: '#F1F5F9', text: '#64748B', dot: '#94A3B8'};
+  const sc = STATUS_COLORS[order.status] ?? {bg: colors.card, text: colors.textSecondary, dot: colors.textSecondary};
 
   const scale = useRef(new Animated.Value(0.88)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -57,7 +57,7 @@ export default function OrderCard({order, index}) {
         </View>
         <View style={[s.footer, {borderTopColor: colors.border}]}>
           <Text style={[s.client, {color: colors.textSecondary}]}>👤 {order.client.firstName}</Text>
-          <Text style={s.earning}>﷼ {order.bikerEarning.toFixed(0)}</Text>
+          <Text style={[s.earning, {color: colors.success}]}>﷼ {order.bikerEarning.toFixed(0)}</Text>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -87,5 +87,5 @@ const s = StyleSheet.create({
   serviceText: {fontSize: 11, fontWeight: '600'},
   footer: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1},
   client: {fontSize: 11},
-  earning: {fontSize: 14, fontWeight: '800', color: '#059669'},
+  earning: {fontSize: 14, fontWeight: '800'},
 });

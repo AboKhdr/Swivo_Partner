@@ -11,6 +11,315 @@
       "orders": "Orders",
       "operations": "Operations",
       "profile": "Account"
+    },
+    "dashboard": {
+      "title": "Welcome",
+      "revenue": "Today's Revenue",
+      "pending": "Pending",
+      "active": "Active",
+      "orders": "Orders",
+      "activeBikers": "Active Bikers",
+      "viewAll": "View All",
+      "pendingOrders": "Pending Orders"
+    },
+    "orders": {
+      "title": "Orders",
+      "all": "All",
+      "searchPlaceholder": "Search by name or number...",
+      "noOrders": "No orders found",
+      "fullAmount": "Full Amount",
+      "viewDetails": "View Details",
+      "status": {
+        "PENDING_PARTNER": "Awaiting Approval",
+        "ACCEPTED": "Accepted",
+        "ASSIGNED": "Assigned",
+        "ON_THE_WAY": "On the Way",
+        "STARTED": "Started",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled"
+      }
+    },
+    "orderDetails": {
+      "title": "Order Details",
+      "branch": "Branch",
+      "payment": "Payment",
+      "paymentVia": "Payment made via",
+      "customerNote": "Customer Notes",
+      "timeline": "Timeline",
+      "timelineArrived": "Order Received",
+      "timelineBiker": "Biker Arrived",
+      "timelineStart": "Wash Started",
+      "timelineEnd": "Wash Finished",
+      "reject": "Reject",
+      "sendBiker": "Send Biker",
+      "assignBiker": "Assign Biker",
+      "cancel": "Cancel Order"
+    },
+    "incoming": {
+      "live": "LIVE",
+      "title": "New Incoming Order",
+      "timer": "minutes to accept and start",
+      "cost": "Cost",
+      "serviceType": "Service Type",
+      "carType": "Car Type",
+      "plate": "Plate",
+      "accept": "Accept Order",
+      "reject": "Reject",
+      "rejectTitle": "Rejection Reason",
+      "rejectConfirm": "Confirm Rejection",
+      "rejectReasons": {
+        "busy": "Currently busy",
+        "outOfRange": "Out of service area",
+        "noBiker": "No biker available",
+        "duplicate": "Duplicate order",
+        "other": "Other"
+      },
+      "rejectNotePlaceholder": "Write reason..."
+    },
+    "assignBiker": {
+      "title": "Assign Biker",
+      "hint": "Only bikers currently on duty will be shown here.",
+      "nearest": "Nearest",
+      "topRated": "Top Rated",
+      "available": "Available",
+      "sending": "Sending...",
+      "send": "Send Biker"
+    },
+    "skipReview": {
+      "title": "Skip Photo Requests",
+      "pending": "Pending",
+      "approved": "Approved",
+      "reason": "Reason:",
+      "note": "Note:",
+      "reject": "Reject",
+      "approve": "Approve",
+      "empty": "No pending requests"
+    },
+    "operations": {
+      "title": "Management",
+      "autoAccept": "Auto-accept Orders",
+      "autoAcceptSub": "Orders will be accepted automatically without sending an approval request to you",
+      "sections": {
+        "management": "Wash Management",
+        "staff": "Staff",
+        "financial": "Financial"
+      },
+      "menu": {
+        "branches": "Branches",
+        "branchesSub": "3 current branches",
+        "hours": "Working Hours",
+        "hoursSub": "7:00 AM - 12:00 AM",
+        "services": "Services",
+        "servicesSub": "8 services",
+        "packages": "Packages",
+        "packagesSub": "8 services - 4 types",
+        "offers": "Offers & Discounts",
+        "offersSub": "2 active",
+        "bikers": "Bikers",
+        "bikersSub": "4 active - 2 on duty",
+        "skipReview": "Approval Requests",
+        "skipReviewSub": "8 requests - 4 types",
+        "staff": "Staff & Permissions",
+        "staffSub": "7:00 AM - 12:00 AM",
+        "payments": "Payment Log",
+        "paymentsSub": "4 active - 2 on duty",
+        "reviews": "Reviews",
+        "reviewsSub": "6 customer reviews"
+      }
+    },
+    "services": {
+      "title": "Services",
+      "addService": "Add Service",
+      "editService": "Edit Service",
+      "photo": "Service Photo",
+      "name": "Service Name",
+      "namePlaceholder": "e.g. Quick Wash",
+      "category": "Service Category",
+      "categoryPlaceholder": "Select category",
+      "serviceType": "Service Types",
+      "atShop": "At Shop",
+      "atHome": "At Home",
+      "both": "Both",
+      "pricing": "Service Pricing",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "save": "Save Service",
+      "saveEdit": "Save Changes",
+      "categories": {
+        "wash": "Wash",
+        "polish": "Polish",
+        "sterilize": "Sterilize",
+        "extra": "Extra"
+      }
+    },
+    "packages": {
+      "title": "Packages",
+      "addPackage": "Add Package",
+      "editPackage": "Edit Package",
+      "summary": "Package Summary",
+      "namePlaceholder": "e.g. Monthly Package",
+      "servicesLabel": "Services in Package",
+      "servicesPlaceholder": "Select services",
+      "servicesSelected": "services selected",
+      "countPerService": "Count per Service",
+      "remove": "Remove",
+      "done": "Done",
+      "save": "Save Package",
+      "saveEdit": "Save Changes",
+      "addPhoto": "Add package photo",
+      "available": "packages available"
+    },
+    "bikers": {
+      "title": "Bikers",
+      "addBiker": "Add Biker",
+      "editBiker": "Edit Biker",
+      "photo": "Biker Photo",
+      "personalInfo": "Personal Information",
+      "fullName": "Full Name",
+      "phone": "Phone Number",
+      "branch": "Assigned Branch",
+      "branchPlaceholder": "Select branch",
+      "workHours": "Working Hours",
+      "save": "Add Biker",
+      "saveEdit": "Save Changes",
+      "trips": "Trips",
+      "actions": {
+        "suspend": "Suspend",
+        "suspendSub": "Temporarily stop the biker from receiving orders",
+        "deactivate": "Deactivate Account",
+        "deactivateSub": "Deactivate account — biker won't be able to log in",
+        "delete": "Delete Biker",
+        "deleteSub": "Permanent deletion — cannot be undone"
+      },
+      "days": {
+        "sat": "Saturday",
+        "sun": "Sunday",
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday"
+      }
+    },
+    "staff": {
+      "title": "Staff",
+      "bikers": "Bikers",
+      "managers": "Managers"
+    },
+    "branches": {
+      "title": "Branches",
+      "subtitle": "branches available",
+      "main": "Main",
+      "orders": "orders",
+      "changePhoto": "Change Photo"
+    },
+    "payments": {
+      "title": "Payment Log",
+      "operations": "transactions",
+      "incoming": "Total Incoming",
+      "outgoing": "Total Outgoing",
+      "net": "Net",
+      "filter": {
+        "all": "All",
+        "today": "Today",
+        "last3": "Last 3 Days",
+        "week": "This Week",
+        "month": "This Month"
+      },
+      "methods": {
+        "card": "Card",
+        "wallet": "Wallet",
+        "cash": "Cash",
+        "auto": "Auto Deduct"
+      },
+      "status": {
+        "pending": "Pending Transfer"
+      },
+      "empty": "No payments in this period"
+    },
+    "reviews": {
+      "title": "Reviews",
+      "subtitle": "customer reviews",
+      "allBranches": "All Branches",
+      "empty": "No reviews for this branch",
+      "total": "reviews"
+    },
+    "profile": {
+      "title": "Profile",
+      "managerRole": "Wash Manager",
+      "accountSettings": "Account Settings",
+      "accountInfo": "Account Info",
+      "accountInfoSub": "Name, phone, email",
+      "notifications": "Notifications",
+      "notificationsSub": "Manage app notifications",
+      "preferences": "Preferences",
+      "appearance": "Appearance",
+      "darkMode": "Dark Mode",
+      "lightMode": "Light Mode",
+      "language": "Language",
+      "languageSub": "English",
+      "help": "Help",
+      "support": "Support",
+      "supportSub": "Contact us",
+      "terms": "Terms & Conditions",
+      "logout": "Log Out",
+      "logoutSub": "Sign out of current account"
+    },
+    "personalInfo": {
+      "title": "Account Info",
+      "myInfo": "My Info",
+      "fullName": "Full Name",
+      "phone": "Phone Number",
+      "email": "Email",
+      "dob": "Date of Birth",
+      "save": "Save Changes"
+    },
+    "support": {
+      "title": "Support",
+      "callUs": "Call Us",
+      "email": "Email",
+      "sendMessage": "Send us a Message",
+      "subject": "Subject",
+      "subjectPlaceholder": "Message subject",
+      "message": "Message",
+      "messagePlaceholder": "Write your message here...",
+      "successMsg": "Your message was sent successfully, we'll be in touch soon",
+      "send": "Send Message"
+    },
+    "terms": {
+      "title": "Terms & Conditions",
+      "lastUpdated": "Last updated: May 2025 — Please read these terms carefully before using the app.",
+      "sections": [
+        {
+          "title": "Acceptance of Terms",
+          "body": "By using the Tamam app, you agree to be bound by these terms and conditions. If you do not agree to any of these terms, please stop using the app immediately. The company reserves the right to modify these terms at any time with prior notice."
+        },
+        {
+          "title": "Services Provided",
+          "body": "The Tamam app provides a platform connecting car wash owners with customers. Services include: order management, biker tracking, branch and staff management, and payment records. The company is not responsible for any disputes arising between service providers and customers."
+        },
+        {
+          "title": "Privacy & Data Protection",
+          "body": "We are committed to protecting your personal data in accordance with Saudi Arabia's Personal Data Protection regulations. Your data is stored securely and will not be shared with any third party without your consent, except as required by law."
+        },
+        {
+          "title": "Payments & Invoices",
+          "body": "All amounts shown are in Saudi Riyals and include VAT. The company may adjust subscription prices with at least 30 days advance notice. Fees paid for expired periods are non-refundable."
+        },
+        {
+          "title": "Service Provider Obligations",
+          "body": "The service provider is committed to delivering agreed services at high quality, adhering to specified working hours, not sharing customer data with any other party, and immediately reporting any issue affecting service delivery."
+        },
+        {
+          "title": "Service Termination",
+          "body": "Either party may terminate the agreement with 14 days advance notice. The company reserves the right to immediately suspend an account in case of violation of any of these terms or proven fraudulent practices."
+        },
+        {
+          "title": "Governing Law",
+          "body": "These terms and conditions are governed by the laws of Saudi Arabia. Saudi courts have jurisdiction over any dispute arising from the application of these terms, with competent courts located in Riyadh."
+        }
+      ]
     }
   },
   "auth": {
@@ -18,7 +327,15 @@
     "tagline": "Log in and manage your customer services in Swivo — your personal guide to car washing delivered to your door!",
     "login": "Log In",
     "browseGuest": "Browse as Guest",
-    "invalidPhone": "Please enter a valid phone number"
+    "invalidPhone": "Please enter a valid phone number",
+    "otp": {
+      "title": "Verify Account",
+      "subtitle": "Please enter the verification code sent to your registered mailbox",
+      "next": "› Next",
+      "resend": "Resend",
+      "resendIn": "Resend in",
+      "invalidCode": "Invalid verification code"
+    }
   },
   "home": {
     "inService": "In Service",
@@ -79,31 +396,17 @@
   "orderDetails": {
     "title": "Order Details",
     "steps": {
-      "ASSIGNED": {
-        "title": "Ready to start?",
-        "desc": "When ready, tap \"On My Way\" to notify the customer and head to the location."
-      },
-      "ON_THE_WAY": {
-        "title": "Arrived at customer location?",
-        "desc": "Verify the car details and tap \"Start Wash\" when ready."
-      },
-      "ARRIVED": {
-        "title": "Let's start washing now",
-        "desc": "Make sure all washing tools are ready, then begin immediately."
-      },
-      "STARTED": {
-        "title": "Washing the car ✨",
-        "desc": "Ensure quality and cleanliness. Then tap \"Finish Wash\"."
-      },
-      "COMPLETED": {
-        "title": "Order Complete ✨",
-        "desc": "Service finished successfully. Please send the wash results to the customer."
-      }
+      "ASSIGNED": { "title": "Ready to start?", "desc": "When ready, tap \"On My Way\" to notify the customer and head to the location." },
+      "ON_THE_WAY": { "title": "Arrived at customer location?", "desc": "Verify the car details and tap \"Start Wash\" when ready." },
+      "ARRIVED": { "title": "Let's start washing now", "desc": "Make sure all washing tools are ready, then begin immediately." },
+      "STARTED": { "title": "Washing the car ✨", "desc": "Ensure quality and cleanliness. Then tap \"Finish Wash\"." },
+      "COMPLETED": { "title": "Order Complete ✨", "desc": "Service finished successfully. Please send the wash results to the customer." }
     },
     "actions": {
+      "ASSIGNED": "On My Way",
       "ON_THE_WAY": "On My Way",
-      "ARRIVED": "Arrived — Start Service",
-      "STARTED": "Start Wash",
+      "ARRIVED": "Take Before Photos",
+      "STARTED": "Done — After Photos",
       "COMPLETED": "Done — Upload Photos"
     },
     "camera": {
@@ -111,10 +414,17 @@
       "permissionMsg": "The app needs camera permission to capture proof photos",
       "allow": "Allow",
       "deny": "Deny",
-      "proofTitle": "Proof Photos",
-      "proofHint": "Capture up to 4 photos — at least 1 required",
+      "beforeTitle": "Before Wash Photos",
+      "beforeHint": "Capture car photos before starting — at least 1 required",
+      "afterTitle": "After Wash Photos",
+      "afterHint": "Capture car photos after finishing — at least 1 required",
       "photos": "Photos",
-      "confirmDone": "Confirm Completion"
+      "confirmDone": "Confirm & Continue",
+      "skip": "Skip Photos",
+      "skipTitle": "Skip Reason",
+      "skipBody": "You must provide a reason for skipping photos to continue",
+      "skipPlaceholder": "Write reason here...",
+      "skipConfirm": "Skip & Continue"
     },
     "cancel": {
       "button": "Cancel Order",
@@ -148,7 +458,7 @@
     "appearance": "Appearance",
     "darkMode": "Dark Mode",
     "lightMode": "Light Mode",
-    "language": "Primary Language",
+    "language": "Language",
     "languageSub": "English",
     "support": "Support",
     "supportSub": "Submit a report",
@@ -173,7 +483,7 @@
     "today": "Today"
   },
   "language": {
-    "title": "Primary Language",
+    "title": "Language",
     "subtitle": "Choose app language",
     "active": "Active",
     "arabic": "العربية",
@@ -194,34 +504,13 @@
     "lastUpdated": "Last updated: April 2026",
     "footer": "For inquiries about any clause, contact the support team",
     "sections": [
-      {
-        "title": "1. Acceptance of Terms",
-        "body": "By using the Tamam Biker app, you agree to be bound by these terms and conditions. If you disagree with any part, you are not permitted to use the app."
-      },
-      {
-        "title": "2. Nature of Service",
-        "body": "Tamam Biker is a platform connecting car wash service providers with customers. As an independent biker, you are not an employee of Tamam and bear responsibility for the quality and safety of service delivery."
-      },
-      {
-        "title": "3. Earnings & Payments",
-        "body": "Your earnings are calculated at 90% of each completed order's value. Withdrawal requests are processed within two business days. Tamam reserves the right to adjust commission rates with prior notice."
-      },
-      {
-        "title": "4. Professional Obligations",
-        "body": "The biker must arrive on time, use appropriate equipment, protect customer property, and act professionally at all times."
-      },
-      {
-        "title": "5. Order Cancellations",
-        "body": "Cancellations are only permitted in exceptional cases. Repeated cancellations may affect your rating and could result in account suspension."
-      },
-      {
-        "title": "6. Privacy & Data Protection",
-        "body": "We are committed to protecting your personal data in accordance with our adopted privacy policy. Your data will not be shared with third parties except with your consent or as required by law."
-      },
-      {
-        "title": "7. Account Termination",
-        "body": "Tamam has the right to suspend or terminate your account in case of a violation of these terms. You have the right to close your account at any time by contacting technical support."
-      }
+      { "title": "1. Acceptance of Terms", "body": "By using the Tamam Biker app, you agree to be bound by these terms and conditions. If you disagree with any part, you are not permitted to use the app." },
+      { "title": "2. Nature of Service", "body": "Tamam Biker is a platform connecting car wash service providers with customers. As an independent biker, you are not an employee of Tamam and bear responsibility for the quality and safety of service delivery." },
+      { "title": "3. Earnings & Payments", "body": "Your earnings are calculated at 90% of each completed order's value. Withdrawal requests are processed within two business days. Tamam reserves the right to adjust commission rates with prior notice." },
+      { "title": "4. Professional Obligations", "body": "The biker must arrive on time, use appropriate equipment, protect customer property, and act professionally at all times." },
+      { "title": "5. Order Cancellations", "body": "Cancellations are only permitted in exceptional cases. Repeated cancellations may affect your rating and could result in account suspension." },
+      { "title": "6. Privacy & Data Protection", "body": "We are committed to protecting your personal data in accordance with our adopted privacy policy. Your data will not be shared with third parties except with your consent or as required by law." },
+      { "title": "7. Account Termination", "body": "Tamam has the right to suspend or terminate your account in case of a violation of these terms. You have the right to close your account at any time by contacting technical support." }
     ]
   }
 }

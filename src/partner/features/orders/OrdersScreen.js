@@ -4,22 +4,15 @@ import {Search} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 
-const FILTERS = [
-  {key: 'all',             label: 'الكل'},
-  {key: 'PENDING_PARTNER', label: 'قيد الانتظار'},
-  {key: 'COMPLETED',       label: 'تم الغسيل'},
-  {key: 'STARTED',         label: 'جاري الغسيل'},
-];
-
-const STATUS_META = {
-  PENDING_PARTNER: {label: 'قيد الانتظار',   color: '#F59E0B'},
-  ACCEPTED:        {label: 'مقبول',           color: '#3B9EFF'},
-  ASSIGNED:        {label: 'تم التعيين',      color: '#8B5CF6'},
-  ON_THE_WAY:      {label: 'في الطريق',       color: '#1B7BF5'},
-  STARTED:         {label: 'جاري الغسيل',     color: '#F59E0B'},
-  COMPLETED:       {label: 'تم الغسيل',       color: '#22C55E'},
-  REJECTED:        {label: 'مرفوض',           color: '#EF4444'},
-  CANCELLED:       {label: 'ملغي',            color: '#EF4444'},
+const STATUS_COLORS = {
+  PENDING_PARTNER: '#F59E0B',
+  ACCEPTED:        '#3B9EFF',
+  ASSIGNED:        '#8B5CF6',
+  ON_THE_WAY:      '#1B7BF5',
+  STARTED:         '#F59E0B',
+  COMPLETED:       '#22C55E',
+  REJECTED:        '#EF4444',
+  CANCELLED:       '#EF4444',
 };
 
 const MOCK_ORDERS = [
@@ -31,14 +24,15 @@ const MOCK_ORDERS = [
   {id: '6', customerName: 'ريم الدوسري',  service: 'غسيل كامل',  status: 'ACCEPTED',        time: '09:30', price: '150', plate: 'MNO 1234', biker: null},
 ];
 
-function OrderCard({item, colors, onPress}) {
-  const meta = STATUS_META[item.status] || {label: item.status, color: '#64748B'};
+function OrderCard({item, colors, t, onPress}) {
+  const color = STATUS_COLORS[item.status] || '#64748B';
+  const statusLabel = t(`partner.orders.status.${item.status}`) || item.status;
   return (
     <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={s.cardTop}>
         <Text style={[s.cardId, {color: colors.primary}]}>#{item.id ? `KF-${item.id.padStart(4, '0')}` : ''}</Text>
-        <View style={[s.badge, {backgroundColor: meta.color + '18'}]}>
-          <Text style={[s.badgeText, {color: meta.color}]}>• {meta.label}</Text>
+        <View style={[s.badge, {backgroundColor: color + '18'}]}>
+          <Text style={[s.badgeText, {color: color}]}>• {statusLabel}</Text>
         </View>
       </View>
 
@@ -53,11 +47,11 @@ function OrderCard({item, colors, onPress}) {
 
       <View style={s.cardBottom}>
         <View style={s.priceCol}>
-          <Text style={[s.priceLabel, {color: colors.textSecondary}]}>المبلغ الكامل</Text>
+          <Text style={[s.priceLabel, {color: colors.textSecondary}]}>{t('partner.orders.fullAmount')}</Text>
           <Text style={[s.priceValue, {color: colors.textPrimary}]}>{item.price}</Text>
         </View>
-        <TouchableOpacity style={{backgroundColor: colors.primary + '10', borderRadius : 50, paddingHorizontal: 12, paddingVertical: 2}} onPress={() => onPress(item)} >
-          <Text style={[s.badge, {color: colors.primary}]}>عرض التفاصيل</Text>
+        <TouchableOpacity style={{backgroundColor: colors.primary + '10', borderRadius: 50, paddingHorizontal: 12, paddingVertical: 2}} onPress={() => onPress(item)}>
+          <Text style={[s.badge, {color: colors.primary}]}>{t('partner.orders.viewDetails')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -66,10 +60,17 @@ function OrderCard({item, colors, onPress}) {
 
 export default function OrdersScreen({onSelectOrder}) {
   const {colors} = useTheme();
-  const {isRTL} = useI18n();
+  const {t, isRTL} = useI18n();
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch]             = useState('');
   const [refreshing, setRefreshing]     = useState(false);
+
+  const FILTERS = [
+    {key: 'all',             label: t('partner.orders.all')},
+    {key: 'PENDING_PARTNER', label: t('partner.orders.status.PENDING_PARTNER')},
+    {key: 'COMPLETED',       label: t('partner.orders.status.COMPLETED')},
+    {key: 'STARTED',         label: t('partner.orders.status.STARTED')},
+  ];
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -84,21 +85,21 @@ export default function OrdersScreen({onSelectOrder}) {
   });
 
   const renderItem = useCallback(({item}) => (
-    <OrderCard item={item} colors={colors} onPress={onSelectOrder || (() => {})} />
-  ), [colors, onSelectOrder]);
+    <OrderCard item={item} colors={colors} t={t} onPress={onSelectOrder || (() => {})} />
+  ), [colors, t, onSelectOrder]);
 
   const keyExtractor = useCallback(item => item.id, []);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <View style={[s.header, {backgroundColor: colors.bg}]}>
-        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>جميع الطلبات</Text>
+        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('partner.orders.title')}</Text>
 
         <View style={[s.searchBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <Search size={16} color={colors.textSecondary} />
           <TextInput
             style={[s.searchInput, {color: colors.textPrimary}]}
-            placeholder="ابحث عن طريق اسم او نمرة..."
+            placeholder={t('partner.orders.searchPlaceholder')}
             placeholderTextColor={colors.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -141,7 +142,7 @@ export default function OrdersScreen({onSelectOrder}) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
         ListEmptyComponent={
           <View style={s.empty}>
-            <Text style={[s.emptyText, {color: colors.textSecondary}]}>لا توجد طلبات</Text>
+            <Text style={[s.emptyText, {color: colors.textSecondary}]}>{t('partner.orders.noOrders')}</Text>
           </View>
         }
       />

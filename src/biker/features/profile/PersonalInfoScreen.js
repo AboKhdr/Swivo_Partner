@@ -146,9 +146,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     minHeight: 50,
   },
-  inputRowDisabled: {
-    backgroundColor: '#F8FAFC',
-  },
+  inputRowDisabled: {},
   input: {
     flex: 1,
     fontSize: 14,

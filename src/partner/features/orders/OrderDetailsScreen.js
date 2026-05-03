@@ -3,6 +3,7 @@ import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native
 import {ArrowLeft, ShoppingBag, Phone, MapPin, Car, CreditCard, Info, Bike, CarFront, Droplets, Sparkles} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import AssignBikerScreen from './AssignBikerScreen';
+import RejectOrderModal from './RejectOrderModal';
 
 
 const TIMELINE_STEPS = [
@@ -24,10 +25,13 @@ const STATUS_ACTIVE_STEPS = {
 export default function OrderDetailsScreen({order, onBack}) {
   const {colors} = useTheme();
   const [showAssign, setShowAssign] = useState(false);
+  const [showReject, setShowReject] = useState(false);
 
+  const isPending  = order?.status === 'PENDING_PARTNER';
   const activeStep = STATUS_ACTIVE_STEPS[order?.status] ?? 0;
 
-  const handleAssigned = useCallback(() => setShowAssign(false), []);
+  const handleAssigned  = useCallback(() => setShowAssign(false), []);
+  const handleRejectConfirm = useCallback(() => setShowReject(false), []);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -138,29 +142,31 @@ export default function OrderDetailsScreen({order, onBack}) {
 
         {/* Timeline */}
         <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>وقت العملية</Text>
-        <View style={s.timeline}>
+        <View style={s.timelineRow}>
           {TIMELINE_STEPS.map((step, i) => {
             const {Icon} = step;
             const isActive    = i < activeStep;
             const isCurrent   = i === activeStep - 1;
             const highlighted = isActive || isCurrent;
-            const isLast      = i === TIMELINE_STEPS.length - 1;
+            const lineActive  = i < activeStep - 1;
             return (
-              <View key={step.key} style={s.timelineStep}>
-                {!isLast && (
-                  <View style={[s.timelineLine, {backgroundColor: isActive ? colors.primary : colors.border}]} />
-                )}
-                <View style={[
-                  s.timelineIconBox,
-                  highlighted
-                    ? {backgroundColor: colors.primary + '18', borderColor: colors.primary, borderWidth: 1.5}
-                    : {backgroundColor: '#FFFFFF',             borderWidth: 0,              elevation: 3, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: {width: 0, height: 2}},
-                ]}>
-                  <Icon size={22} color={highlighted ? colors.primary : colors.textSecondary} />
+              <React.Fragment key={step.key}>
+                <View style={s.timelineStep}>
+                  <View style={[
+                    s.timelineIconBox,
+                    highlighted
+                      ? {backgroundColor: colors.primary + '18', borderColor: colors.primary, borderWidth: 1.5}
+                      : {backgroundColor: colors.card, elevation: 3, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: {width: 0, height: 2}},
+                  ]}>
+                    <Icon size={22} color={highlighted ? colors.primary : colors.textSecondary} />
+                  </View>
+                  <Text style={[s.timelineLabel, {color: colors.textPrimary}]}>{step.label}</Text>
+                  <Text style={[s.timelineTime, {color: colors.textSecondary}]}>02:30 PM</Text>
                 </View>
-                <Text style={[s.timelineLabel, {color: colors.textPrimary}]}>{step.label}</Text>
-                <Text style={[s.timelineTime, {color: colors.textSecondary}]}>02:30 PM</Text>
-              </View>
+                {i < TIMELINE_STEPS.length - 1 && (
+                  <View style={[s.timelineConnector, {backgroundColor: lineActive ? colors.primary : colors.border}]} />
+                )}
+              </React.Fragment>
             );
           })}
         </View>
@@ -168,25 +174,34 @@ export default function OrderDetailsScreen({order, onBack}) {
         <View style={s.bottomPad} />
       </ScrollView>
 
-      <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
-        <TouchableOpacity
-          style={[s.rejectBtn, {backgroundColor: '#FEE2E2', borderColor: '#FCA5A5'}]}
-          activeOpacity={0.75}>
-          <Text style={[s.rejectText, {color: '#EF4444'}]}>رفض</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.assignBtn, {backgroundColor: colors.primary}]}
-          onPress={() => setShowAssign(true)}
-          activeOpacity={0.8}>
-          <Bike size={20} color="#FFF" />
-          <Text style={s.assignBtnText}>ارسال البايكر</Text>
-        </TouchableOpacity>
-      </View>
+      {isPending && (
+        <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
+          <TouchableOpacity
+            style={[s.rejectBtn, {backgroundColor: '#FEE2E2', borderColor: '#FCA5A5'}]}
+            onPress={() => setShowReject(true)}
+            activeOpacity={0.75}>
+            <Text style={[s.rejectText, {color: '#EF4444'}]}>رفض</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.assignBtn, {backgroundColor: colors.primary}]}
+            onPress={() => setShowAssign(true)}
+            activeOpacity={0.8}>
+            <Bike size={20} color="#FFF" />
+            <Text style={s.assignBtnText}>ارسال البايكر</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <AssignBikerScreen
         visible={showAssign}
         onClose={() => setShowAssign(false)}
         onAssigned={handleAssigned}
+      />
+
+      <RejectOrderModal
+        visible={showReject}
+        onClose={() => setShowReject(false)}
+        onConfirm={handleRejectConfirm}
       />
     </View>
   );
@@ -230,11 +245,11 @@ const s = StyleSheet.create({
   notesRow:        {flexDirection: 'row', gap: 12},
   notesIconBox:    {width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginTop: 2},
   notesText:       {flex: 1, fontSize: 13, lineHeight: 22},
-  timeline:        {flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, paddingVertical: 8},
-  timelineStep:    {alignItems: 'center', flex: 1, gap: 8, position: 'relative'},
+  timelineRow:     {flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, paddingVertical: 8},
+  timelineStep:    {alignItems: 'center', flex: 1, gap: 8},
   timelineIconBox: {width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center'},
-  timelineLine:    {position: 'absolute', top: 26, left: '50%', right: '-50%', height: 2},
-  timelineLabel:   {fontSize: 11, fontWeight: '600'},
+  timelineConnector: {flex: 0.4, height: 2, alignSelf: 'center', marginBottom: 44},
+  timelineLabel:   {fontSize: 9, fontWeight: '600'},
   timelineTime:    {fontSize: 10},
   footer:          {flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 28, borderTopWidth: 1},
   rejectBtn:       {paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center'},

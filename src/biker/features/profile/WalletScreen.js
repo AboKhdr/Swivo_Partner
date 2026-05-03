@@ -43,8 +43,8 @@ function TxIcon({type, colors}) {
     );
   }
   return (
-    <View style={[si.wrap, {backgroundColor: '#F1F5F9'}]}>
-      <Building2 size={20} color="#64748B" strokeWidth={2} />
+    <View style={[si.wrap, {backgroundColor: colors.bg}]}>
+      <Building2 size={20} color={colors.textSecondary} strokeWidth={2} />
     </View>
   );
 }

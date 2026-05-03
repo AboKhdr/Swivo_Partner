@@ -1,201 +1,319 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {Animated, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
-import {Phone, MapPin, Car, X, Check} from 'lucide-react-native';
+import {
+  Animated,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Vibration,
+  View,
+} from 'react-native';
+import {Zap, X, User, MapPin, DollarSign, Droplets, Car, Hash} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
+import {useI18n} from '../../../shared/i18n/I18nContext';
 
-const TIMEOUT_SECONDS = 60;
+const TIMEOUT_SECONDS = 15 * 60;
 
-const REJECT_REASONS = [
-  'مشغول حالياً',
-  'خارج نطاق الخدمة',
-  'لا يوجد بايكر متاح',
-  'طلب مكرر',
-  'أخرى',
-];
+const REJECT_REASON_KEYS = ['busy', 'outOfRange', 'noBiker', 'duplicate', 'other'];
 
-export default function IncomingOrderScreen({order, onAccept, onReject}) {
+export default function IncomingOrderScreen({visible, order, onAccept, onReject}) {
   const {colors} = useTheme();
-  const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_SECONDS);
-  const [showReject, setShowReject]   = useState(false);
+  const {t} = useI18n();
+  const rejectReasons = REJECT_REASON_KEYS.map(k => ({key: k, label: t(`partner.incoming.rejectReasons.${k}`)}));
+  const [secondsLeft, setSecondsLeft]       = useState(TIMEOUT_SECONDS);
+  const [showReject, setShowReject]         = useState(false);
   const [selectedReason, setSelectedReason] = useState('');
-  const [otherNote, setOtherNote]     = useState('');
+  const [otherNote, setOtherNote]           = useState('');
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {toValue: 1.08, duration: 600, useNativeDriver: true}),
-        Animated.timing(pulseAnim, {toValue: 1,    duration: 600, useNativeDriver: true}),
-      ])
-    ).start();
-  }, [pulseAnim]);
+    if (visible) {
+      setSecondsLeft(TIMEOUT_SECONDS);
+      setShowReject(false);
+      setSelectedReason('');
+      setOtherNote('');
+    }
+  }, [visible]);
 
+  // Pulse animation on title
   useEffect(() => {
+    if (!visible) return;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {toValue: 1.04, duration: 800, useNativeDriver: true}),
+        Animated.timing(pulseAnim, {toValue: 1,    duration: 800, useNativeDriver: true}),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [visible, pulseAnim]);
+
+  // Vibration — repeat:true keeps ringing until cancelled
+  useEffect(() => {
+    if (!visible) {
+      Vibration.cancel();
+      return;
+    }
+    // Long repeating pattern: ring 1s, pause 0.5s, ring 1s, pause 0.5s ...
+    Vibration.vibrate([0, 1000, 500, 1000, 500, 1000, 500], true);
+    return () => Vibration.cancel();
+  }, [visible]);
+
+  // Countdown
+  useEffect(() => {
+    if (!visible) return;
     if (secondsLeft <= 0) {
+      Vibration.cancel();
       onReject('AUTO_TIMEOUT');
       return;
     }
-    const timer = setTimeout(() => setSecondsLeft(s => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [secondsLeft, onReject]);
+    const t = setTimeout(() => setSecondsLeft(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [visible, secondsLeft, onReject]);
 
   const handleAccept = useCallback(() => {
+    Vibration.cancel();
     onAccept(order);
   }, [order, onAccept]);
 
   const handleRejectConfirm = useCallback(() => {
     if (!selectedReason) return;
-    const reason = selectedReason === 'أخرى' ? otherNote || 'أخرى' : selectedReason;
+    const otherLabel = t('partner.incoming.rejectReasons.other');
+    const reason = selectedReason === otherLabel ? (otherNote.trim() || otherLabel) : selectedReason;
+    Vibration.cancel();
     onReject(reason);
-  }, [selectedReason, otherNote, onReject]);
+  }, [selectedReason, otherNote, onReject, t]);
 
-  const timerColor = secondsLeft <= 15 ? colors.danger : secondsLeft <= 30 ? colors.warning : colors.primary;
-  const canConfirmReject = selectedReason && (selectedReason !== 'أخرى' || otherNote.trim().length > 0);
+  const minutes   = Math.floor(secondsLeft / 60);
+  const secs      = secondsLeft % 60;
+  const timeLabel = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')} ${t('partner.incoming.timer')}`;
 
-  if (showReject) {
-    return (
-      <View style={[s.root, {backgroundColor: colors.bg}]}>
-        <View style={[s.rejectHeader, {borderBottomColor: colors.border, backgroundColor: colors.card}]}>
-          <TouchableOpacity onPress={() => setShowReject(false)} style={s.backBtn}>
-            <X size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={[s.rejectTitle, {color: colors.textPrimary}]}>سبب الرفض</Text>
-          <View style={{width: 36}} />
-        </View>
-
-        <View style={s.rejectBody}>
-          {REJECT_REASONS.map(reason => (
-            <TouchableOpacity
-              key={reason}
-              style={[s.reasonItem, {backgroundColor: colors.card, borderColor: selectedReason === reason ? colors.primary : colors.border}]}
-              onPress={() => setSelectedReason(reason)}
-              activeOpacity={0.75}>
-              <View style={[s.radioOuter, {borderColor: selectedReason === reason ? colors.primary : colors.border}]}>
-                {selectedReason === reason && <View style={[s.radioInner, {backgroundColor: colors.primary}]} />}
-              </View>
-              <Text style={[s.reasonText, {color: colors.textPrimary}]}>{reason}</Text>
-            </TouchableOpacity>
-          ))}
-
-          {selectedReason === 'أخرى' && (
-            <TextInput
-              style={[s.noteInput, {backgroundColor: colors.card, borderColor: colors.border, color: colors.textPrimary}]}
-              placeholder="اكتب السبب..."
-              placeholderTextColor={colors.textSecondary}
-              value={otherNote}
-              onChangeText={setOtherNote}
-              multiline
-              textAlignVertical="top"
-            />
-          )}
-
-          <TouchableOpacity
-            style={[s.confirmRejectBtn, {backgroundColor: canConfirmReject ? colors.danger : colors.border}]}
-            onPress={handleRejectConfirm}
-            disabled={!canConfirmReject}
-            activeOpacity={0.8}>
-            <Text style={s.confirmRejectText}>تأكيد الرفض</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  const otherLabel = t('partner.incoming.rejectReasons.other');
+  const canConfirm = selectedReason && (selectedReason !== otherLabel || otherNote.trim().length > 0);
 
   return (
-    <View style={[s.root, {backgroundColor: '#0F172A'}]}>
-      <View style={s.timerSection}>
-        <Animated.View style={[s.timerRing, {borderColor: timerColor, transform: [{scale: pulseAnim}]}]}>
-          <Text style={[s.timerNumber, {color: timerColor}]}>{secondsLeft}</Text>
-          <Text style={[s.timerLabel, {color: timerColor}]}>ثانية</Text>
-        </Animated.View>
-        <Text style={s.incomingLabel}>طلب جديد وارد</Text>
-      </View>
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
+      <View style={s.overlay}>
+        <View style={s.sheet}>
 
-      <View style={[s.orderCard, {backgroundColor: colors.card}]}>
-        <View style={s.orderRow}>
-          <View style={[s.orderIconBox, {backgroundColor: colors.primary + '18'}]}>
-            <Phone size={18} color={colors.primary} />
+          {/* ── Blue header ── */}
+          <View style={[s.blueHeader, {backgroundColor: colors.primary}]}>
+            {/* Live badge */}
+            <View style={s.liveBadge}>
+              <View style={s.liveDot} />
+              <Text style={s.liveTxt}>{t('partner.incoming.live')}</Text>
+            </View>
+
+            <Animated.Text style={[s.mainTitle, {transform: [{scale: pulseAnim}]}]}>
+              {t('partner.incoming.title')}
+            </Animated.Text>
+            <Text style={s.timerSub}>{timeLabel}</Text>
           </View>
-          <View style={s.orderInfo}>
-            <Text style={[s.orderLabel, {color: colors.textSecondary}]}>العميل</Text>
-            <Text style={[s.orderValue, {color: colors.textPrimary}]}>{order?.customerName || 'عميل'}</Text>
-          </View>
+
+          {/* ── White body ── */}
+          <ScrollView
+            style={[s.body, {backgroundColor: colors.bg}]}
+            contentContainerStyle={s.bodyContent}
+            showsVerticalScrollIndicator={false}>
+
+            {/* Customer */}
+            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                <User size={20} color={colors.primary} />
+              </View>
+              <View style={s.cardInfo}>
+                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
+                  {order?.customerName || 'خالد العتيبي'}
+                </Text>
+                <View style={s.locationRow}>
+                  <MapPin size={12} color={colors.textSecondary} />
+                  <Text style={[s.cardSub, {color: colors.textSecondary}]}>
+                    {order?.location || 'حي الملقا، الرياض'}
+                  </Text>
+                </View>
+              </View>
+              {/* Avatar placeholder */}
+              <View style={[s.avatar, {backgroundColor: colors.primary + '20'}]}>
+                <User size={22} color={colors.primary} />
+              </View>
+            </View>
+
+            {/* Price */}
+            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                <DollarSign size={20} color={colors.primary} />
+              </View>
+              <View style={s.cardInfo}>
+                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.cost')}</Text>
+                <Text style={[s.priceValue, {color: colors.textPrimary}]}>
+                  ﷼ {order?.price || '180'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Service */}
+            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                <Droplets size={20} color={colors.primary} />
+              </View>
+              <View style={s.cardInfo}>
+                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.serviceType')}</Text>
+                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
+                  {order?.service || 'غسيل خارجي + داخلي'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Car + Plate side by side */}
+            <View style={s.twoCol}>
+              <View style={[s.halfCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                  <Car size={20} color={colors.primary} />
+                </View>
+                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.carType')}</Text>
+                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
+                  {order?.carModel || 'BMW M4'}
+                </Text>
+              </View>
+
+              <View style={[s.halfCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                  <Hash size={20} color={colors.primary} />
+                </View>
+                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.plate')}</Text>
+                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
+                  {order?.plate || 'R T L 8756'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Accept button */}
+            <TouchableOpacity
+              style={[s.acceptBtn, {backgroundColor: colors.primary}]}
+              onPress={handleAccept}
+              activeOpacity={0.85}>
+              <Zap size={20} color="#FFF" fill="#FFF" />
+              <Text style={s.acceptTxt}>{t('partner.incoming.accept')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.rejectLink} onPress={() => setShowReject(true)} activeOpacity={0.75}>
+              <Text style={[s.rejectLinkTxt, {color: colors.textSecondary}]}>{t('partner.incoming.reject')}</Text>
+            </TouchableOpacity>
+
+          </ScrollView>
         </View>
 
-        <View style={[s.divider, {backgroundColor: colors.border}]} />
+        {/* ── Reject bottom sheet ── */}
+        {showReject && (
+          <View style={[s.rejectSheet, {backgroundColor: colors.card}]}>
+            <View style={[s.handle, {backgroundColor: colors.border}]} />
+            <View style={s.rejectHeader}>
+              <Text style={[s.rejectTitle, {color: colors.textPrimary}]}>{t('partner.incoming.rejectTitle')}</Text>
+              <TouchableOpacity onPress={() => setShowReject(false)} style={s.closeBtn}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-        <View style={s.orderRow}>
-          <View style={[s.orderIconBox, {backgroundColor: colors.purple + '18'}]}>
-            <Car size={18} color={colors.purple} />
-          </View>
-          <View style={s.orderInfo}>
-            <Text style={[s.orderLabel, {color: colors.textSecondary}]}>الخدمة</Text>
-            <Text style={[s.orderValue, {color: colors.textPrimary}]}>{order?.service || 'غسيل'}</Text>
-          </View>
-        </View>
+            <View style={s.reasonsList}>
+              {rejectReasons.map(({key, label}) => {
+                const isSel = selectedReason === label;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[s.reasonRow, {
+                      borderColor:     isSel ? colors.primary : colors.border,
+                      backgroundColor: isSel ? colors.primary + '10' : colors.bg,
+                    }]}
+                    onPress={() => setSelectedReason(label)}
+                    activeOpacity={0.75}>
+                    <View style={[s.radio, {borderColor: isSel ? colors.primary : colors.border}]}>
+                      {isSel && <View style={[s.radioDot, {backgroundColor: colors.primary}]} />}
+                    </View>
+                    <Text style={[s.reasonTxt, {color: isSel ? colors.primary : colors.textPrimary}]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
 
-        <View style={[s.divider, {backgroundColor: colors.border}]} />
+              {selectedReason === otherLabel && (
+                <TextInput
+                  style={[s.noteInput, {backgroundColor: colors.bg, borderColor: colors.border, color: colors.textPrimary}]}
+                  placeholder={t('partner.incoming.rejectNotePlaceholder')}
+                  placeholderTextColor={colors.textSecondary}
+                  value={otherNote}
+                  onChangeText={setOtherNote}
+                  multiline
+                  textAlignVertical="top"
+                />
+              )}
+            </View>
 
-        <View style={s.orderRow}>
-          <View style={[s.orderIconBox, {backgroundColor: colors.success + '18'}]}>
-            <MapPin size={18} color={colors.success} />
+            <TouchableOpacity
+              style={[s.confirmBtn, {backgroundColor: canConfirm ? colors.danger : colors.border}]}
+              onPress={handleRejectConfirm}
+              disabled={!canConfirm}
+              activeOpacity={0.8}>
+              <Text style={s.confirmTxt}>{t('partner.incoming.rejectConfirm')}</Text>
+            </TouchableOpacity>
           </View>
-          <View style={s.orderInfo}>
-            <Text style={[s.orderLabel, {color: colors.textSecondary}]}>الموقع</Text>
-            <Text style={[s.orderValue, {color: colors.textPrimary}]}>{order?.location || 'الرياض، حي النخيل'}</Text>
-          </View>
-        </View>
+        )}
       </View>
-
-      <View style={s.actions}>
-        <TouchableOpacity
-          style={[s.rejectBtn, {backgroundColor: colors.danger + '22', borderColor: colors.danger}]}
-          onPress={() => setShowReject(true)}
-          activeOpacity={0.8}>
-          <X size={24} color={colors.danger} />
-          <Text style={[s.rejectBtnText, {color: colors.danger}]}>رفض</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[s.acceptBtn, {backgroundColor: colors.success}]}
-          onPress={handleAccept}
-          activeOpacity={0.8}>
-          <Check size={24} color="#FFF" />
-          <Text style={s.acceptBtnText}>قبول</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  root:              {flex: 1},
-  timerSection:      {alignItems: 'center', paddingTop: 64, paddingBottom: 32},
-  timerRing:         {width: 130, height: 130, borderRadius: 65, borderWidth: 4, alignItems: 'center', justifyContent: 'center'},
-  timerNumber:       {fontSize: 48, fontWeight: '900'},
-  timerLabel:        {fontSize: 13, fontWeight: '600', marginTop: -4},
-  incomingLabel:     {color: '#F1F5F9', fontSize: 18, fontWeight: '700', marginTop: 20},
-  orderCard:         {marginHorizontal: 20, borderRadius: 20, padding: 20, gap: 4},
-  orderRow:          {flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 14},
-  orderIconBox:      {width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
-  orderInfo:         {flex: 1, gap: 2},
-  orderLabel:        {fontSize: 11, fontWeight: '500'},
-  orderValue:        {fontSize: 15, fontWeight: '700'},
-  divider:           {height: 1, marginHorizontal: 4},
-  actions:           {flexDirection: 'row', paddingHorizontal: 20, paddingTop: 32, gap: 16},
-  rejectBtn:         {flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, borderRadius: 18, borderWidth: 1.5},
-  rejectBtnText:     {fontSize: 16, fontWeight: '800'},
-  acceptBtn:         {flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, borderRadius: 18},
-  acceptBtnText:     {fontSize: 16, fontWeight: '800', color: '#FFF'},
-  rejectHeader:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1},
-  backBtn:           {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
-  rejectTitle:       {fontSize: 18, fontWeight: '800'},
-  rejectBody:        {padding: 20, gap: 10},
-  reasonItem:        {flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 14, borderWidth: 1.5},
-  radioOuter:        {width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center'},
-  radioInner:        {width: 10, height: 10, borderRadius: 5},
-  reasonText:        {fontSize: 15, fontWeight: '600'},
-  noteInput:         {borderWidth: 1, borderRadius: 14, padding: 14, fontSize: 14, minHeight: 90, marginTop: 4},
-  confirmRejectBtn:  {paddingVertical: 18, borderRadius: 18, alignItems: 'center', marginTop: 8},
-  confirmRejectText: {color: '#FFF', fontSize: 16, fontWeight: '800'},
+  overlay:      {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)'},
+  sheet:        {borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', maxHeight: '92%'},
+
+  // Blue header
+  blueHeader:   {paddingTop: 24, paddingBottom: 28, paddingHorizontal: 20, alignItems: 'center', gap: 8},
+  liveBadge:    {flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 50},
+  liveDot:      {width: 7, height: 7, borderRadius: 4, backgroundColor: '#FFF'},
+  liveTxt:      {color: '#FFF', fontSize: 12, fontWeight: '700'},
+  mainTitle:    {color: '#FFF', fontSize: 28, fontWeight: '900'},
+  timerSub:     {color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '500'},
+
+  // Body
+  body:         {},
+  bodyContent:  {padding: 16, gap: 10, paddingBottom: 8},
+
+  // Cards
+  card:         {flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 16, borderWidth: 1},
+  iconCircle:   {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
+  cardInfo:     {flex: 1, gap: 2},
+  cardLabel:    {fontSize: 11},
+  cardValue:    {fontSize: 15, fontWeight: '700'},
+  cardSub:      {fontSize: 12},
+  locationRow:  {flexDirection: 'row', alignItems: 'center', gap: 4},
+  avatar:       {width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center'},
+  priceValue:   {fontSize: 22, fontWeight: '900'},
+
+  // Two-column row
+  twoCol:       {flexDirection: 'row', gap: 10},
+  halfCard:     {flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, gap: 6, alignItems: 'center'},
+
+  // Buttons
+  acceptBtn:    {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 16, marginTop: 6},
+  acceptTxt:    {color: '#FFF', fontSize: 16, fontWeight: '800'},
+  rejectLink:   {alignItems: 'center', paddingVertical: 12},
+  rejectLinkTxt:{fontSize: 14, fontWeight: '700', color: '#EF4444'},
+
+  // Reject sheet
+  rejectSheet:  {position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36},
+  handle:       {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16},
+  rejectHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16},
+  rejectTitle:  {fontSize: 16, fontWeight: '800'},
+  closeBtn:     {width: 34, height: 34, alignItems: 'center', justifyContent: 'center'},
+  reasonsList:  {gap: 8, marginBottom: 16},
+  reasonRow:    {flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1.5},
+  radio:        {width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center'},
+  radioDot:     {width: 10, height: 10, borderRadius: 5},
+  reasonTxt:    {fontSize: 14, fontWeight: '600'},
+  noteInput:    {borderWidth: 1, borderRadius: 14, padding: 14, fontSize: 14, minHeight: 80, marginTop: 4},
+  confirmBtn:   {paddingVertical: 16, borderRadius: 14, alignItems: 'center'},
+  confirmTxt:   {color: '#FFF', fontSize: 15, fontWeight: '800'},
 });

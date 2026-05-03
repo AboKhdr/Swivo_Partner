@@ -3,7 +3,7 @@ import {BackHandler, StyleSheet, View} from 'react-native';
 import ProfileScreen from './ProfileScreen';
 import PersonalInfoScreen from './PersonalInfoScreen';
 import WalletScreen from './WalletScreen';
-import LanguageScreen from './LanguageScreen';
+import LanguageScreen from '../../../shared/components/LanguageScreen';
 import SupportScreen from './SupportScreen';
 import TermsScreen from './TermsScreen';
 
