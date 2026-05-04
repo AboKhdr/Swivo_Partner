@@ -328,6 +328,7 @@
     "login": "Log In",
     "browseGuest": "Browse as Guest",
     "invalidPhone": "Please enter a valid phone number",
+    "networkError": "Connection failed, check your internet and try again",
     "otp": {
       "title": "Verify Account",
       "subtitle": "Please enter the verification code sent to your registered mailbox",

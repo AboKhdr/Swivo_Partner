@@ -9,24 +9,30 @@ import {ChevronLeft, Camera, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import StatusTracker from '../../../shared/components/StatusTracker';
+import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, cancelOrder} from '../../../services/orders';
 
 const SWIPE_WIDTH = 300;
 const THUMB = 56;
 const MAX_X = SWIPE_WIDTH - THUMB - 4;
 
 function SwipeButton({label, color, onComplete, loading}) {
-  const x = useRef(new Animated.Value(0)).current;
+  const x    = useRef(new Animated.Value(0)).current;
   const [done, setDone] = useState(false);
 
+  // RTL: thumb starts at MAX_X and slides left (dx is negative)
+  // LTR: thumb starts at 0 and slides right (dx is positive)
+  // We normalise to absolute displacement so the same threshold works both ways.
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (_, g) => {
-        const nx = Math.max(0, Math.min(g.dx, MAX_X));
+        // Support both RTL (negative dx) and LTR (positive dx)
+        const raw = Math.abs(g.dx);
+        const nx  = Math.min(raw, MAX_X);
         x.setValue(nx);
       },
       onPanResponderRelease: (_, g) => {
-        if (g.dx >= MAX_X * 0.85) {
+        if (Math.abs(g.dx) >= MAX_X * 0.85) {
           Animated.spring(x, {toValue: MAX_X, useNativeDriver: false}).start(() => {
             setDone(true);
             onComplete();
@@ -39,17 +45,14 @@ function SwipeButton({label, color, onComplete, loading}) {
   ).current;
 
   const trackBg = x.interpolate({
-    inputRange: [0, MAX_X],
+    inputRange:  [0, MAX_X],
     outputRange: [color + '22', color + '44'],
     extrapolate: 'clamp',
   });
 
   return (
     <Animated.View style={[sw.track, {backgroundColor: trackBg, borderColor: color + '55'}]}>
-      {/* label centered */}
       <Text style={[sw.label, {color}]}>{done ? '...' : label}</Text>
-
-      {/* thumb */}
       <Animated.View
         style={[sw.thumb, {backgroundColor: color, transform: [{translateX: x}]}]}
         {...pan.panHandlers}>
@@ -70,11 +73,17 @@ const STEP_IMGS = {
   COMPLETED:  require('../../../assets/steps/5.png'),
 };
 
-const ACTION_NEXT = {
+// onshop orders skip ON_THE_WAY and ARRIVED — biker is already at the location
+const ACTION_NEXT_MOBILE = {
   ASSIGNED:   'ON_THE_WAY',
   ON_THE_WAY: 'ARRIVED',
   ARRIVED:    'STARTED',
   STARTED:    'COMPLETED',
+};
+
+const ACTION_NEXT_ONSHOP = {
+  ASSIGNED: 'STARTED',
+  STARTED:  'COMPLETED',
 };
 
 export default function OrderDetailsScreen({order, onBack}) {
@@ -90,7 +99,12 @@ export default function OrderDetailsScreen({order, onBack}) {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [skipReason, setSkipReason] = useState('');
 
-  const canCancel = currentStatus === 'ASSIGNED' || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED';
+  const isOnshop = order.type === 'onshop';
+  const ACTION_NEXT = isOnshop ? ACTION_NEXT_ONSHOP : ACTION_NEXT_MOBILE;
+
+  const canCancel = isOnshop
+    ? currentStatus === 'ASSIGNED'
+    : currentStatus === 'ASSIGNED' || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED';
   const actionNextStatus = ACTION_NEXT[currentStatus] ?? null;
   const action = actionNextStatus ? {label: t(`orderDetails.actions.${currentStatus}`), nextStatus: actionNextStatus} : null;
 
@@ -100,9 +114,12 @@ export default function OrderDetailsScreen({order, onBack}) {
     currentStatus === 'ARRIVED'    ? colors.primary  :
     currentStatus === 'STARTED'    ? colors.purple   : colors.border;
 
-  const handleAction = () => {
+  // The step that triggers the before-photo modal
+  const photoTriggerStep = isOnshop ? 'ASSIGNED' : 'ARRIVED';
+
+  const handleAction = async () => {
     if (!action) return;
-    if (currentStatus === 'ARRIVED') {
+    if (currentStatus === photoTriggerStep) {
       setUploadPhase('before');
       setPhotos([]);
       setShowImageUpload(true);
@@ -115,8 +132,9 @@ export default function OrderDetailsScreen({order, onBack}) {
       return;
     }
     setActionLoading(true);
-    // TODO: PATCH /api/biker/order/:id/status
-    setTimeout(() => { setCurrentStatus(action.nextStatus); setActionLoading(false); }, 900);
+    await updateOrderStatus(order.id, action.nextStatus);
+    setCurrentStatus(action.nextStatus);
+    setActionLoading(false);
   };
 
   const handleTakePhoto = async () => {
@@ -150,39 +168,38 @@ export default function OrderDetailsScreen({order, onBack}) {
     setPhotos(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const handleCompleteWithPhotos = () => {
+  const handleCompleteWithPhotos = async () => {
     if (photos.length === 0) return;
     setShowImageUpload(false);
     setActionLoading(true);
-    if (uploadPhase === 'before') {
-      // TODO: POST /api/biker/order/:id/photos?phase=before
-      setTimeout(() => { setCurrentStatus('STARTED'); setActionLoading(false); }, 900);
-    } else {
-      // TODO: POST /api/biker/order/:id/photos?phase=after
-      setTimeout(() => { setCurrentStatus('COMPLETED'); setActionLoading(false); }, 1000);
+    const nextStatus = uploadPhase === 'before' ? 'STARTED' : 'COMPLETED';
+    for (const uri of photos) {
+      await uploadOrderPhoto(order.id, uri, uploadPhase);
     }
+    await updateOrderStatus(order.id, nextStatus);
+    setCurrentStatus(nextStatus);
+    setActionLoading(false);
   };
 
-  const handleSkipConfirm = () => {
+  const handleSkipConfirm = async () => {
     if (!skipReason.trim()) return;
     setShowSkipModal(false);
     setShowImageUpload(false);
     setSkipReason('');
     setActionLoading(true);
-    if (uploadPhase === 'before') {
-      // TODO: POST /api/biker/order/:id/skip-photos?phase=before with reason
-      setTimeout(() => { setCurrentStatus('STARTED'); setActionLoading(false); }, 900);
-    } else {
-      // TODO: POST /api/biker/order/:id/skip-photos?phase=after with reason
-      setTimeout(() => { setCurrentStatus('COMPLETED'); setActionLoading(false); }, 1000);
-    }
+    const nextStatus = uploadPhase === 'before' ? 'STARTED' : 'COMPLETED';
+    await skipOrderPhoto(order.id, uploadPhase, skipReason.trim());
+    await updateOrderStatus(order.id, nextStatus);
+    setCurrentStatus(nextStatus);
+    setActionLoading(false);
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     setShowCancelModal(false);
     setActionLoading(true);
-    // TODO: PUT /api/biker/order/:id {action:'cancel', reason}
-    setTimeout(() => { setCurrentStatus('CANCELLED'); setActionLoading(false); }, 800);
+    await cancelOrder(order.id, cancelReason.trim());
+    setCurrentStatus('CANCELLED');
+    setActionLoading(false);
   };
 
   return (
@@ -200,10 +217,10 @@ export default function OrderDetailsScreen({order, onBack}) {
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={s.section}>
-          <StatusTracker status={currentStatus} />
+          <StatusTracker status={currentStatus} orderType={order.type} />
         </View>
 
-        {STEP_IMGS[currentStatus] && (
+        {STEP_IMGS[currentStatus] && ACTION_NEXT[currentStatus] !== undefined && (
           <View style={[s.guideCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
             <Image source={STEP_IMGS[currentStatus]} style={s.guideImg} resizeMode="contain" />
             <Text style={[s.guideTitle, {color: colors.textPrimary}]}>{t(`orderDetails.steps.${currentStatus}.title`)}</Text>

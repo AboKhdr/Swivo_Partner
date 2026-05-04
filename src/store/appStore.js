@@ -1,0 +1,40 @@
+import {create} from 'zustand';
+
+const useAppStore = create((set, get) => ({
+  // ── Global loading overlay ─────────────────────────────────────────────
+  loadingKeys: {},   // { [key]: true } — multiple concurrent loaders
+  isLoading: (key) => !!get().loadingKeys[key],
+  startLoading: (key) => set(s => ({loadingKeys: {...s.loadingKeys, [key]: true}})),
+  stopLoading:  (key) => set(s => {
+    const next = {...s.loadingKeys};
+    delete next[key];
+    return {loadingKeys: next};
+  }),
+
+  // ── Toast / error banners ──────────────────────────────────────────────
+  toasts: [],
+  showToast: (message, type = 'error') => {
+    const id = Date.now();
+    set(s => ({toasts: [...s.toasts, {id, message, type}]}));
+    setTimeout(() => {
+      set(s => ({toasts: s.toasts.filter(t => t.id !== id)}));
+    }, 3500);
+  },
+  dismissToast: (id) => set(s => ({toasts: s.toasts.filter(t => t.id !== id)})),
+
+  // ── Incoming order (partner) ─────────────────────────────────────────
+  incomingOrder: null,
+  setIncomingOrder: (order) => set({incomingOrder: order}),
+  clearIncomingOrder: () => set({incomingOrder: null}),
+
+  // ── Auto-accept toggle (partner, persisted per session) ───────────────
+  autoAccept: false,
+  setAutoAccept: (val) => set({autoAccept: val}),
+
+  // ── Unread notifications badge ─────────────────────────────────────────
+  unreadCount: 0,
+  setUnreadCount: (n) => set({unreadCount: n}),
+  decrementUnread: () => set(s => ({unreadCount: Math.max(0, s.unreadCount - 1)})),
+}));
+
+export default useAppStore;

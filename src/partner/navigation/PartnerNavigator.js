@@ -8,6 +8,7 @@ import OrdersNavigator from '../features/orders/OrdersNavigator';
 import OperationsNavigator from '../features/operations/OperationsNavigator';
 import PartnerProfileNavigator from '../features/profile/PartnerProfileNavigator';
 import IncomingOrderScreen from '../features/orders/IncomingOrderScreen';
+import useAppStore from '../../store/appStore';
 
 // unmount: true → tab is destroyed when leaving (no state to preserve)
 const TAB_KEYS = [
@@ -17,25 +18,16 @@ const TAB_KEYS = [
   {key: 'profile',    labelKey: 'partner.nav.profile',    Icon: User,          Screen: PartnerProfileNavigator, unmount: false},
 ];
 
-// Mock incoming order — replace with real push notification data
-const MOCK_INCOMING = {
-  id:           '99',
-  customerName: 'خالد العتيبي',
-  location:     'في الرياض، الرياض',
-  service:      'غسيل خارجي + داخلي',
-  carModel:     'BMW M4',
-  plate:        'R T L 8756',
-  price:        '180',
-  status:       'PENDING_PARTNER',
-};
-
 export default function PartnerNavigator() {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [activeTab, setActiveTab]         = useState('dashboard');
-  const [history, setHistory]             = useState(['dashboard']);
-  const [mounted, setMounted]             = useState({dashboard: true});
-  const [incomingOrder, setIncomingOrder] = useState(MOCK_INCOMING);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [history, setHistory]     = useState(['dashboard']);
+  const [mounted, setMounted]     = useState({dashboard: true});
+
+  const incomingOrder     = useAppStore(s => s.incomingOrder);
+  const clearIncomingOrder = useAppStore(s => s.clearIncomingOrder);
+  const unreadCount       = useAppStore(s => s.unreadCount);
 
   const handleTabPress = useCallback((key) => {
     if (key === activeTab) return;
@@ -61,13 +53,8 @@ export default function PartnerNavigator() {
     return () => sub.remove();
   }, [history]);
 
-  const handleAccept = useCallback(() => {
-    setIncomingOrder(null);
-  }, []);
-
-  const handleReject = useCallback(() => {
-    setIncomingOrder(null);
-  }, []);
+  const handleAccept = useCallback(() => clearIncomingOrder(), [clearIncomingOrder]);
+  const handleReject = useCallback(() => clearIncomingOrder(), [clearIncomingOrder]);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -84,18 +71,26 @@ export default function PartnerNavigator() {
       <View style={[s.tabBar, {backgroundColor: colors.card}]}>
         {TAB_KEYS.map(({key, labelKey, Icon}) => {
           const isActive = key === activeTab;
+          const showBadge = key === 'orders' && unreadCount > 0;
           return (
             <TouchableOpacity
               key={key}
               style={s.tabItem}
               onPress={() => handleTabPress(key)}
               activeOpacity={0.8}>
-              <View style={[s.iconWrap, isActive && {backgroundColor: colors.primary, borderRadius: 50}]}>
-                <Icon
-                  size={22}
-                  color={isActive ? '#fff' : colors.textSecondary}
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                />
+              <View style={s.iconOuter}>
+                <View style={[s.iconWrap, isActive && {backgroundColor: colors.primary, borderRadius: 50}]}>
+                  <Icon
+                    size={22}
+                    color={isActive ? '#fff' : colors.textSecondary}
+                    strokeWidth={isActive ? 2.5 : 1.8}
+                  />
+                </View>
+                {showBadge && (
+                  <View style={[s.badge, {backgroundColor: colors.danger ?? '#EF4444'}]}>
+                    <Text style={s.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                  </View>
+                )}
               </View>
               <Text style={[s.tabLabel, {color: colors.textSecondary}]}>
                 {t(labelKey)}
@@ -132,7 +127,10 @@ const s = StyleSheet.create({
     shadowOpacity:     0.06,
     shadowRadius:      10,
   },
-  tabItem:  {flex: 1, alignItems: 'center', gap: 5},
-  iconWrap: {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
-  tabLabel: {fontSize: 10, fontWeight: '500'},
+  tabItem:   {flex: 1, alignItems: 'center', gap: 5},
+  iconOuter: {position: 'relative'},
+  iconWrap:  {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
+  badge:     {position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3},
+  badgeText: {color: '#FFF', fontSize: 9, fontWeight: '800'},
+  tabLabel:  {fontSize: 10, fontWeight: '500'},
 });

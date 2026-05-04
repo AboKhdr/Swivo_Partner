@@ -7,12 +7,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Vibration,
   View,
 } from 'react-native';
 import {Zap, X, User, MapPin, DollarSign, Droplets, Car, Hash} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import {cancelIncomingOrderNotification} from '../../../services/notificationChannel';
 
 const TIMEOUT_SECONDS = 15 * 60;
 
@@ -50,22 +50,12 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     return () => anim.stop();
   }, [visible, pulseAnim]);
 
-  // Vibration — repeat:true keeps ringing until cancelled
-  useEffect(() => {
-    if (!visible) {
-      Vibration.cancel();
-      return;
-    }
-    // Long repeating pattern: ring 1s, pause 0.5s, ring 1s, pause 0.5s ...
-    Vibration.vibrate([0, 1000, 500, 1000, 500, 1000, 500], true);
-    return () => Vibration.cancel();
-  }, [visible]);
 
   // Countdown
   useEffect(() => {
     if (!visible) return;
     if (secondsLeft <= 0) {
-      Vibration.cancel();
+      cancelIncomingOrderNotification().catch(() => {});
       onReject('AUTO_TIMEOUT');
       return;
     }
@@ -74,7 +64,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
   }, [visible, secondsLeft, onReject]);
 
   const handleAccept = useCallback(() => {
-    Vibration.cancel();
+    cancelIncomingOrderNotification().catch(() => {});
     onAccept(order);
   }, [order, onAccept]);
 
@@ -82,7 +72,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     if (!selectedReason) return;
     const otherLabel = t('partner.incoming.rejectReasons.other');
     const reason = selectedReason === otherLabel ? (otherNote.trim() || otherLabel) : selectedReason;
-    Vibration.cancel();
+    cancelIncomingOrderNotification().catch(() => {});
     onReject(reason);
   }, [selectedReason, otherNote, onReject, t]);
 

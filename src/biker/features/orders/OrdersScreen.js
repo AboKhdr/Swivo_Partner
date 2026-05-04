@@ -3,7 +3,7 @@ import {
   FlatList, Platform, RefreshControl, StatusBar,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import {ChevronRight, MapPin, Car, User, Droplets, ChevronUp, ChevronDown, Sparkles} from 'lucide-react-native';
+import {ChevronRight, MapPin, Car, User, Droplets, ChevronUp, ChevronDown, Sparkles, Bike, Store} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {MOCK_ORDERS, MOCK_PAST_ORDERS} from '../../../shared/data/mockData';
@@ -30,9 +30,24 @@ function OrderCard({order, onPress, onLocationPress, colors, t}) {
   return (
     <View style={[c.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={c.cardTop}>
-        <View>
-          <Text style={[c.gridValue, {color: colors.textPrimary}]}>{order.service.name}</Text>
-          <Text style={[c.timeText, {color: colors.textPrimary}]}>{order.scheduledAt}</Text>
+        <View style={c.cardTopLeft}>
+          <View style={c.titleRow}>
+            <Text style={[c.gridValue, {color: colors.textPrimary}]}>{order.service.name}</Text>
+            {order.type === 'onshop'
+              ? (
+                <View style={[c.typePill, {backgroundColor: '#8B5CF615'}]}>
+                  <Store size={11} color="#8B5CF6" />
+                  <Text style={[c.typeTxt, {color: '#8B5CF6'}]}>في الموقع</Text>
+                </View>
+              ) : (
+                <View style={[c.typePill, {backgroundColor: colors.primary + '15'}]}>
+                  <Bike size={11} color={colors.primary} />
+                  <Text style={[c.typeTxt, {color: colors.primary}]}>متنقل</Text>
+                </View>
+              )
+            }
+          </View>
+          <Text style={[c.timeText, {color: colors.textSecondary}]}>{order.scheduledAt}</Text>
         </View>
         <View style={[c.badge, {backgroundColor: bs.bg}]}>
           <Sparkles size={11} color={bs.icon} strokeWidth={2} />
@@ -199,11 +214,15 @@ const s = StyleSheet.create({
 });
 
 const c = StyleSheet.create({
-  card: {borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, gap: 12},
-  cardTop: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
-  badge: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20},
-  badgeText: {fontSize: 12, fontWeight: '700'},
-  timeText: {fontSize: 14, fontWeight: '700'},
+  card:        {borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, gap: 12},
+  cardTop:     {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8},
+  cardTopLeft: {flex: 1, gap: 3},
+  titleRow:    {flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap'},
+  typePill:    {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 20},
+  typeTxt:     {fontSize: 10, fontWeight: '700'},
+  badge:       {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20},
+  badgeText:   {fontSize: 12, fontWeight: '700'},
+  timeText:    {fontSize: 12},
   grid: {gap: 10},
   gridItem: {flexDirection: 'row', alignItems: 'center', gap: 10},
   gridIcon: {width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center'},

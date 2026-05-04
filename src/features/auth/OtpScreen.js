@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Image,
   KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
+import {verifyOTP, resendOTP} from '../../services/auth';
 
 const OTP_LENGTH = 4;
 const RESEND_DELAY = 30;
@@ -21,10 +23,11 @@ export default function OtpScreen({phone, onVerified, onBack}) {
   const {colors, isDark} = useTheme();
   const {t, isRTL} = useI18n();
 
-  const [digits, setDigits]     = useState(Array(OTP_LENGTH).fill(''));
+  const [digits, setDigits]       = useState(Array(OTP_LENGTH).fill(''));
   const [activeIdx, setActiveIdx] = useState(0);
-  const [error, setError]        = useState(null);
+  const [error, setError]         = useState(null);
   const [resendSec, setResendSec] = useState(RESEND_DELAY);
+  const [isLoading, setIsLoading] = useState(false);
 
   const inputRefs = useRef([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -77,25 +80,41 @@ export default function OtpScreen({phone, onVerified, onBack}) {
     }
   }, [digits]);
 
-  const handleVerify = useCallback(() => {
+  const handleVerify = useCallback(async () => {
     const code = digits.join('');
     if (code.length < OTP_LENGTH) {
       setError(t('auth.otp.invalidCode'));
       shake();
       return;
     }
-    // TODO: POST /api/auth/otp/verify  { phone, code }
-    onVerified();
-  }, [digits, t, onVerified, shake]);
+    setIsLoading(true);
+    setError(null);
+    const res = await verifyOTP(phone, code);
+    setIsLoading(false);
+    if (res.success) {
+      onVerified(res.data?.user?.role ?? 'biker');
+    } else {
+      shake();
+      setError(
+        res.error === 'NETWORK_ERROR' ? t('auth.networkError') :
+        res.error === 'TIMEOUT'       ? t('auth.networkError') :
+        res.data?.message             ?? t('auth.otp.invalidCode'),
+      );
+      setDigits(Array(OTP_LENGTH).fill(''));
+      setActiveIdx(0);
+      inputRefs.current[0]?.focus();
+    }
+  }, [digits, phone, t, onVerified, shake]);
 
-  const handleResend = useCallback(() => {
+  const handleResend = useCallback(async () => {
     if (resendSec > 0) return;
     setDigits(Array(OTP_LENGTH).fill(''));
     setError(null);
     setResendSec(RESEND_DELAY);
     inputRefs.current[0]?.focus();
     setActiveIdx(0);
-  }, [resendSec]);
+    await resendOTP(phone);
+  }, [resendSec, phone]);
 
   const filled = digits.filter(Boolean).length;
 
@@ -173,13 +192,17 @@ export default function OtpScreen({phone, onVerified, onBack}) {
 
         {/* Next button */}
         <TouchableOpacity
-          style={[s.btn, {backgroundColor: filled === OTP_LENGTH ? colors.primary : colors.border}]}
+          style={[s.btn, {backgroundColor: filled === OTP_LENGTH && !isLoading ? colors.primary : colors.border}]}
           onPress={handleVerify}
-          disabled={filled < OTP_LENGTH}
+          disabled={filled < OTP_LENGTH || isLoading}
           activeOpacity={0.85}>
-          <Text style={[s.btnTxt, {color: filled === OTP_LENGTH ? '#FFF' : colors.textSecondary}]}>
-            {t('auth.otp.next')}
-          </Text>
+          {isLoading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={[s.btnTxt, {color: filled === OTP_LENGTH ? '#FFF' : colors.textSecondary}]}>
+              {t('auth.otp.next')}
+            </Text>
+          )}
         </TouchableOpacity>
 
         {/* Resend */}

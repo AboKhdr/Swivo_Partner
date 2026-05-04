@@ -1,9 +1,72 @@
 import React, {useCallback, useState} from 'react';
-import {FlatList, Image, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {ArrowRight, Pencil, MapPin, Clock, Bike, ShoppingBag, Camera} from 'lucide-react-native';
+import {Alert, FlatList, Image, Modal, PermissionsAndroid, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
+import {ArrowRight, Pencil, MapPin, Clock, Bike, ShoppingBag, Camera, ImagePlus, X, Wrench} from 'lucide-react-native';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import {MOCK_SERVICES_ALL} from '../../../shared/data/mockData';
 import EditBranchScreen from './EditBranchScreen';
+
+async function requestCamera() {
+  if (Platform.OS !== 'android') return true;
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {title: 'إذن الكاميرا', message: 'يحتاج التطبيق إلى الكاميرا لالتقاط صورة الفرع'},
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch {
+    return false;
+  }
+}
+
+function ImagePickerModal({visible, onCamera, onGallery, onRemove, hasImage, onClose, colors}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={ip.overlay} />
+      </TouchableWithoutFeedback>
+      <View style={ip.sheet}>
+        <View style={[ip.card, {backgroundColor: colors.card}]}>
+          <View style={[ip.handle, {backgroundColor: colors.border}]} />
+          <Text style={[ip.title, {color: colors.textPrimary}]}>صورة الفرع</Text>
+
+          <TouchableOpacity style={[ip.row, {borderColor: colors.border}]} onPress={onCamera} activeOpacity={0.75}>
+            <View style={[ip.iconBox, {backgroundColor: colors.primary + '15'}]}>
+              <Camera size={20} color={colors.primary} />
+            </View>
+            <Text style={[ip.rowTxt, {color: colors.textPrimary}]}>التقاط صورة</Text>
+          </TouchableOpacity>
+
+          <View style={[ip.sep, {backgroundColor: colors.border}]} />
+
+          <TouchableOpacity style={[ip.row, {borderColor: colors.border}]} onPress={onGallery} activeOpacity={0.75}>
+            <View style={[ip.iconBox, {backgroundColor: colors.primary + '15'}]}>
+              <ImagePlus size={20} color={colors.primary} />
+            </View>
+            <Text style={[ip.rowTxt, {color: colors.textPrimary}]}>اختيار من المعرض</Text>
+          </TouchableOpacity>
+
+          {hasImage && (
+            <>
+              <View style={[ip.sep, {backgroundColor: colors.border}]} />
+              <TouchableOpacity style={[ip.row, {borderColor: colors.border}]} onPress={onRemove} activeOpacity={0.75}>
+                <View style={[ip.iconBox, {backgroundColor: colors.danger + '15'}]}>
+                  <X size={20} color={colors.danger} />
+                </View>
+                <Text style={[ip.rowTxt, {color: colors.danger}]}>حذف الصورة</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          <TouchableOpacity style={[ip.cancelBtn, {backgroundColor: colors.bg}]} onPress={onClose} activeOpacity={0.75}>
+            <Text style={[ip.cancelTxt, {color: colors.textSecondary}]}>إلغاء</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 const MOCK_BRANCHES = [
   {id: 'br1', nameAr: 'طريق الملك فهد', address: 'البرج 4 , شارع الياسمين',                    hours: '8:00 – 22:00', orders: 12, bikers: 120, isMain: true},
@@ -51,15 +114,51 @@ function BannerArea({image, colors, onChangeImage, onEdit}) {
 }
 
 function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
-  const [banner, setBanner] = useState(item.banner ?? null);
+  const [banner,      setBanner]      = useState(item.banner ?? null);
+  const [showImgPick, setShowImgPick] = useState(false);
+  // Each service enabled/disabled per branch — first 2 active by default
+  const [serviceStates, setServiceStates] = useState(() =>
+    Object.fromEntries(MOCK_SERVICES_ALL.map((s, i) => [s.id, i < 2]))
+  );
+  const toggleService = useCallback((id, val) =>
+    setServiceStates(prev => ({...prev, [id]: val})), []);
+
+  const handleCamera = async () => {
+    setShowImgPick(false);
+    const allowed = await requestCamera();
+    if (!allowed) { Alert.alert('تنبيه', 'يرجى منح إذن الكاميرا من الإعدادات'); return; }
+    launchCamera({mediaType: 'photo', quality: 0.8, saveToPhotos: false}, res => {
+      const uri = res.assets?.[0]?.uri;
+      if (uri) setBanner(uri);
+    });
+  };
+
+  const handleGallery = () => {
+    setShowImgPick(false);
+    launchImageLibrary({mediaType: 'photo', quality: 0.8, selectionLimit: 1}, res => {
+      const uri = res.assets?.[0]?.uri;
+      if (uri) setBanner(uri);
+    });
+  };
+
+  const handleRemove = () => { setBanner(null); setShowImgPick(false); };
 
   return (
     <View style={[s.card, {backgroundColor: colors.card}]}>
       <BannerArea
         image={banner}
         colors={colors}
-        onChangeImage={() => setBanner(null)}
+        onChangeImage={() => setShowImgPick(true)}
         onEdit={() => onEdit(item)}
+      />
+      <ImagePickerModal
+        visible={showImgPick}
+        hasImage={!!banner}
+        onCamera={handleCamera}
+        onGallery={handleGallery}
+        onRemove={handleRemove}
+        onClose={() => setShowImgPick(false)}
+        colors={colors}
       />
 
       <View style={s.cardBody}>
@@ -88,6 +187,34 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
             <Clock size={15} color={colors.primary} />
             <Text style={[s.statValue, {color: colors.textPrimary}]}>{item.hours}</Text>
           </View>
+        </View>
+
+        <View style={[s.divider, {backgroundColor: colors.border}]} />
+
+        {/* Services section */}
+        <View style={s.servicesSection}>
+          <View style={s.servicesSectionHeader}>
+            <View style={[s.svcIconBox, {backgroundColor: colors.primary + '15'}]}>
+              <Wrench size={14} color={colors.primary} />
+            </View>
+            <Text style={[s.servicesSectionTitle, {color: colors.textPrimary}]}>الخدمات المتاحة</Text>
+          </View>
+          {MOCK_SERVICES_ALL.map(svc => (
+            <View key={svc.id} style={[s.serviceRow, {borderBottomColor: colors.border}]}>
+              <View style={s.serviceInfo}>
+                <Text style={[s.serviceName, {color: colors.textPrimary}]}>{svc.nameAr}</Text>
+                <View style={[s.categoryChip, {backgroundColor: colors.primary + '12'}]}>
+                  <Text style={[s.categoryText, {color: colors.primary}]}>{svc.category}</Text>
+                </View>
+              </View>
+              <Switch
+                value={serviceStates[svc.id] ?? false}
+                onValueChange={val => toggleService(svc.id, val)}
+                trackColor={{false: colors.border, true: colors.primary + 'AA'}}
+                thumbColor={serviceStates[svc.id] ? colors.primary : '#ccc'}
+              />
+            </View>
+          ))}
         </View>
       </View>
 
@@ -188,4 +315,28 @@ const s = StyleSheet.create({
 
   mainBadge:     {position: 'absolute', bottom: 82, left: 14, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20},
   mainBadgeText: {color: '#FFF', fontSize: 12, fontWeight: '700'},
+
+  servicesSection:       {gap: 0},
+  servicesSectionHeader: {flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10},
+  svcIconBox:            {width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
+  servicesSectionTitle:  {fontSize: 13, fontWeight: '800'},
+  serviceRow:            {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1},
+  serviceInfo:           {flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1},
+  serviceName:           {fontSize: 13, fontWeight: '600'},
+  categoryChip:          {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20},
+  categoryText:          {fontSize: 10, fontWeight: '700'},
+});
+
+const ip = StyleSheet.create({
+  overlay:   {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)'},
+  sheet:     {flex: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 32},
+  card:      {borderRadius: 24, padding: 20, gap: 4},
+  handle:    {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 12},
+  title:     {fontSize: 17, fontWeight: '800', marginBottom: 8},
+  row:       {flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14},
+  iconBox:   {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center'},
+  rowTxt:    {fontSize: 15, fontWeight: '600'},
+  sep:       {height: 1},
+  cancelBtn: {marginTop: 8, paddingVertical: 14, borderRadius: 14, alignItems: 'center'},
+  cancelTxt: {fontSize: 15, fontWeight: '600'},
 });

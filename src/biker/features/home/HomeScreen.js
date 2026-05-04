@@ -8,6 +8,7 @@ import {Bell, DollarSign, Droplets, Star, MapPin, Car, CircleUserRound} from 'lu
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {MOCK_USER, MOCK_ORDERS} from '../../../shared/data/mockData';
+import NotificationsScreen from './NotificationsScreen';
 
 // ─── Service Circle Button ────────────────────────────────────────────────────
 function ServiceButton({active, onToggle, colors, t}) {
@@ -138,8 +139,9 @@ function NewOrderCard({order, colors}) {
 export default function HomeScreen() {
   const {colors, isDark} = useTheme();
   const {t} = useI18n();
-  const [active, setActive] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [active, setActive]               = useState(false);
+  const [refreshing, setRefreshing]       = useState(false);
+  const [showNotifications, setShowNotif] = useState(false);
 
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerY       = useRef(new Animated.Value(-20)).current;
@@ -158,6 +160,10 @@ export default function HomeScreen() {
 
   const renderOrder = useCallback(({item}) => <NewOrderCard order={item} colors={colors} />, [colors]);
 
+  if (showNotifications) {
+    return <NotificationsScreen onBack={() => setShowNotif(false)} />;
+  }
+
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
@@ -169,7 +175,7 @@ export default function HomeScreen() {
           </View>
           <Text style={[s.userName, {color: colors.textPrimary}]}>{MOCK_USER.firstName} {MOCK_USER.lastName}</Text>
         </View>
-        <TouchableOpacity style={[s.notifBtn, {backgroundColor: colors.card}]} activeOpacity={0.7}>
+        <TouchableOpacity style={[s.notifBtn, {backgroundColor: colors.card}]} onPress={() => setShowNotif(true)} activeOpacity={0.7}>
           <Bell size={20} color={colors.textSecondary} strokeWidth={1.8} />
         </TouchableOpacity>
       </Animated.View>

@@ -23,6 +23,8 @@ import {
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import useAppStore from '../../../store/appStore';
+import {showIncomingOrderNotification} from '../../../services/notificationChannel';
 import ServicesScreen from './ServicesScreen';
 import PackagesScreen from './PackagesScreen';
 import StaffScreen from './StaffScreen';
@@ -31,6 +33,7 @@ import BranchesScreen from './BranchesScreen';
 import PaymentsScreen from './PaymentsScreen';
 import SkipReviewScreen from '../orders/SkipReviewScreen';
 import ReviewsScreen from './ReviewsScreen';
+import OffersScreen from './OffersScreen';
 
 function buildSections(t) {
   return [
@@ -38,7 +41,6 @@ function buildSections(t) {
       title: t('partner.operations.sections.management'),
       items: [
         {key: 'branches',   label: t('partner.operations.menu.branches'),   sub: t('partner.operations.menu.branchesSub'),   Icon: GitBranch,  dot: false},
-        {key: 'hours',      label: t('partner.operations.menu.hours'),      sub: t('partner.operations.menu.hoursSub'),      Icon: Clock,      dot: false},
         {key: 'services',   label: t('partner.operations.menu.services'),   sub: t('partner.operations.menu.servicesSub'),   Icon: Car,        dot: false},
         {key: 'packages',   label: t('partner.operations.menu.packages'),   sub: t('partner.operations.menu.packagesSub'),   Icon: Package,    dot: false},
         {key: 'offers',     label: t('partner.operations.menu.offers'),     sub: t('partner.operations.menu.offersSub'),     Icon: Tag,        dot: true},
@@ -48,7 +50,6 @@ function buildSections(t) {
       title: t('partner.operations.sections.staff'),
       items: [
         {key: 'bikers',     label: t('partner.operations.menu.bikers'),     sub: t('partner.operations.menu.bikersSub'),     Icon: Bike,       dot: false},
-        {key: 'skipReview', label: t('partner.operations.menu.skipReview'), sub: t('partner.operations.menu.skipReviewSub'), Icon: CheckSquare,dot: false},
         {key: 'staff',      label: t('partner.operations.menu.staff'),      sub: t('partner.operations.menu.staffSub'),      Icon: Users,      dot: false},
       ],
     },
@@ -90,9 +91,22 @@ function MenuRow({item, colors, onPress}) {
   );
 }
 
+const MOCK_INCOMING = {
+  _id: 'TEST-001',
+  customerName: 'خالد العتيبي',
+  location: 'حي الملقا، الرياض',
+  price: '180',
+  service: 'غسيل خارجي + داخلي',
+  carModel: 'Toyota Camry',
+  plate: 'RTL 8756',
+  status: 'PENDING_PARTNER',
+};
+
 function OperationsMenu({colors, onNavigate}) {
   const {t} = useI18n();
-  const [autoAccept, setAutoAccept] = useState(true);
+  const autoAccept      = useAppStore(s => s.autoAccept);
+  const setAutoAccept   = useAppStore(s => s.setAutoAccept);
+  const setIncomingOrder = useAppStore(s => s.setIncomingOrder);
   const sections = buildSections(t);
 
   return (
@@ -105,6 +119,17 @@ function OperationsMenu({colors, onNavigate}) {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+
+        {/* DEV: simulate incoming order notification */}
+        <TouchableOpacity
+          style={[s.devBtn, {backgroundColor: '#F59E0B18', borderColor: '#F59E0B'}]}
+          onPress={() => {
+            setIncomingOrder(MOCK_INCOMING);
+            showIncomingOrderNotification(MOCK_INCOMING).catch(() => {});
+          }}
+          activeOpacity={0.8}>
+          <Text style={s.devBtnText}>🧪 اختبار: طلب جديد وارد</Text>
+        </TouchableOpacity>
 
         <View style={[s.toggleCard, {backgroundColor: colors.primary + '12', borderColor: colors.primary + '30'}]}>
           <Switch
@@ -162,6 +187,7 @@ export default function OperationsNavigator() {
       {screen === 'payments'   && <PaymentsScreen   onBack={goBack} />}
       {screen === 'skipReview' && <SkipReviewScreen onBack={goBack} />}
       {screen === 'reviews'    && <ReviewsScreen    onBack={goBack} />}
+      {screen === 'offers'     && <OffersScreen     onBack={goBack} />}
     </View>
   );
 }
@@ -209,4 +235,8 @@ const s = StyleSheet.create({
   rowRight:      {flexDirection: 'row', alignItems: 'center', gap: 8},
   dot:           {width: 8, height: 8, borderRadius: 4},
   iconCircle:    {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
+
+  // DEV test button
+  devBtn:        {borderWidth: 1.5, borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginBottom: 4},
+  devBtnText:    {fontSize: 14, fontWeight: '700', color: '#F59E0B'},
 });

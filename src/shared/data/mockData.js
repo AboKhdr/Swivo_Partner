@@ -7,7 +7,7 @@ export const MOCK_USER = {
 
 export const MOCK_ORDERS = [
   {
-    _id: '1', orderNumber: 'ORD-1234', status: 'ASSIGNED',
+    _id: '1', orderNumber: 'ORD-1234', status: 'ASSIGNED', type: 'mobile',
     car: {brand: 'Toyota', model: 'Camry', color: 'أبيض', plateNumber: 'RTL 8756'},
     address: 'الرياض، حي الياسمين', scheduledAt: '10:30 ص', scheduledDate: 'اليوم',
     service: {name: 'غسيل خارجي', price: 50},
@@ -16,7 +16,7 @@ export const MOCK_ORDERS = [
     bikerEarning: 45.00, createdAt: '2026-04-27T07:00:00.000Z',
   },
   {
-    _id: '2', orderNumber: 'ORD-1235', status: 'ON_THE_WAY',
+    _id: '2', orderNumber: 'ORD-1235', status: 'ON_THE_WAY', type: 'onshop',
     car: {brand: 'Honda', model: 'Accord', color: 'أسود', plateNumber: 'XYZ 5678'},
     address: 'حي العليا، الرياض', scheduledAt: '11:00 ص', scheduledDate: 'اليوم',
     service: {name: 'غسيل داخلي', price: 40},
@@ -25,7 +25,7 @@ export const MOCK_ORDERS = [
     bikerEarning: 36.00, createdAt: '2026-04-27T08:00:00.000Z',
   },
   {
-    _id: '3', orderNumber: 'ORD-1236', status: 'STARTED',
+    _id: '3', orderNumber: 'ORD-1236', status: 'STARTED', type: 'mobile',
     car: {brand: 'BMW', model: 'X5', color: 'رمادي', plateNumber: 'DEF 9012'},
     address: 'حي الملقا، الرياض', scheduledAt: '12:00 م', scheduledDate: 'اليوم',
     service: {name: 'تنظيف شامل', price: 80},
@@ -63,6 +63,14 @@ export const MOCK_PAST_ORDERS = [
     extras: ['تعطير داخلي'],
     bikerEarning: 0, createdAt: '2026-04-25T08:00:00.000Z',
   },
+];
+
+export const MOCK_SERVICES_ALL = [
+  {id: 's1', nameAr: 'غسلة سريعة',   category: 'غسيل'},
+  {id: 's2', nameAr: 'غسلة متقدمة',  category: 'تلميع'},
+  {id: 's3', nameAr: 'غسيل داخلي',   category: 'تعقيم'},
+  {id: 's4', nameAr: 'تنظيف شامل',   category: 'غسيل'},
+  {id: 's5', nameAr: 'تلميع الإطارات', category: 'تلميع'},
 ];
 
 export const MOCK_BRANCHES = [

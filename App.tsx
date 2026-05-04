@@ -1,28 +1,45 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {View} from 'react-native';
 import {ThemeProvider} from './src/shared/context/ThemeContext';
 import {I18nProvider, useI18n} from './src/shared/i18n/I18nContext';
+import {FirebaseProvider} from './src/shared/context/FirebaseContext';
 import LoginScreen from './src/features/auth/LoginScreen';
 import BikerNavigator from './src/biker/navigation/AppNavigator';
 import PartnerNavigator from './src/partner/navigation/PartnerNavigator';
+import useAuthStore from './src/store/authStore';
+import {setUnauthorizedHandler} from './src/services/api';
 
 type Role = 'biker' | 'manager' | null;
 
 function AppRoot() {
-  const [role, setRole] = useState<Role>('manager');
   const {isRTL} = useI18n();
+  const {role, isReady, hydrate, logout} = useAuthStore();
+
+  // Temporary override until auth API is live — remove when real login is wired
+  const [devRole, setDevRole] = useState<Role>('manager');
+
+  useEffect(() => {
+    hydrate();
+    setUnauthorizedHandler(logout);
+  }, [hydrate, logout]);
+
+  if (!isReady) return null;
+
+  const activeRole: Role = role ?? devRole;
 
   return (
     <View style={{flex: 1, direction: isRTL ? 'rtl' : 'ltr'}}>
       <ThemeProvider>
-        {role === 'biker'   && <BikerNavigator />}
-        {role === 'manager' && <PartnerNavigator />}
-        {role === null && (
-          <LoginScreen
-            onLogin={(userRole: Role) => setRole(userRole || 'biker')}
-            onGuest={() => setRole('biker')}
-          />
-        )}
+        <FirebaseProvider>
+          {activeRole === 'biker'   && <BikerNavigator />}
+          {activeRole === 'manager' && <PartnerNavigator />}
+          {activeRole === null && (
+            <LoginScreen
+              onLogin={(userRole: Role) => setDevRole(userRole || 'biker')}
+              onGuest={() => setDevRole('biker')}
+            />
+          )}
+        </FirebaseProvider>
       </ThemeProvider>
     </View>
   );

@@ -16,12 +16,13 @@ const STATUS_COLORS = {
 };
 
 const MOCK_ORDERS = [
-  {id: '1', customerName: 'أحمد محمد',    service: 'غسيل خارجي', status: 'PENDING_PARTNER', time: '10:30', price: '80',  plate: 'ABC 1234', biker: null},
-  {id: '2', customerName: 'سارة العمري',  service: 'غسيل كامل',  status: 'ON_THE_WAY',      time: '10:15', price: '150', plate: 'XYZ 5678', biker: 'محمد علي'},
-  {id: '3', customerName: 'خالد الغامدي', service: 'تلميع',       status: 'COMPLETED',       time: '09:00', price: '200', plate: 'DEF 9012', biker: 'أنس كريم'},
-  {id: '4', customerName: 'منى السعيد',   service: 'غسيل داخلي', status: 'STARTED',         time: '10:00', price: '120', plate: 'GHI 3456', biker: 'محمد علي'},
-  {id: '5', customerName: 'فيصل الحربي',  service: 'غسيل خارجي', status: 'ASSIGNED',        time: '09:45', price: '80',  plate: 'JKL 7890', biker: 'أنس كريم'},
-  {id: '6', customerName: 'ريم الدوسري',  service: 'غسيل كامل',  status: 'ACCEPTED',        time: '09:30', price: '150', plate: 'MNO 1234', biker: null},
+  {id: '1', customerName: 'أحمد محمد',    service: 'غسيل خارجي', status: 'PENDING_PARTNER', time: '10:30', price: '80',  plate: 'ABC 1234', biker: null,         type: 'mobile'},
+  {id: '2', customerName: 'سارة العمري',  service: 'غسيل كامل',  status: 'ON_THE_WAY',      time: '10:15', price: '150', plate: 'XYZ 5678', biker: 'محمد علي',   type: 'mobile'},
+  {id: '3', customerName: 'خالد الغامدي', service: 'تلميع',       status: 'COMPLETED',       time: '09:00', price: '200', plate: 'DEF 9012', biker: 'أنس كريم',   type: 'mobile'},
+  {id: '4', customerName: 'منى السعيد',   service: 'غسيل داخلي', status: 'STARTED',         time: '10:00', price: '120', plate: 'GHI 3456', biker: 'محمد علي',   type: 'onshop'},
+  {id: '5', customerName: 'فيصل الحربي',  service: 'غسيل خارجي', status: 'ASSIGNED',        time: '09:45', price: '80',  plate: 'JKL 7890', biker: 'أنس كريم',   type: 'mobile'},
+  {id: '6', customerName: 'ريم الدوسري',  service: 'غسيل كامل',  status: 'ACCEPTED',        time: '09:30', price: '150', plate: 'MNO 1234', biker: null,         type: 'onshop'},
+  {id: '7', customerName: 'تركي المطيري', service: 'غسيل خارجي', status: 'PENDING_PARTNER', time: '11:00', price: '80',  plate: 'PQR 4567', biker: null,         type: 'onshop'},
 ];
 
 function OrderCard({item, colors, t, onPress}) {
@@ -30,7 +31,14 @@ function OrderCard({item, colors, t, onPress}) {
   return (
     <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={s.cardTop}>
-        <Text style={[s.cardId, {color: colors.primary}]}>#{item.id ? `KF-${item.id.padStart(4, '0')}` : ''}</Text>
+        <View style={s.cardIdRow}>
+          <Text style={[s.cardId, {color: colors.primary}]}>#{item.id ? `KF-${item.id.padStart(4, '0')}` : ''}</Text>
+          {item.type === 'onshop' && (
+            <View style={[s.typePill, {backgroundColor: colors.primary + '18'}]}>
+              <Text style={[s.typePillText, {color: colors.primary}]}>في الموقع</Text>
+            </View>
+          )}
+        </View>
         <View style={[s.badge, {backgroundColor: color + '18'}]}>
           <Text style={[s.badgeText, {color: color}]}>• {statusLabel}</Text>
         </View>
@@ -162,7 +170,10 @@ const s = StyleSheet.create({
   list:         {paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8},
   card:         {borderRadius: 16, borderWidth: 1, marginBottom: 12, padding: 16, gap: 10},
   cardTop:      {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
+  cardIdRow:    {flexDirection: 'row', alignItems: 'center', gap: 6},
   cardId:       {fontSize: 13, fontWeight: '700'},
+  typePill:     {paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20},
+  typePillText: {fontSize: 10, fontWeight: '700'},
   badge:        {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20},
   badgeText:    {fontSize: 11, fontWeight: '700'},
   serviceName:  {fontSize: 18, fontWeight: '800'},
@@ -171,6 +182,7 @@ const s = StyleSheet.create({
   cardDivider:  {height: 1},
   cardBottom:   {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
   detailsBtn:   {fontSize: 14, fontWeight: '700'},
+  priceCol:     {gap: 2},
   priceLabel:   {fontSize: 11},
   priceValue:   {fontSize: 24, fontWeight: '800'},
   empty:        {alignItems: 'center', paddingTop: 60},

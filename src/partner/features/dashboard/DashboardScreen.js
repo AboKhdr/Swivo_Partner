@@ -86,13 +86,13 @@ export default function DashboardScreen() {
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <View style={[s.topBar]}>
-        <TouchableOpacity style={s.topBarBtn} activeOpacity={0.75} onPress={() => setShowNotifications(true)}>
-          <Bell size={22} color={colors.textPrimary} />
+        <TouchableOpacity style={[s.topBarBtn, {backgroundColor : colors.primary + '15', borderRadius : 50 , borderColor : colors.primary , borderWidth : 1}]} activeOpacity={0.75} onPress={() => setShowNotifications(true)}>
+          <Bell size={22} color={colors.primary} />
         </TouchableOpacity>
         <View>
-          <Image source={require('../../../../public/logo.png')} style={{width: 40, height: 40}} />
+          <Image source={require('../../../../public/logo.png')} style={{width: 50, height: 40 , objectFit : "contain"}} />
         </View>
-        <TouchableOpacity style={s.topBarBtn} activeOpacity={0.75}>
+        <TouchableOpacity style={[s.topBarBtn, {backgroundColor : colors.warning + '15', borderRadius : 50 , borderColor : colors.warning , borderWidth : 1}]} activeOpacity={0.75}>
           <Text style={{color: colors.warning}} >أ</Text>
         </TouchableOpacity>
       </View>
@@ -160,7 +160,7 @@ const s = StyleSheet.create({
   scroll:           {flex: 1},
   heroCard:         {marginHorizontal: 16, marginBottom: 8, borderRadius: 20, padding: 20, gap: 4},
   heroGreeting:     {fontSize: 12, color: '#9CA3AF', fontWeight: '500'},
-  heroBranchName:   {fontSize: 18, fontWeight: '800', marginBottom: 4},
+  heroBranchName:   {fontSize: 18, fontWeight: '800', color: '#9CA3AF', marginBottom: 4},
   heroRevenueLabel: {fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 2},
   heroRevenue:      {fontSize: 38, color: '#fff', fontWeight: '900', marginBottom: 20},
   heroStats:        {flexDirection: 'row', justifyContent: 'space-between', gap: 10},

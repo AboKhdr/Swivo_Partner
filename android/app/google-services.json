@@ -7,20 +7,59 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:909319495974:android:com_partnerappnew",
+        "mobilesdk_app_id": "1:909319495974:android:46c589479633f4df2361e7",
         "android_client_info": {
           "package_name": "com.partnerappnew"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "909319495974-etdap8tdnf1omdhr3tkon9aqgf7nqp47.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDOAxO8bJXxO0HZBVYNxiiBOo0_qsPQprU"
+          "current_key": "AIzaSyBvBIM9bBp2CKAHQ_wF9a8pnc6F76oEteo"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "909319495974-etdap8tdnf1omdhr3tkon9aqgf7nqp47.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:909319495974:android:61fbcc13336e83462361e7",
+        "android_client_info": {
+          "package_name": "com.swivo.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "909319495974-etdap8tdnf1omdhr3tkon9aqgf7nqp47.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvBIM9bBp2CKAHQ_wF9a8pnc6F76oEteo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "909319495974-etdap8tdnf1omdhr3tkon9aqgf7nqp47.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

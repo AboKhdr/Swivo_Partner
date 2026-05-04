@@ -2,9 +2,8 @@ import React from 'react';
 import {View, StyleSheet} from 'react-native';
 import {Play, MapPin, UserCheck, Droplets, Camera} from 'lucide-react-native';
 import {useTheme} from '../context/ThemeContext';
-import {STATUS_STEPS} from '../constants/status';
 
-const STEPS = [
+const STEPS_MOBILE = [
   {key: 'ASSIGNED',   Icon: Play},
   {key: 'ON_THE_WAY', Icon: MapPin},
   {key: 'ARRIVED',    Icon: UserCheck},
@@ -12,15 +11,22 @@ const STEPS = [
   {key: 'COMPLETED',  Icon: Camera},
 ];
 
+const STEPS_ONSHOP = [
+  {key: 'ASSIGNED',  Icon: Play},
+  {key: 'STARTED',   Icon: Droplets},
+  {key: 'COMPLETED', Icon: Camera},
+];
+
 const BOX = 38;
 
-export default function StatusTracker({status}) {
+export default function StatusTracker({status, orderType}) {
   const {colors} = useTheme();
-  const currentIdx = STATUS_STEPS.indexOf(status);
+  const steps = orderType === 'onshop' ? STEPS_ONSHOP : STEPS_MOBILE;
+  const currentIdx = steps.findIndex(s => s.key === status);
 
   return (
     <View style={s.root}>
-      {STEPS.map(({key, Icon}, i) => {
+      {steps.map(({key, Icon}, i) => {
         const done   = i < currentIdx;
         const active = i === currentIdx;
 

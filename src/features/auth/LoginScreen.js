@@ -16,6 +16,7 @@ import {
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
 import OtpScreen from './OtpScreen';
+import {login} from '../../services/auth';
 
 const MAX_PHONE_LEN = 10;
 
@@ -44,18 +45,24 @@ export default function LoginScreen({onLogin, onGuest}) {
     ]).start();
   }, [formOpacity, formY, logoOpacity, logoY]);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (phone.trim().length < 9) {
       setError(t('auth.invalidPhone'));
       return;
     }
     setError(null);
     setIsLoading(true);
-    // TODO: POST /api/auth/signin/credentials
-    setTimeout(() => {
-      setIsLoading(false);
+    const res = await login(`+966${phone.trim()}`);
+    setIsLoading(false);
+    if (res.success) {
       setShowOtp(true);
-    }, 800);
+    } else {
+      setError(
+        res.error === 'NETWORK_ERROR' ? t('auth.networkError') :
+        res.error === 'TIMEOUT'       ? t('auth.networkError') :
+        res.data?.message             ?? t('auth.invalidPhone'),
+      );
+    }
   };
 
   if (showOtp) {
