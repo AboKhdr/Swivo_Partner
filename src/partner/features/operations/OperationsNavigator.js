@@ -125,7 +125,7 @@ function OperationsMenu({colors, onNavigate}) {
           style={[s.devBtn, {backgroundColor: '#F59E0B18', borderColor: '#F59E0B'}]}
           onPress={() => {
             setIncomingOrder(MOCK_INCOMING);
-            showIncomingOrderNotification(MOCK_INCOMING).catch(() => {});
+            showIncomingOrderNotification(MOCK_INCOMING).catch(e => console.log('TEST BTN ERROR:', e));
           }}
           activeOpacity={0.8}>
           <Text style={s.devBtnText}>🧪 اختبار: طلب جديد وارد</Text>

@@ -4,10 +4,11 @@ import api from '../services/api';
 import {registerFCMToken} from '../services/notifications';
 
 const useAuthStore = create((set, get) => ({
-  user:    null,   // { id, firstName, lastName, phone, role, avatar? }
+  // user shape from verifyOTP: { _id, name, phoneNumber, preferredLanguage, tenantId, role }
+  user:    null,
   token:   null,
-  role:    null,   // 'biker' | 'manager' | null
-  isReady: false,  // hydration complete
+  role:    null,   // 'biker' | 'admin' | null
+  isReady: false,
 
   // ── Bootstrap ─────────────────────────────────────────────────────────
   hydrate: async () => {
@@ -18,7 +19,7 @@ const useAuthStore = create((set, get) => ({
       ]);
       if (token && userRaw) {
         const user = JSON.parse(userRaw);
-        set({token, user, role: user.role, isReady: true});
+        set({token, user, role: user.role ?? null, isReady: true});
       } else {
         set({isReady: true});
       }
@@ -28,14 +29,13 @@ const useAuthStore = create((set, get) => ({
   },
 
   // ── Auth Actions ────────────────────────────────────────────────────────
-  setSession: async (token, refreshToken, user) => {
+  // No refreshToken — backend response only returns: { token, user }
+  setSession: async (token, user) => {
     await Promise.all([
       api.saveToken(token),
-      AsyncStorage.setItem('refresh_token', refreshToken ?? ''),
       AsyncStorage.setItem('auth_user', JSON.stringify(user)),
     ]);
-    set({token, user, role: user.role});
-    // Send stored FCM token to backend now that user is authenticated
+    set({token, user, role: user.role ?? null});
     AsyncStorage.getItem('fcm_token').then(fcmToken => {
       if (fcmToken) registerFCMToken(fcmToken, user.role).catch(() => {});
     }).catch(() => {});
@@ -44,7 +44,6 @@ const useAuthStore = create((set, get) => ({
   logout: async () => {
     await Promise.all([
       api.clearToken(),
-      AsyncStorage.removeItem('refresh_token'),
       AsyncStorage.removeItem('auth_user'),
     ]);
     set({token: null, user: null, role: null});

@@ -1,13 +1,8 @@
-import React, {useCallback, useState} from 'react';
-import {FlatList, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, FlatList, Modal, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
 import {Bike} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-
-const MOCK_BIKERS = [
-  {id: 'b1', name: 'خالد العتيبي', distance: '0.01 mm', rating: 4.8, isOnDuty: true},
-  {id: 'b2', name: 'خالد العتيبي', distance: '0.01 mm', rating: 4.8, isOnDuty: true},
-  {id: 'b3', name: 'خالد العتيبي', distance: '252 km',  rating: 4.8, isOnDuty: true},
-];
+import {getStaff, assignBiker} from '../../../services/partner';
 
 const FILTERS = [
   {key: 'nearest', label: 'الأقرب مسافة'},
@@ -15,6 +10,12 @@ const FILTERS = [
 ];
 
 function BikerRow({item, selected, onPress, colors}) {
+  const name   = item.userId
+    ? `${item.userId.firstName ?? ''} ${item.userId.lastName ?? ''}`.trim()
+    : item.name ?? '';
+  const rating = item.rating ?? 0;
+  const trips  = item.activeOrdersCount ?? 0;
+
   return (
     <TouchableOpacity
       style={[s.row, {borderColor: colors.border}]}
@@ -24,40 +25,62 @@ function BikerRow({item, selected, onPress, colors}) {
         {selected && <View style={[s.radioDot, {backgroundColor: colors.primary}]} />}
       </View>
       <View style={s.rowInfo}>
-        <Text style={[s.rowName, {color: colors.textPrimary}]}>{item.name}</Text>
+        <Text style={[s.rowName, {color: colors.textPrimary}]}>{name}</Text>
         <View style={s.rowMeta}>
-          <Text style={[s.rowMetaText, {color: colors.textSecondary}]}>📍 {item.distance}</Text>
-          <Text style={[s.rowMetaText, {color: colors.textSecondary}]}>⭐ {item.rating}</Text>
+          <Text style={[s.rowMetaText, {color: colors.textSecondary}]}>🛵 {trips} طلب</Text>
+          {rating > 0 && <Text style={[s.rowMetaText, {color: colors.textSecondary}]}>⭐ {rating}</Text>}
         </View>
       </View>
       <View style={[s.avatar, {backgroundColor: colors.primary + '15'}]}>
-        <Text style={[s.avatarText, {color: colors.primary}]}>{item.name.charAt(0)}</Text>
+        <Text style={[s.avatarText, {color: colors.primary}]}>{(name || 'ب').charAt(0)}</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-export default function AssignBikerScreen({visible, onClose, onAssigned}) {
+export default function AssignBikerScreen({visible, orderId, onClose, onAssigned}) {
   const {colors} = useTheme();
-  const [selected, setSelected]     = useState(null);
-  const [activeFilter, setFilter]   = useState('nearest');
-  const [loading, setLoading]       = useState(false);
+  const [bikers,       setBikers]      = useState([]);
+  const [selected,     setSelected]    = useState(null);
+  const [activeFilter, setFilter]      = useState('nearest');
+  const [loading,      setLoading]     = useState(false);
+  const [confirming,   setConfirming]  = useState(false);
 
-  const handleConfirm = useCallback(() => {
-    if (!selected) return;
+  useEffect(() => {
+    if (!visible) return;
     setLoading(true);
-    setTimeout(() => {
+    setSelected(null);
+    getStaff({role: 'BIKER', isOnDuty: true, sort: activeFilter, limit: 50}).then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setBikers(Array.isArray(list) ? list : []);
+      }
       setLoading(false);
+    });
+  }, [visible, activeFilter]);
+
+  const handleConfirm = useCallback(async () => {
+    if (!selected || confirming) return;
+    const staffId = selected._id ?? selected.id;
+    setConfirming(true);
+    const res = await assignBiker(orderId, staffId);
+    setConfirming(false);
+    if (res.success) {
       setSelected(null);
-      onAssigned(selected);
-    }, 800);
-  }, [selected, onAssigned]);
+      onAssigned(staffId);
+    }
+  }, [selected, confirming, orderId, onAssigned]);
 
   const renderItem = useCallback(({item}) => (
-    <BikerRow item={item} selected={selected?.id === item.id} onPress={setSelected} colors={colors} />
+    <BikerRow
+      item={item}
+      selected={(selected?._id ?? selected?.id) === (item._id ?? item.id)}
+      onPress={setSelected}
+      colors={colors}
+    />
   ), [selected, colors]);
 
-  const keyExtractor = useCallback(item => item.id, []);
+  const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -71,7 +94,7 @@ export default function AssignBikerScreen({visible, onClose, onAssigned}) {
         <View style={s.sheetHeader}>
           <View style={s.sheetTitleRow}>
             <View style={[s.availableBadge, {backgroundColor: '#22C55E18'}]}>
-              <Text style={[s.availableText, {color: '#22C55E'}]}>• {MOCK_BIKERS.length} متاحين</Text>
+              <Text style={[s.availableText, {color: '#22C55E'}]}>• {bikers.length} متاحين</Text>
             </View>
             <Text style={[s.sheetTitle, {color: colors.textPrimary}]}>توكيل بايكر</Text>
           </View>
@@ -96,23 +119,34 @@ export default function AssignBikerScreen({visible, onClose, onAssigned}) {
           </View>
         </View>
 
-        <FlatList
-          data={MOCK_BIKERS}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          style={s.list}
-          contentContainerStyle={s.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+        {loading ? (
+          <View style={s.center}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={bikers}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            style={s.list}
+            contentContainerStyle={s.listContent}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={s.empty}>
+                <Text style={[s.emptyText, {color: colors.textSecondary}]}>لا يوجد بايكرز متاحين</Text>
+              </View>
+            }
+          />
+        )}
 
         <View style={s.footer}>
           <TouchableOpacity
-            style={[s.confirmBtn, {backgroundColor: selected && !loading ? colors.primary : colors.border}]}
+            style={[s.confirmBtn, {backgroundColor: selected && !confirming ? colors.primary : colors.border}]}
             onPress={handleConfirm}
-            disabled={!selected || loading}
+            disabled={!selected || confirming}
             activeOpacity={0.8}>
             <Bike size={20} color="#FFF" />
-            <Text style={s.confirmText}>{loading ? 'جاري الإرسال...' : 'ارسال البايكر'}</Text>
+            <Text style={s.confirmText}>{confirming ? 'جاري الإرسال...' : 'ارسال البايكر'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -133,6 +167,9 @@ const s = StyleSheet.create({
   filters:       {flexDirection: 'row', gap: 8, marginTop: 4},
   filterChip:    {paddingHorizontal: 14, paddingVertical: 7, borderRadius: 50, borderWidth: 1},
   filterText:    {fontSize: 13, fontWeight: '600'},
+  center:        {height: 150, alignItems: 'center', justifyContent: 'center'},
+  empty:         {paddingVertical: 40, alignItems: 'center'},
+  emptyText:     {fontSize: 14},
   list:          {maxHeight: 300},
   listContent:   {paddingHorizontal: 16, paddingTop: 8, gap: 2},
   row:           {flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1},

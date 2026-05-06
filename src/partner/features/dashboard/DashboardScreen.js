@@ -1,31 +1,37 @@
-import React, {useState, useCallback} from 'react';
-import {FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Bell, Info, Car, Phone, MapPin} from 'lucide-react-native';
+import React, {useState, useEffect, useCallback} from 'react';
+import {
+  ActivityIndicator, Image, RefreshControl, ScrollView,
+  StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
+import {Bell, Car, MapPin, Phone} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import useAuthStore from '../../../store/authStore';
+import {getDashboardToday, getStaff} from '../../../services/partner';
 import NotificationsScreen from './NotificationsScreen';
 
-const MOCK_BRANCH = {
-  name: 'مغسلة الكروية',
-  managerName: 'خالد',
-  todayRevenue: '285.00',
-  totalOrders: 6,
-  activeOrders: 4,
-  pendingOrders: 4,
-};
-
-const MOCK_PENDING = [
-  {id: '1', service: 'غسيل داخلي + خارجي', location: 'حي الملقا، الرياض', price: '120', time: 'قبل 2 دقيقة',  status: 'PENDING_PARTNER'},
-  {id: '2', service: 'غسيل خارجي',          location: 'حي الملقا، الرياض', price: '80',  time: 'قبل 10 دقيقة', status: 'PENDING_PARTNER'},
-  {id: '3', service: 'غسيل كامل - تشحيم',   location: 'حي الملقا، الرياض', price: '50',  time: 'قبل 24 دقيقة', status: 'PENDING_PARTNER'},
-];
-
-const MOCK_BIKERS = [
-  {id: '1', name: 'يحيى الصفدي',       status: 'متاح', dotColor: '#F59E0B'},
-  {id: '2', name: 'غيث الكفرسوسائي', status: 'متاح', dotColor: '#22C55E'},
-];
-
+// ── Order Card ────────────────────────────────────────────────────────────────
 function OrderCard({item, colors, t, onPress}) {
+  const serviceName =
+    item.itemsSnapshot?.[0]?.nameSnapshot?.ar
+    ?? item.itemsSnapshot?.[0]?.nameSnapshot?.en
+    ?? item.items?.[0]?.service?.name?.ar
+    ?? item.items?.[0]?.service?.name?.en
+    ?? item.items?.[0]?.name?.ar
+    ?? item.items?.[0]?.name?.en
+    ?? item.service?.name?.ar
+    ?? item.service?.name?.en
+    ?? (typeof item.service?.name === 'string' ? item.service.name : '')
+    ?? '';
+  const branchName = item.branch?.name?.ar ?? item.branch?.name?.en ?? item.branch?.name ?? '';
+  const location = item.addressSnapshot?.addressText
+    ?? item.addressSnapshot?.district
+    ?? branchName;
+  const price = item.tenantNetSnapshot ?? item.totalAmount ?? '';
+  const timeStr = item.scheduledAt
+    ? new Date(item.scheduledAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
+    : '';
+
   return (
     <TouchableOpacity
       style={[s.pendingCard, {backgroundColor: colors.card, borderColor: colors.border}]}
@@ -39,45 +45,112 @@ function OrderCard({item, colors, t, onPress}) {
           <Car size={22} color={colors.textSecondary} />
         </View>
         <View style={s.pendingInfo}>
-          <Text style={[s.pendingService, {color: colors.textPrimary}]}>{item.service}</Text>
-          <Text style={[s.pendingLocation, {color: colors.textSecondary}]}><MapPin color={"gray"} size={16}/> {item.location}</Text>
+          <Text style={[s.pendingService, {color: colors.textPrimary}]}>{serviceName}</Text>
+          {!!location && (
+            <View style={s.pendingLocationRow}>
+              <MapPin size={12} color={colors.textSecondary} strokeWidth={2} />
+              <Text style={[s.pendingLocation, {color: colors.textSecondary}]} numberOfLines={1}>{location}</Text>
+            </View>
+          )}
         </View>
         <View style={s.pendingPriceCol}>
-          <Text style={[s.pendingPrice, {color: colors.primary}]}> {item.price}</Text>
-          <Text style={[s.pendingTime, {color: colors.textSecondary}]}>{item.time}</Text>
+          {!!price && <Text style={[s.pendingPrice, {color: colors.primary}]}>{price} ﷼</Text>}
+          {!!timeStr && <Text style={[s.pendingTime, {color: colors.textSecondary}]}>{timeStr}</Text>}
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-function BikerCard({item, colors}) {
+// ── Biker Card ────────────────────────────────────────────────────────────────
+function BikerCard({item, colors, t}) {
+  const name = item.userId
+    ? `${item.userId.firstName ?? ''} ${item.userId.lastName ?? ''}`.trim()
+    : (item.name?.ar ?? item.name?.en ?? item.name ?? '');
+  const phone = item.userId?.phoneNumber ?? '';
+  const isActive = item.isActive ?? item.isOnDuty ?? false;
+  const dotColor = isActive ? '#22C55E' : '#94A3B8';
+
   return (
     <View style={[s.bikerCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-      <View style={s.bikerTextCol}>
-        <View style={s.bikerNameRow}>
-          {/* <View style={[s.statusDot, {backgroundColor: item.dotColor}]} /> */}
-          <Text style={[s.bikerName, {color: colors.textPrimary}]}>{item.name}</Text>
-        </View>
-        <Text style={[s.bikerStatus, {color: colors.textSecondary}]}>{item.status}</Text>
+      <View style={[s.bikerAvatar, {backgroundColor: colors.primary + '20'}]}>
+        <Text style={[s.bikerAvatarText, {color: colors.primary}]}>{(name.charAt(0) || '؟').toUpperCase()}</Text>
       </View>
-      <TouchableOpacity style={[s.bikerActionBtn, {backgroundColor: colors.bg, borderColor: colors.border}]} activeOpacity={0.75}>
-        <Phone size={18} color={colors.textSecondary} />
-      </TouchableOpacity>
+      <View style={s.bikerTextCol}>
+        <Text style={[s.bikerName, {color: colors.textPrimary}]}>{name}</Text>
+        <View style={s.bikerDutyRow}>
+          <View style={[s.dutyDot, {backgroundColor: dotColor}]} />
+          <Text style={[s.bikerStatus, {color: colors.textSecondary}]}>
+            {isActive ? t('partner.dashboard.active') : t('partner.dashboard.inactive') ?? 'غير نشط'}
+          </Text>
+        </View>
+      </View>
+      {!!phone && (
+        <TouchableOpacity
+          style={[s.bikerActionBtn, {backgroundColor: colors.bg, borderColor: colors.border}]}
+          activeOpacity={0.75}
+          onPress={() => {
+            const {Linking} = require('react-native');
+            Linking.openURL(`tel:${phone}`);
+          }}>
+          <Phone size={16} color={colors.primary} strokeWidth={2} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
-export default function DashboardScreen() {
+// ── Main Screen ───────────────────────────────────────────────────────────────
+export default function DashboardScreen({onOrderPress}) {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [refreshing, setRefreshing]       = useState(false);
+  const user = useAuthStore(s => s.user);
+
+  const [loading, setLoading]           = useState(true);
+  const [refreshing, setRefreshing]     = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
+  const [stats, setStats]               = useState(null);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [activeBikers, setActiveBikers] = useState([]);
+
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const [todayRes, bikersRes] = await Promise.all([
+      getDashboardToday(),
+      getStaff({role: 'BIKER', isOnDuty: true, limit: 10}),
+    ]);
+
+    if (todayRes.success) {
+      const d = todayRes.data?.data ?? todayRes.data ?? {};
+      setStats({
+        todayRevenue:    d.todayRevenue    ?? 0,
+        pendingCount:    d.pendingOrdersCount ?? 0,
+        activeCount:     d.activeOrdersCount  ?? 0,
+        totalOrders:     d.totalOrdersToday   ?? 0,
+      });
+      setPendingOrders(d.recentPendingOrders ?? []);
+    }
+
+    if (bikersRes.success) {
+      const list = bikersRes.data?.data ?? bikersRes.data ?? [];
+      setActiveBikers(Array.isArray(list) ? list : []);
+    }
+
+    if (!silent) setLoading(false);
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData(true);
+    setRefreshing(false);
+  }, [fetchData]);
+
+  const managerName = user
+    ? `${user.firstName ?? user.name ?? ''}`.trim()
+    : '';
 
   if (showNotifications) {
     return <NotificationsScreen onBack={() => setShowNotifications(false)} />;
@@ -85,111 +158,131 @@ export default function DashboardScreen() {
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
-      <View style={[s.topBar]}>
-        <TouchableOpacity style={[s.topBarBtn, {backgroundColor : colors.primary + '15', borderRadius : 50 , borderColor : colors.primary , borderWidth : 1}]} activeOpacity={0.75} onPress={() => setShowNotifications(true)}>
+      {/* Top bar */}
+      <View style={s.topBar}>
+        <TouchableOpacity
+          style={[s.topBarBtn, {backgroundColor: colors.primary + '15', borderColor: colors.primary, borderWidth: 1}]}
+          activeOpacity={0.75}
+          onPress={() => setShowNotifications(true)}>
           <Bell size={22} color={colors.primary} />
         </TouchableOpacity>
-        <View>
-          <Image source={require('../../../../public/logo.png')} style={{width: 50, height: 40 , objectFit : "contain"}} />
+        <Image source={require('../../../../public/logo.png')} style={s.logo} resizeMode="contain" />
+        <View style={[s.topBarBtn, {backgroundColor: colors.primary + '15', borderColor: colors.primary, borderWidth: 1}]}>
+          <Text style={[s.avatarLetter, {color: colors.primary}]}>
+            {(managerName.charAt(0) || 'م').toUpperCase()}
+          </Text>
         </View>
-        <TouchableOpacity style={[s.topBarBtn, {backgroundColor : colors.warning + '15', borderRadius : 50 , borderColor : colors.warning , borderWidth : 1}]} activeOpacity={0.75}>
-          <Text style={{color: colors.warning}} >أ</Text>
-        </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={s.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}>
-
-        <View style={{paddingHorizontal: 16, paddingTop: 20}}>
-          <Text style={s.heroGreeting}>{t('partner.dashboard.title')}، {MOCK_BRANCH.managerName}</Text>
-          <Text style={s.heroBranchName}>{MOCK_BRANCH.name}</Text>
+      {loading ? (
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-        <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
-          <Text style={s.heroRevenueLabel}>{t('partner.dashboard.revenue')}</Text>
-          <Text style={s.heroRevenue}> {MOCK_BRANCH.todayRevenue}</Text>
-          <View style={s.heroStats}>
-            <View style={s.heroStatItem}>
-              <Text style={s.heroStatValue}>{MOCK_BRANCH.pendingOrders}</Text>
-              <Text style={s.heroStatLabel}>{t('partner.dashboard.pending')}</Text>
-            </View>
-            <View style={s.heroStatItem}>
-              <Text style={s.heroStatValue}>{MOCK_BRANCH.activeOrders}</Text>
-              <Text style={s.heroStatLabel}>{t('partner.dashboard.active')}</Text>
-            </View>
-            <View style={s.heroStatItem}>
-              <Text style={s.heroStatValue}>{MOCK_BRANCH.totalOrders}</Text>
-              <Text style={s.heroStatLabel}>{t('partner.dashboard.orders')}</Text>
+      ) : (
+        <ScrollView
+          style={s.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}>
+
+          {/* Greeting */}
+          <View style={s.greetingWrap}>
+            <Text style={[s.heroGreeting, {color: colors.textSecondary}]}>
+              {t('partner.dashboard.title')}{managerName ? `، ${managerName}` : ''}
+            </Text>
+          </View>
+
+          {/* Hero card */}
+          <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
+            <Text style={s.heroRevenueLabel}>{t('partner.dashboard.revenue')}</Text>
+            <Text style={s.heroRevenue}>{stats?.todayRevenue ?? 0} ﷼</Text>
+            <View style={s.heroStats}>
+              <View style={s.heroStatItem}>
+                <Text style={s.heroStatValue}>{stats?.pendingCount ?? 0}</Text>
+                <Text style={s.heroStatLabel}>{t('partner.dashboard.pending')}</Text>
+              </View>
+              <View style={s.heroStatItem}>
+                <Text style={s.heroStatValue}>{stats?.activeCount ?? 0}</Text>
+                <Text style={s.heroStatLabel}>{t('partner.dashboard.active')}</Text>
+              </View>
+              <View style={s.heroStatItem}>
+                <Text style={s.heroStatValue}>{stats?.totalOrders ?? 0}</Text>
+                <Text style={s.heroStatLabel}>{t('partner.dashboard.orders')}</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.pendingOrders')}</Text>
-          {MOCK_PENDING.map(item => (
-            <OrderCard key={item.id} item={item} colors={colors} t={t} onPress={() => {}} />
-          ))}
-        </View>
+          {/* Pending orders */}
+          {pendingOrders.length > 0 && (
+            <View style={s.section}>
+              <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.pendingOrders')}</Text>
+              {pendingOrders.map(item => (
+                <OrderCard
+                  key={item._id ?? item.id}
+                  item={item}
+                  colors={colors}
+                  t={t}
+                  onPress={onOrderPress ?? (() => {})}
+                />
+              ))}
+            </View>
+          )}
 
-        <View style={s.section}>
-          <View style={s.sectionHeader}>
-            <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.activeBikers')}</Text>
-            <TouchableOpacity activeOpacity={0.75}>
-              <Text style={[s.viewAll, {color: colors.primary}]}>{t('partner.dashboard.viewAll')}</Text>
-            </TouchableOpacity>
-          </View>
-          {MOCK_BIKERS.map(item => (
-            <BikerCard key={item.id} item={item} colors={colors} />
-          ))}
-        </View>
+          {/* Active bikers */}
+          {activeBikers.length > 0 && (
+            <View style={s.section}>
+              <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.activeBikers')}</Text>
+              {activeBikers.map(item => (
+                <BikerCard key={item._id} item={item} colors={colors} t={t} />
+              ))}
+            </View>
+          )}
 
-        <View style={s.bottomPad} />
-      </ScrollView>
+          <View style={s.bottomPad} />
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root:             {flex: 1},
+  center:           {flex: 1, alignItems: 'center', justifyContent: 'center'},
   topBar:           {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12},
-  topBarBtn:        {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
-  logoText:         {fontSize: 20, fontWeight: '900', letterSpacing: -0.5},
-  logoPlusBadge:    {paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, marginLeft: 2},
-  logoPlusText:     {fontSize: 10, color: '#fff', fontWeight: '900'},
+  topBarBtn:        {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},
+  avatarLetter:     {fontSize: 15, fontWeight: '800'},
+  logo:             {width: 50, height: 40},
   scroll:           {flex: 1},
-  heroCard:         {marginHorizontal: 16, marginBottom: 8, borderRadius: 20, padding: 20, gap: 4},
-  heroGreeting:     {fontSize: 12, color: '#9CA3AF', fontWeight: '500'},
-  heroBranchName:   {fontSize: 18, fontWeight: '800', color: '#9CA3AF', marginBottom: 4},
+  greetingWrap:     {paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8},
+  heroGreeting:     {fontSize: 14, fontWeight: '500'},
+  heroCard:         {marginHorizontal: 16, marginBottom: 20, borderRadius: 20, padding: 20, gap: 4},
   heroRevenueLabel: {fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 2},
   heroRevenue:      {fontSize: 38, color: '#fff', fontWeight: '900', marginBottom: 20},
   heroStats:        {flexDirection: 'row', justifyContent: 'space-between', gap: 10},
   heroStatItem:     {flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 14, paddingVertical: 12, gap: 4},
   heroStatValue:    {fontSize: 20, color: '#fff', fontWeight: '800'},
   heroStatLabel:    {fontSize: 12, color: 'rgba(255,255,255,0.8)'},
-  section:          {paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4},
-  sectionHeader:    {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12},
+  section:          {paddingHorizontal: 16, paddingBottom: 8, marginBottom: 8},
   sectionTitle:     {fontSize: 16, fontWeight: '700', marginBottom: 12},
-  viewAll:          {fontSize: 13, fontWeight: '600'},
   pendingCard:      {borderRadius: 14, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 14, borderWidth: 1, marginBottom: 10, gap: 10},
   pendingBadge:     {alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20},
   pendingBadgeText: {fontSize: 11, fontWeight: '700'},
   pendingRow:       {flexDirection: 'row', alignItems: 'center', gap: 10},
   carIconBox:       {width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
   pendingInfo:      {flex: 1, gap: 5},
-  pendingService:   {fontSize: 15, fontWeight: '700', },
-  pendingLocation:  {fontSize: 12 , display : "flex", alignItems : "center", gap: 1},
-  pendingPriceCol:  {alignItems: 'flex-start', gap: 4, minWidth: 56},
-  pendingPrice:     {fontSize: 14, textAlign:"center" ,fontWeight: '800'},
+  pendingService:   {fontSize: 15, fontWeight: '700'},
+  pendingLocationRow:{flexDirection: 'row', alignItems: 'center', gap: 4},
+  pendingLocation:  {fontSize: 12, flex: 1},
+  pendingPriceCol:  {alignItems: 'flex-end', gap: 4, minWidth: 60},
+  pendingPrice:     {fontSize: 14, fontWeight: '800'},
   pendingTime:      {fontSize: 11},
-  bikerCard:        {flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 10, gap: 10},
-  bikerInfoBox:     {justifyContent: 'center'},
-  bikerInfoBtn:     {width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1},
+  bikerCard:        {flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 10, gap: 12},
+  bikerAvatar:      {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center'},
+  bikerAvatarText:  {fontSize: 16, fontWeight: '800'},
   bikerTextCol:     {flex: 1, gap: 4},
-  bikerNameRow:     {flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 8},
   bikerName:        {fontSize: 15, fontWeight: '700'},
-  statusDot:        {width: 10, height: 10, borderRadius: 5},
-  bikerStatus:      {fontSize: 12, },
-  bikerActionBtn:   {width: 36, height: 36, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 1},
-  bottomPad:        {height: 24},
+  bikerDutyRow:     {flexDirection: 'row', alignItems: 'center', gap: 6},
+  dutyDot:          {width: 7, height: 7, borderRadius: 4},
+  bikerStatus:      {fontSize: 12},
+  bikerActionBtn:   {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1},
+  bottomPad:        {height: 40},
 });

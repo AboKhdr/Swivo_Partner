@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from '../config';
 
-const BASE_URL = config.BASE_URL;
+const BASE_URL = config.BASE_URL1;
 const TIMEOUT_MS = 15000;
 
 async function getToken() {

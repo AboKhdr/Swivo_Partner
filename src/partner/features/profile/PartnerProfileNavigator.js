@@ -8,6 +8,7 @@ import {
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import useAuthStore from '../../../store/authStore';
 import PartnerPersonalInfoScreen from './PartnerPersonalInfoScreen';
 import NotificationsScreen from '../dashboard/NotificationsScreen';
 import SupportScreen from './SupportScreen';
@@ -31,7 +32,7 @@ function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, co
   );
 }
 
-function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t}) {
+function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, managerInitial, onLogout}) {
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.card} />
@@ -47,10 +48,10 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t}) {
           onPress={() => onNavigate('info')}
           activeOpacity={0.85}>
           <View style={[s.avatar, {backgroundColor: colors.primary + '18'}]}>
-            <Text style={[s.avatarText, {color: colors.primary}]}>م</Text>
+            <Text style={[s.avatarText, {color: colors.primary}]}>{managerInitial}</Text>
           </View>
           <View style={s.avatarInfo}>
-            <Text style={[s.managerName, {color: colors.textPrimary}]}>سالم العتيبي</Text>
+            <Text style={[s.managerName, {color: colors.textPrimary}]}>{managerName}</Text>
             <Text style={[s.managerSub, {color: colors.textSecondary}]}>{t('partner.profile.managerRole')}</Text>
           </View>
           <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2} />
@@ -109,7 +110,7 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t}) {
           <NavRow
             Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418"
             label={t('partner.profile.logout')} sub={t('partner.profile.logoutSub')}
-            onPress={() => {}} danger colors={colors} />
+            onPress={onLogout} danger colors={colors} />
         </View>
 
         <View style={{height: 16}} />
@@ -138,6 +139,10 @@ function PlaceholderScreen({title, colors, onBack}) {
 export default function PartnerProfileNavigator() {
   const {colors, isDark, toggleTheme} = useTheme();
   const {t} = useI18n();
+  const user   = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
+  const managerName    = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || '—' : '—';
+  const managerInitial = managerName.charAt(0) || 'م';
   const [screen, setScreen] = useState(null);
 
   const goTo   = useCallback(key => setScreen(key), []);
@@ -155,7 +160,7 @@ export default function PartnerProfileNavigator() {
   return (
     <View style={s.flex}>
       <View style={[s.flex, screen ? s.hidden : null]}>
-        <ProfileMenu colors={colors} isDark={isDark} toggleTheme={toggleTheme} onNavigate={goTo} t={t} />
+        <ProfileMenu colors={colors} isDark={isDark} toggleTheme={toggleTheme} onNavigate={goTo} t={t} managerName={managerName} managerInitial={managerInitial} onLogout={logout} />
       </View>
       {screen === 'info' && (
         <View style={s.flex}>

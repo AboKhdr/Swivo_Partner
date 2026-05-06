@@ -16,10 +16,10 @@ import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
 import {verifyOTP, resendOTP} from '../../services/auth';
 
-const OTP_LENGTH = 4;
+const OTP_LENGTH = 6;
 const RESEND_DELAY = 30;
 
-export default function OtpScreen({phone, onVerified, onBack}) {
+export default function OtpScreen({phone,prefix , onVerified, onBack}) {
   const {colors, isDark} = useTheme();
   const {t, isRTL} = useI18n();
 
@@ -89,10 +89,11 @@ export default function OtpScreen({phone, onVerified, onBack}) {
     }
     setIsLoading(true);
     setError(null);
-    const res = await verifyOTP(phone, code);
+    const res = await verifyOTP({phone, prefix : "966", code});
     setIsLoading(false);
     if (res.success) {
-      onVerified(res.data?.user?.role ?? 'biker');
+      // response: { success, token, user: { _id, name, role, ... } }
+      onVerified(res.data?.user?.role ?? res.data?.role ?? 'biker');
     } else {
       shake();
       setError(
@@ -239,14 +240,14 @@ const s = StyleSheet.create({
   },
   phoneTxt:   {fontSize: 15, fontWeight: '700'},
 
-  boxRow:     {flexDirection: 'row', gap: 14, marginBottom: 16},
+  boxRow:     {flexDirection: 'row', gap: 8, marginBottom: 16},
   box:        {
-    width: 62, height: 70,
+    width: 50, height: 55,
     borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
   },
   boxInput:   {
-    width: '100%', height: '100%',
+    width: '30px', height: '30px',
     fontSize: 28, fontWeight: '800',
     textAlign: 'center', padding: 0,
   },

@@ -1,5 +1,6 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   StyleSheet,
@@ -19,22 +20,8 @@ import {
   Wallet,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
+import {getBikerPayouts} from '../../../services/partner';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_PAYMENTS = [
-  {id: 'p1',  date: '2026-05-03', label: 'طلب #1042 - غسلة سريعة',   amount: 120,  type: 'in',  method: 'بطاقة',   status: 'completed'},
-  {id: 'p2',  date: '2026-05-03', label: 'طلب #1041 - غسلة متقدمة',  amount: 180,  type: 'in',  method: 'محفظة',   status: 'completed'},
-  {id: 'p3',  date: '2026-05-03', label: 'عمولة المنصة',              amount: 30,   type: 'out', method: 'خصم تلقائي', status: 'completed'},
-  {id: 'p4',  date: '2026-05-02', label: 'طلب #1040 - باقة شهرية',   amount: 500,  type: 'in',  method: 'بطاقة',   status: 'completed'},
-  {id: 'p5',  date: '2026-05-02', label: 'طلب #1039 - تلميع خارجي',  amount: 200,  type: 'in',  method: 'كاش',     status: 'completed'},
-  {id: 'p6',  date: '2026-05-02', label: 'عمولة المنصة',              amount: 70,   type: 'out', method: 'خصم تلقائي', status: 'completed'},
-  {id: 'p7',  date: '2026-05-01', label: 'طلب #1038 - غسيل داخلي',   amount: 130,  type: 'in',  method: 'محفظة',   status: 'completed'},
-  {id: 'p8',  date: '2026-05-01', label: 'طلب #1037 - تعقيم',        amount: 250,  type: 'in',  method: 'بطاقة',   status: 'pending'},
-  {id: 'p9',  date: '2026-04-30', label: 'طلب #1036 - غسلة سريعة',   amount: 120,  type: 'in',  method: 'كاش',     status: 'completed'},
-  {id: 'p10', date: '2026-04-30', label: 'عمولة المنصة',              amount: 50,   type: 'out', method: 'خصم تلقائي', status: 'completed'},
-  {id: 'p11', date: '2026-04-29', label: 'طلب #1035 - باقة بريميوم',  amount: 800,  type: 'in',  method: 'بطاقة',   status: 'completed'},
-  {id: 'p12', date: '2026-04-28', label: 'طلب #1034 - غسلة متقدمة',  amount: 180,  type: 'in',  method: 'محفظة',   status: 'completed'},
-];
 
 const DATE_FILTERS = [
   {key: 'all',   label: 'الكل'},
@@ -53,7 +40,7 @@ function isSameDay(a, b) {
 }
 
 function filterByDate(payments, key) {
-  const now = new Date('2026-05-03');
+  const now = new Date();
   if (key === 'all') return payments;
   if (key === 'today') return payments.filter(p => isSameDay(new Date(p.date), now));
   if (key === '3days') {
@@ -197,13 +184,38 @@ const pc = StyleSheet.create({
   amount:       {fontSize: 15, fontWeight: '800'},
 });
 
+// ─── Map API payout to display shape ─────────────────────────────────────────
+function mapPayout(p) {
+  return {
+    id:     p._id ?? p.id,
+    date:   p.createdAt ? p.createdAt.slice(0, 10) : (p.date ?? ''),
+    label:  p.notes ?? p.label ?? `دفعة #${(p._id ?? '').slice(-6)}`,
+    amount: p.amount ?? 0,
+    type:   'out',
+    method: p.paymentMethod ?? p.method ?? 'bank_transfer',
+    status: p.status ?? 'completed',
+  };
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PaymentsScreen({onBack}) {
   const {colors} = useTheme();
-  const [dateFilter, setDateFilter] = useState('month');
-  const [showFilter, setShowFilter] = useState(false);
+  const [payments,    setPayments]   = useState([]);
+  const [loading,     setLoading]    = useState(true);
+  const [dateFilter,  setDateFilter] = useState('month');
+  const [showFilter,  setShowFilter] = useState(false);
 
-  const filtered = useMemo(() => filterByDate(MOCK_PAYMENTS, dateFilter), [dateFilter]);
+  useEffect(() => {
+    getBikerPayouts({limit: 100}).then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setPayments((Array.isArray(list) ? list : []).map(mapPayout));
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  const filtered = useMemo(() => filterByDate(payments, dateFilter), [payments, dateFilter]);
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
@@ -285,6 +297,7 @@ export default function PaymentsScreen({onBack}) {
       </View>
 
       {/* List */}
+      {loading ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View> : null}
       <FlatList
         data={listData}
         renderItem={renderItem}
@@ -311,6 +324,7 @@ export default function PaymentsScreen({onBack}) {
 
 const s = StyleSheet.create({
   root:           {flex: 1},
+  center:         {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:         {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12},
   backBtn:        {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   headerText:     {flex: 1, gap: 2, paddingHorizontal: 8},

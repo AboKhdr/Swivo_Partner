@@ -1,4 +1,8 @@
 {
+  "common": {
+    "retry": "Retry",
+    "offlineContent": "Could not refresh content, showing cached version."
+  },
   "nav": {
     "home": "Home",
     "orders": "Orders",
@@ -36,8 +40,10 @@
         "ON_THE_WAY": "On the Way",
         "STARTED": "Started",
         "COMPLETED": "Completed",
-        "CANCELLED": "Cancelled"
-      }
+        "CANCELLED": "Cancelled",
+        "REJECTED": "Rejected"
+      },
+      "onshop": "On-site"
     },
     "orderDetails": {
       "title": "Order Details",
@@ -355,14 +361,19 @@
     "offlineSub": "Press the button above to start receiving orders",
     "plate": "Plate",
     "carType": "Car Type",
-    "startWash": "Start Wash"
+    "startWash": "Start Wash",
+    "walletBalance": "Your Balance",
+    "weeklyEarnings": "This Week's Earnings",
+    "selectBranch": "Select Your Branch",
+    "noBranches": "No branches available"
   },
   "notifications": {
     "title": "Notifications",
     "today": "Today",
     "cancelledOrder": "Scheduled order cancelled",
     "newReview": "New Review!",
-    "completedWash": "Car wash completed"
+    "completedWash": "Car wash completed",
+    "empty": "No notifications yet"
   },
   "orders": {
     "title": "Orders",
@@ -434,13 +445,27 @@
       "back": "Go Back",
       "yes": "Yes, Cancel"
     },
-    "backToOrders": "Back to Orders"
+    "backToOrders": "Back to Orders",
+    "summary": {
+      "title": "Order Summary",
+      "earning": "Your Earning",
+      "beforePhotos": "Before Photos",
+      "afterPhotos": "After Photos",
+      "photos": "Photos"
+    }
   },
   "orderMap": {
     "title": "Order Location",
     "customer": "Customer",
     "service": "Service",
-    "time": "Time"
+    "time": "Time",
+    "call": "Call",
+    "whatsapp": "WhatsApp",
+    "navigate": "Start Navigation",
+    "mapUnavailable": "Map unavailable",
+    "webviewNotInstalled": "Library not installed",
+    "mapLoading": "Loading map...",
+    "mapError": "Failed to load map"
   },
   "reviews": {
     "title": "Reviews",
@@ -472,16 +497,25 @@
     "title": "Personal Information",
     "myInfo": "My Info",
     "name": "Name",
+    "firstName": "First Name",
+    "lastName": "Last Name",
     "phone": "Phone Number",
     "email": "Email",
     "dob": "Date of Birth",
     "workArea": "Work Area",
-    "edit": "Edit"
+    "edit": "Edit",
+    "save": "Save Changes",
+    "changePhoto": "Change Photo",
+    "takePhoto": "Take a Photo",
+    "chooseGallery": "Choose from Gallery",
+    "tapToChange": "Tap to change photo",
+    "uploadFailed": "Photo upload failed, please try again"
   },
   "wallet": {
     "title": "My Wallet",
     "balance": "Current Balance:",
-    "today": "Today"
+    "today": "Today",
+    "noTransactions": "No transactions yet"
   },
   "language": {
     "title": "Language",
@@ -497,7 +531,10 @@
   "support": {
     "title": "Support",
     "placeholder": "Write your message here...",
-    "send": "Send"
+    "send": "Send",
+    "sentTitle": "Sent Successfully",
+    "sentSub": "Our support team will contact you shortly",
+    "sendAnother": "Send Another Message"
   },
   "terms": {
     "title": "Terms & Conditions",

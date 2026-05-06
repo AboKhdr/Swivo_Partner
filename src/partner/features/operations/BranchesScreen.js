@@ -1,10 +1,10 @@
-import React, {useCallback, useState} from 'react';
-import {Alert, FlatList, Image, Modal, PermissionsAndroid, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, Alert, FlatList, Image, Modal, PermissionsAndroid, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
 import {ArrowRight, Pencil, MapPin, Clock, Bike, ShoppingBag, Camera, ImagePlus, X, Wrench} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {MOCK_SERVICES_ALL} from '../../../shared/data/mockData';
+import {getBranches, getBranchServices, toggleBranchService} from '../../../services/partner';
 import EditBranchScreen from './EditBranchScreen';
 
 async function requestCamera() {
@@ -68,11 +68,6 @@ function ImagePickerModal({visible, onCamera, onGallery, onRemove, hasImage, onC
   );
 }
 
-const MOCK_BRANCHES = [
-  {id: 'br1', nameAr: 'طريق الملك فهد', address: 'البرج 4 , شارع الياسمين',                    hours: '8:00 – 22:00', orders: 12, bikers: 120, isMain: true},
-  {id: 'br2', nameAr: 'فرع العليا',      address: 'الرياض، حي العليا، طريق الملك فهد',          hours: '9:00 – 21:00', orders: 8,  bikers: 80,  isMain: false},
-  {id: 'br3', nameAr: 'فرع النخيل',      address: 'الرياض، حي النخيل، شارع الأمير محمد',        hours: '8:00 – 22:00', orders: 5,  bikers: 40,  isMain: false},
-];
 
 function BannerArea({image, colors, onChangeImage, onEdit}) {
   return (
@@ -114,14 +109,34 @@ function BannerArea({image, colors, onChangeImage, onEdit}) {
 }
 
 function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
-  const [banner,      setBanner]      = useState(item.banner ?? null);
-  const [showImgPick, setShowImgPick] = useState(false);
-  // Each service enabled/disabled per branch — first 2 active by default
-  const [serviceStates, setServiceStates] = useState(() =>
-    Object.fromEntries(MOCK_SERVICES_ALL.map((s, i) => [s.id, i < 2]))
-  );
-  const toggleService = useCallback((id, val) =>
-    setServiceStates(prev => ({...prev, [id]: val})), []);
+  const [banner,        setBanner]        = useState(item.banner ?? null);
+  const [showImgPick,   setShowImgPick]   = useState(false);
+  const [branchSvcs,    setBranchSvcs]    = useState([]);
+  const [svcsLoading,   setSvcsLoading]   = useState(true);
+  const branchId = item._id ?? item.id;
+
+  useEffect(() => {
+    getBranchServices(branchId).then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setBranchSvcs(Array.isArray(list) ? list : []);
+      }
+      setSvcsLoading(false);
+    });
+  }, [branchId]);
+
+  const handleToggleSvc = useCallback(async (serviceId, val) => {
+    setBranchSvcs(prev => prev.map(sv => sv.serviceId === serviceId ? {...sv, isEnabled: val} : sv));
+    await toggleBranchService(branchId, serviceId, val);
+  }, [branchId]);
+
+  const nameAr  = item.name?.ar ?? item.name?.en ?? item.nameAr ?? '';
+  const address = item.address ?? '';
+  const orders  = item.activeOrdersCount  ?? item.orders  ?? 0;
+  const bikers  = item.activeBikersCount  ?? item.bikers  ?? 0;
+
+  const openHour  = item.workingHours?.find(h => !h.isClosed);
+  const hoursStr  = openHour ? `${openHour.open} – ${openHour.close}` : (item.hours ?? '');
 
   const handleCamera = async () => {
     setShowImgPick(false);
@@ -167,8 +182,8 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
             <MapPin size={18} color={colors.primary} />
           </View>
           <View style={s.addrText}>
-            <Text style={[s.addrName, {color: colors.textPrimary}]}>{item.nameAr}</Text>
-            <Text style={[s.addrSub,  {color: colors.textSecondary}]}>{item.address}</Text>
+            <Text style={[s.addrName, {color: colors.textPrimary}]}>{nameAr}</Text>
+            {!!address && <Text style={[s.addrSub, {color: colors.textSecondary}]}>{address}</Text>}
           </View>
         </View>
 
@@ -177,16 +192,18 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
         <View style={s.statsRow}>
           <View style={[s.statItem, {backgroundColor: colors.primary + '15'}]}>
             <Bike size={15} color={colors.primary} />
-            <Text style={[s.statValue, {color: colors.textPrimary}]}>{item.bikers}</Text>
+            <Text style={[s.statValue, {color: colors.textPrimary}]}>{bikers}</Text>
           </View>
           <View style={[s.statItem, {backgroundColor: colors.primary + '15'}]}>
             <ShoppingBag size={15} color={colors.primary} />
-            <Text style={[s.statValue, {color: colors.textPrimary}]}>{item.orders} {ordersLabel}</Text>
+            <Text style={[s.statValue, {color: colors.textPrimary}]}>{orders} {ordersLabel}</Text>
           </View>
-          <View style={[s.statItem, {backgroundColor: colors.primary + '15'}]}>
-            <Clock size={15} color={colors.primary} />
-            <Text style={[s.statValue, {color: colors.textPrimary}]}>{item.hours}</Text>
-          </View>
+          {!!hoursStr && (
+            <View style={[s.statItem, {backgroundColor: colors.primary + '15'}]}>
+              <Clock size={15} color={colors.primary} />
+              <Text style={[s.statValue, {color: colors.textPrimary}]}>{hoursStr}</Text>
+            </View>
+          )}
         </View>
 
         <View style={[s.divider, {backgroundColor: colors.border}]} />
@@ -199,22 +216,31 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
             </View>
             <Text style={[s.servicesSectionTitle, {color: colors.textPrimary}]}>الخدمات المتاحة</Text>
           </View>
-          {MOCK_SERVICES_ALL.map(svc => (
-            <View key={svc.id} style={[s.serviceRow, {borderBottomColor: colors.border}]}>
-              <View style={s.serviceInfo}>
-                <Text style={[s.serviceName, {color: colors.textPrimary}]}>{svc.nameAr}</Text>
-                <View style={[s.categoryChip, {backgroundColor: colors.primary + '12'}]}>
-                  <Text style={[s.categoryText, {color: colors.primary}]}>{svc.category}</Text>
+          {svcsLoading
+            ? <ActivityIndicator size="small" color={colors.primary} style={{marginVertical: 8}} />
+            : branchSvcs.map(sv => {
+              const svcName = sv.service?.name?.ar ?? sv.service?.name?.en ?? sv.serviceId ?? '';
+              const cat     = sv.service?.category?.name?.ar ?? '';
+              return (
+                <View key={sv.serviceId} style={[s.serviceRow, {borderBottomColor: colors.border}]}>
+                  <View style={s.serviceInfo}>
+                    <Text style={[s.serviceName, {color: colors.textPrimary}]}>{svcName}</Text>
+                    {!!cat && (
+                      <View style={[s.categoryChip, {backgroundColor: colors.primary + '12'}]}>
+                        <Text style={[s.categoryText, {color: colors.primary}]}>{cat}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Switch
+                    value={sv.isEnabled ?? false}
+                    onValueChange={val => handleToggleSvc(sv.serviceId, val)}
+                    trackColor={{false: colors.border, true: colors.primary + 'AA'}}
+                    thumbColor={sv.isEnabled ? colors.primary : '#ccc'}
+                  />
                 </View>
-              </View>
-              <Switch
-                value={serviceStates[svc.id] ?? false}
-                onValueChange={val => toggleService(svc.id, val)}
-                trackColor={{false: colors.border, true: colors.primary + 'AA'}}
-                thumbColor={serviceStates[svc.id] ? colors.primary : '#ccc'}
-              />
-            </View>
-          ))}
+              );
+            })
+          }
         </View>
       </View>
 
@@ -230,17 +256,31 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
 export default function BranchesScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
+  const [branches,      setBranches]      = useState([]);
+  const [loading,       setLoading]       = useState(true);
   const [editingBranch, setEditingBranch] = useState(null);
+
+  const fetchBranches = useCallback(async () => {
+    setLoading(true);
+    const res = await getBranches();
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setBranches(Array.isArray(list) ? list : []);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchBranches(); }, [fetchBranches]);
 
   const ordersLabel = t('partner.branches.orders');
   const mainLabel   = t('partner.branches.main');
 
   const handleEdit    = useCallback(item => setEditingBranch(item), []);
-  const handleBack    = useCallback(() => setEditingBranch(null), []);
+  const handleBack    = useCallback(() => { setEditingBranch(null); fetchBranches(); }, [fetchBranches]);
   const renderItem    = useCallback(({item}) => (
     <BranchCard item={item} colors={colors} ordersLabel={ordersLabel} mainLabel={mainLabel} onEdit={handleEdit} />
   ), [colors, ordersLabel, mainLabel, handleEdit]);
-  const keyExtractor  = useCallback(item => item.id, []);
+  const keyExtractor  = useCallback(item => item._id ?? item.id, []);
 
   const showList = !editingBranch;
 
@@ -255,17 +295,22 @@ export default function BranchesScreen({onBack}) {
             <View style={s.headerText}>
               <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('partner.branches.title')}</Text>
               <Text style={[s.headerSub,   {color: colors.textSecondary}]}>
-                {MOCK_BRANCHES.length} {t('partner.branches.subtitle')}
+                {branches.length} {t('partner.branches.subtitle')}
               </Text>
             </View>
           </View>
+          {loading
+            ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            : (
           <FlatList
-            data={MOCK_BRANCHES}
+            data={branches}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             contentContainerStyle={s.list}
             showsVerticalScrollIndicator={false}
           />
+            )
+          }
         </View>
       </View>
       {editingBranch && (
@@ -281,6 +326,7 @@ const s = StyleSheet.create({
   flex:          {flex: 1},
   hidden:        {display: 'none'},
   root:          {flex: 1},
+  center:        {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:        {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16},
   headerText:    {flex: 1, gap: 4, paddingHorizontal: 8},
   headerTitle:   {fontSize: 26, fontWeight: '900'},

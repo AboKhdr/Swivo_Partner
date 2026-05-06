@@ -3,7 +3,7 @@ import api from './api';
 // ── FCM Token ────────────────────────────────────────────────────────────────
 
 export async function registerFCMToken(fcmToken, role) {
-  // role: 'biker' | 'manager'
+  // role: 'biker' | 'admin'
   return api.post('/notifications/register', {fcmToken, role});
 }
 

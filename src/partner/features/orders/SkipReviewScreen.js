@@ -1,22 +1,25 @@
-import React, {useCallback, useState} from 'react';
-import {FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {ArrowRight, Check, X, AlertCircle} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-
-const MOCK_SKIP_REQUESTS = [
-  {id: 's1', bikerName: 'محمد علي',    orderId: '#1024', reason: 'الهاتف لا يعمل',  note: '',                    status: 'PENDING', time: 'منذ 5 دقائق'},
-  {id: 's2', bikerName: 'أنس كريم',    orderId: '#1018', reason: 'أخرى',            note: 'العميل رفض التصوير',  status: 'PENDING', time: 'منذ 20 دقيقة'},
-  {id: 's3', bikerName: 'يوسف إبراهيم', orderId: '#1010', reason: 'الكاميرا تالفة', note: '',                    status: 'APPROVED', time: 'منذ ساعة'},
-];
+import {getSkipRequests, approveSkipRequest, rejectSkipRequest} from '../../../services/partner';
 
 function SkipCard({item, colors, onApprove, onReject}) {
-  const isPending = item.status === 'PENDING';
+  const isPending  = item.status === 'PENDING';
+  const bikerName  = item.requestedBy
+    ? `${item.requestedBy.firstName ?? ''} ${item.requestedBy.lastName ?? ''}`.trim()
+    : item.bikerName ?? '';
+  const orderNum   = item.orderId?.orderNumber ?? item.orderId?._id ?? item.orderId ?? item.orderId ?? '';
+  const timeStr    = item.requestedAt
+    ? new Date(item.requestedAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
+    : item.time ?? '';
+
   return (
     <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={s.cardHeader}>
         <View>
-          <Text style={[s.bikerName, {color: colors.textPrimary}]}>{item.bikerName}</Text>
-          <Text style={[s.orderId, {color: colors.textSecondary}]}>طلب {item.orderId}</Text>
+          <Text style={[s.bikerName, {color: colors.textPrimary}]}>{bikerName}</Text>
+          <Text style={[s.orderId, {color: colors.textSecondary}]}>طلب #{orderNum}</Text>
         </View>
         <View style={[s.badge, {backgroundColor: isPending ? colors.warning + '18' : colors.success + '18'}]}>
           <Text style={[s.badgeText, {color: isPending ? colors.warning : colors.success}]}>
@@ -36,7 +39,7 @@ function SkipCard({item, colors, onApprove, onReject}) {
         ) : null}
       </View>
 
-      <Text style={[s.time, {color: colors.textSecondary}]}>{item.time}</Text>
+      {!!timeStr && <Text style={[s.time, {color: colors.textSecondary}]}>{timeStr}</Text>}
 
       {isPending && (
         <View style={s.actions}>
@@ -62,14 +65,31 @@ function SkipCard({item, colors, onApprove, onReject}) {
 
 export default function SkipReviewScreen({onBack}) {
   const {colors} = useTheme();
-  const [requests, setRequests] = useState(MOCK_SKIP_REQUESTS);
+  const [requests, setRequests] = useState([]);
+  const [loading,  setLoading]  = useState(true);
 
-  const handleApprove = useCallback((item) => {
-    setRequests(prev => prev.map(r => r.id === item.id ? {...r, status: 'APPROVED'} : r));
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    const res = await getSkipRequests({status: 'PENDING', limit: 50});
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setRequests(Array.isArray(list) ? list : []);
+    }
+    setLoading(false);
   }, []);
 
-  const handleReject = useCallback((item) => {
-    setRequests(prev => prev.map(r => r.id === item.id ? {...r, status: 'REJECTED'} : r));
+  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  const handleApprove = useCallback(async (item) => {
+    const orderId = item.orderId?._id ?? item.orderId;
+    await approveSkipRequest(orderId);
+    setRequests(prev => prev.filter(r => (r._id ?? r.id) !== (item._id ?? item.id)));
+  }, []);
+
+  const handleReject = useCallback(async (item) => {
+    const orderId = item.orderId?._id ?? item.orderId;
+    await rejectSkipRequest(orderId);
+    setRequests(prev => prev.filter(r => (r._id ?? r.id) !== (item._id ?? item.id)));
   }, []);
 
   const pending = requests.filter(r => r.status === 'PENDING').length;
@@ -78,7 +98,7 @@ export default function SkipReviewScreen({onBack}) {
     <SkipCard item={item} colors={colors} onApprove={handleApprove} onReject={handleReject} />
   ), [colors, handleApprove, handleReject]);
 
-  const keyExtractor = useCallback(item => item.id, []);
+  const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -99,6 +119,9 @@ export default function SkipReviewScreen({onBack}) {
         <View style={{width: 36}} />
       </View>
 
+      {loading
+        ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+        : (
       <FlatList
         data={requests}
         renderItem={renderItem}
@@ -110,12 +133,15 @@ export default function SkipReviewScreen({onBack}) {
           </View>
         }
       />
+        )
+      }
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root:           {flex: 1},
+  center:         {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:         {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1, gap: 12},
   backBtn:        {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   headerText:     {flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8},

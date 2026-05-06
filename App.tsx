@@ -9,14 +9,14 @@ import PartnerNavigator from './src/partner/navigation/PartnerNavigator';
 import useAuthStore from './src/store/authStore';
 import {setUnauthorizedHandler} from './src/services/api';
 
-type Role = 'biker' | 'manager' | null;
+type Role = 'biker' | 'admin' | null;
 
 function AppRoot() {
   const {isRTL} = useI18n();
   const {role, isReady, hydrate, logout} = useAuthStore();
 
   // Temporary override until auth API is live — remove when real login is wired
-  const [devRole, setDevRole] = useState<Role>('manager');
+  const [devRole, setDevRole] = useState<Role>(null);
 
   useEffect(() => {
     hydrate();
@@ -32,10 +32,10 @@ function AppRoot() {
       <ThemeProvider>
         <FirebaseProvider>
           {activeRole === 'biker'   && <BikerNavigator />}
-          {activeRole === 'manager' && <PartnerNavigator />}
+          {activeRole === 'admin'   && <PartnerNavigator />}
           {activeRole === null && (
             <LoginScreen
-              onLogin={(userRole: Role) => setDevRole(userRole || 'biker')}
+              onLogin={(userRole: Role) => setDevRole(userRole ?? 'biker')}
               onGuest={() => setDevRole('biker')}
             />
           )}

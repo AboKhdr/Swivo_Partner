@@ -1,5 +1,6 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Switch,
@@ -12,12 +13,7 @@ import {ArrowRight, User, Phone, Clock} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import SelectField from '../../../shared/components/SelectField';
 import ImagePickerField from '../../../shared/components/ImagePickerField';
-
-const MOCK_BRANCHES = [
-  {value: 'b1', label: 'الفرع الرئيسي - شارع الياسمين'},
-  {value: 'b2', label: 'فرع العليا'},
-  {value: 'b3', label: 'فرع النرجس'},
-];
+import {getBranches, addStaff} from '../../../services/partner';
 
 const DAYS = [
   {key: 'sat', label: 'السبت'},
@@ -50,24 +46,49 @@ function InputRow({icon: Icon, placeholder, value, onChangeText, keyboardType, c
   );
 }
 
-export default function AddBikerScreen({onBack, onSave, initialData}) {
+export default function AddBikerScreen({onBack, onSaved, initialData}) {
   const {colors} = useTheme();
   const isEdit = !!initialData;
 
-  const [photo,  setPhoto]  = useState(initialData?.photo    ?? null);
-  const [name,   setName]   = useState(initialData?.name     ?? '');
-  const [phone,  setPhone]  = useState(initialData?.phone    ?? '');
-  const [branch, setBranch] = useState(initialData?.branchId ?? '');
-  const [days,   setDays]   = useState(initialData?.days     ?? DEFAULT_DAYS);
+  const [photo,    setPhoto]    = useState(initialData?.photo    ?? null);
+  const [name,     setName]     = useState(initialData?.name     ?? '');
+  const [phone,    setPhone]    = useState(initialData?.phone    ?? '');
+  const [branch,   setBranch]   = useState(initialData?.branchId ?? '');
+  const [days,     setDays]     = useState(initialData?.days     ?? DEFAULT_DAYS);
+  const [branches, setBranches] = useState([]);
+  const [saving,   setSaving]   = useState(false);
+
+  useEffect(() => {
+    getBranches().then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setBranches(
+          (Array.isArray(list) ? list : []).map(b => ({
+            value: b._id ?? b.id,
+            label: b.name?.ar ?? b.name?.en ?? b._id,
+          })),
+        );
+      }
+    });
+  }, []);
 
   const toggleDay = key =>
     setDays(prev => ({...prev, [key]: {...prev[key], enabled: !prev[key].enabled}}));
 
   const canSave = name.trim() && phone.trim() && branch;
 
-  const handleSave = () => {
-    if (!canSave) return;
-    onSave?.({photo, name, phone, branchId: branch, days});
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    await addStaff({
+      phoneNumber: phone.trim(),
+      firstName:   name.trim().split(' ')[0] ?? name.trim(),
+      lastName:    name.trim().split(' ').slice(1).join(' ') || '',
+      branchId:    branch,
+      role:        'BIKER',
+    });
+    setSaving(false);
+    onSaved?.();
     onBack();
   };
 
@@ -120,7 +141,7 @@ export default function AddBikerScreen({onBack, onSave, initialData}) {
         <SelectField
           label="الفرع التابع له"
           placeholder="اختر الفرع"
-          options={MOCK_BRANCHES}
+          options={branches}
           value={branch}
           onChange={setBranch}
         />
@@ -172,11 +193,14 @@ export default function AddBikerScreen({onBack, onSave, initialData}) {
 
         {/* Save */}
         <TouchableOpacity
-          style={[s.saveBtn, {backgroundColor: canSave ? colors.primary : colors.border}]}
+          style={[s.saveBtn, {backgroundColor: canSave && !saving ? colors.primary : colors.border}]}
           onPress={handleSave}
-          disabled={!canSave}
+          disabled={!canSave || saving}
           activeOpacity={0.85}>
-          <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'إضافة البايكر'}</Text>
+          {saving
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'إضافة البايكر'}</Text>
+          }
         </TouchableOpacity>
 
       </ScrollView>

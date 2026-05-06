@@ -1,20 +1,15 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, StatusBar,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import {ArrowRight, Calendar} from 'lucide-react-native';
+import {ArrowRight} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import {getPartnerProfile, updatePartnerProfile} from '../../../services/partner';
 
-const MOCK_MANAGER = {
-  name:  'سالم العتيبي',
-  phone: '+966 501 234 567',
-  email: 'salem@tamam.sa',
-  dob:   '15 , يناير , 1990',
-};
-
-function Field({label, value, onChangeText, placeholder, keyboardType, editable = true, Icon, colors}) {
+function Field({label, value, onChangeText, placeholder, keyboardType, editable = true, colors}) {
   return (
     <View style={s.fieldWrap}>
       <Text style={[s.fieldLabel, {color: colors.textPrimary}]}>{label}</Text>
@@ -33,11 +28,6 @@ function Field({label, value, onChangeText, placeholder, keyboardType, editable 
           editable={editable}
           textAlign="right"
         />
-        {Icon && (
-          <View style={[s.inputIcon, {backgroundColor: colors.primary + '12'}]}>
-            <Icon size={18} color={colors.primary} strokeWidth={2} />
-          </View>
-        )}
       </View>
     </View>
   );
@@ -46,10 +36,33 @@ function Field({label, value, onChangeText, placeholder, keyboardType, editable 
 export default function PartnerPersonalInfoScreen({onBack}) {
   const {colors, isDark} = useTheme();
   const {t} = useI18n();
-  const [name,  setName]  = useState(MOCK_MANAGER.name);
-  const [phone, setPhone] = useState(MOCK_MANAGER.phone);
-  const [email, setEmail] = useState(MOCK_MANAGER.email);
-  const [dob,   setDob]   = useState(MOCK_MANAGER.dob);
+  const [firstName, setFirstName] = useState('');
+  const [lastName,  setLastName]  = useState('');
+  const [phone,     setPhone]     = useState('');
+  const [email,     setEmail]     = useState('');
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+
+  useEffect(() => {
+    getPartnerProfile().then(res => {
+      if (res.success) {
+        const d = res.data?.data ?? res.data ?? {};
+        setFirstName(d.firstName ?? '');
+        setLastName(d.lastName ?? '');
+        setPhone(d.phoneNumber ?? '');
+        setEmail(d.email ?? '');
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    await updatePartnerProfile({firstName: firstName.trim(), lastName: lastName.trim()});
+    setSaving(false);
+    onBack();
+  };
 
   return (
     <KeyboardAvoidingView
@@ -66,21 +79,27 @@ export default function PartnerPersonalInfoScreen({onBack}) {
         <View style={{width: 36}} />
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.content}
-        showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('partner.personalInfo.myInfo')}</Text>
-          <Field label={t('partner.personalInfo.fullName')} value={name}  onChangeText={setName}  placeholder={t('partner.personalInfo.fullName')} colors={colors} />
-          <Field label={t('partner.personalInfo.phone')}    value={phone} onChangeText={setPhone} placeholder={t('partner.personalInfo.phone')} keyboardType="phone-pad" colors={colors} />
-          <Field label={t('partner.personalInfo.email')}    value={email} onChangeText={setEmail} placeholder={t('partner.personalInfo.email')} keyboardType="email-address" colors={colors} />
-          <Field label={t('partner.personalInfo.dob')}      value={dob}   onChangeText={setDob}   placeholder={t('partner.personalInfo.dob')} Icon={Calendar} colors={colors} />
+      {loading ? (
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-        <View style={{height: 100}} />
-      </ScrollView>
+      ) : (
+        <ScrollView style={s.scroll} contentContainerStyle={s.content}
+          showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={s.section}>
+            <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('partner.personalInfo.myInfo')}</Text>
+            <Field label={t('partner.personalInfo.fullName')} value={firstName} onChangeText={setFirstName} placeholder={t('partner.personalInfo.fullName')} colors={colors} />
+            <Field label={t('partner.personalInfo.fullName') + ' (2)'} value={lastName} onChangeText={setLastName} placeholder="" colors={colors} />
+            <Field label={t('partner.personalInfo.phone')} value={phone} onChangeText={setPhone} placeholder={t('partner.personalInfo.phone')} keyboardType="phone-pad" editable={false} colors={colors} />
+            <Field label={t('partner.personalInfo.email')} value={email} onChangeText={setEmail} placeholder={t('partner.personalInfo.email')} keyboardType="email-address" editable={false} colors={colors} />
+          </View>
+          <View style={{height: 100}} />
+        </ScrollView>
+      )}
 
       <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
-        <TouchableOpacity style={[s.saveBtn, {backgroundColor: colors.primary}]} onPress={onBack} activeOpacity={0.85}>
-          <Text style={s.saveBtnText}>{t('partner.personalInfo.save')}</Text>
+        <TouchableOpacity style={[s.saveBtn, {backgroundColor: colors.primary}]} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
+          <Text style={s.saveBtnText}>{saving ? '...' : t('partner.personalInfo.save')}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -89,6 +108,7 @@ export default function PartnerPersonalInfoScreen({onBack}) {
 
 const s = StyleSheet.create({
   root:        {flex: 1},
+  center:      {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:      {
     flexDirection: 'row', alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? 56 : 48,
@@ -111,7 +131,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, minHeight: 50,
   },
   input:       {flex: 1, fontSize: 14, paddingVertical: 12, textAlign: 'right'},
-  inputIcon:   {marginLeft: 8, width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
 
   footer:      {padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16, borderTopWidth: 1},
   saveBtn:     {borderRadius: 14, paddingVertical: 16, alignItems: 'center'},

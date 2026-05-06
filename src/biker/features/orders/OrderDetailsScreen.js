@@ -1,6 +1,6 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
-  ActivityIndicator, Animated, Image, Modal, PanResponder,
+  ActivityIndicator, Animated, FlatList, Image, Modal, PanResponder,
   PermissionsAndroid, Platform, ScrollView, StatusBar, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -9,7 +9,7 @@ import {ChevronLeft, Camera, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import StatusTracker from '../../../shared/components/StatusTracker';
-import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, cancelOrder} from '../../../services/orders';
+import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, cancelOrder, getOrderById} from '../../../services/orders';
 
 const SWIPE_WIDTH = 300;
 const THUMB = 56;
@@ -98,8 +98,49 @@ export default function OrderDetailsScreen({order, onBack}) {
   const [cancelReason, setCancelReason] = useState('');
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [skipReason, setSkipReason] = useState('');
+  const [completedOrder, setCompletedOrder] = useState(
+    currentStatus === 'COMPLETED' ? order : null,
+  );
 
-  const isOnshop = order.type === 'onshop';
+  const orderId  = order._id ?? order.id;
+
+  const fetchCompleted = useCallback(async () => {
+    const res = await getOrderById(orderId);
+    if (res.success && res.data?.data) setCompletedOrder(res.data.data);
+    else if (res.success && res.data)  setCompletedOrder(res.data);
+  }, [orderId]);
+
+  useEffect(() => {
+    if (currentStatus === 'COMPLETED') fetchCompleted();
+  }, [currentStatus, fetchCompleted]);
+
+  // orderType: 'MOBILE' | 'IN_SHOP' (backend) أو 'mobile'|'onshop' (legacy)
+  const isOnshop = (order.orderType ?? order.type ?? '').toUpperCase() === 'IN_SHOP'
+    || (order.orderType ?? order.type ?? '') === 'onshop';
+
+  // ── derived display values from real data shape ────────────────────────
+  const clientName = order.client
+    ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
+    : '';
+  const carBrand    = order.userCar?.brand?.name ?? '';
+  const carModel    = order.userCar?.model?.name ?? '';
+  const carPlate    = order.userCar?.plateNumber ?? '';
+  const carDisplay  = [carBrand, carModel].filter(Boolean).join(' ');
+  const address     = order.addressSnapshot?.addressText
+    ?? order.addressSnapshot?.district
+    ?? order.branch?.address
+    ?? '';
+  const firstItem   = order.itemsSnapshot?.[0];
+  const serviceName = firstItem?.nameSnapshot?.ar
+    ?? firstItem?.nameSnapshot?.en
+    ?? order.service?.name
+    ?? '';
+  const scheduledAt = order.scheduledAt
+    ? new Date(order.scheduledAt).toLocaleString('ar-SA', {
+        weekday: 'long', day: '2-digit', month: 'long',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : '';
   const ACTION_NEXT = isOnshop ? ACTION_NEXT_ONSHOP : ACTION_NEXT_MOBILE;
 
   const canCancel = isOnshop
@@ -132,8 +173,8 @@ export default function OrderDetailsScreen({order, onBack}) {
       return;
     }
     setActionLoading(true);
-    await updateOrderStatus(order.id, action.nextStatus);
-    setCurrentStatus(action.nextStatus);
+    const res = await updateOrderStatus(orderId, action.nextStatus);
+    if (res.success) setCurrentStatus(action.nextStatus);
     setActionLoading(false);
   };
 
@@ -174,9 +215,9 @@ export default function OrderDetailsScreen({order, onBack}) {
     setActionLoading(true);
     const nextStatus = uploadPhase === 'before' ? 'STARTED' : 'COMPLETED';
     for (const uri of photos) {
-      await uploadOrderPhoto(order.id, uri, uploadPhase);
+      await uploadOrderPhoto(orderId, uri, uploadPhase);
     }
-    await updateOrderStatus(order.id, nextStatus);
+    await updateOrderStatus(orderId, nextStatus);
     setCurrentStatus(nextStatus);
     setActionLoading(false);
   };
@@ -188,8 +229,8 @@ export default function OrderDetailsScreen({order, onBack}) {
     setSkipReason('');
     setActionLoading(true);
     const nextStatus = uploadPhase === 'before' ? 'STARTED' : 'COMPLETED';
-    await skipOrderPhoto(order.id, uploadPhase, skipReason.trim());
-    await updateOrderStatus(order.id, nextStatus);
+    await skipOrderPhoto(orderId, uploadPhase, skipReason.trim());
+    await updateOrderStatus(orderId, nextStatus);
     setCurrentStatus(nextStatus);
     setActionLoading(false);
   };
@@ -197,7 +238,7 @@ export default function OrderDetailsScreen({order, onBack}) {
   const handleCancel = async () => {
     setShowCancelModal(false);
     setActionLoading(true);
-    await cancelOrder(order.id, cancelReason.trim());
+    await cancelOrder(orderId, cancelReason.trim());
     setCurrentStatus('CANCELLED');
     setActionLoading(false);
   };
@@ -217,7 +258,7 @@ export default function OrderDetailsScreen({order, onBack}) {
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={s.section}>
-          <StatusTracker status={currentStatus} orderType={order.type} />
+          <StatusTracker status={currentStatus} orderType={isOnshop ? 'onshop' : 'mobile'} />
         </View>
 
         {STEP_IMGS[currentStatus] && ACTION_NEXT[currentStatus] !== undefined && (
@@ -229,42 +270,46 @@ export default function OrderDetailsScreen({order, onBack}) {
         )}
 
         <View style={[s.detailCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <Text style={[s.clientName, {color: colors.textPrimary}]}>
-            {order.client.firstName} {order.client.lastName}
-          </Text>
+          <Text style={[s.clientName, {color: colors.textPrimary}]}>{clientName}</Text>
+          {!!scheduledAt && (
+            <Text style={[s.infoLabel, {color: colors.textSecondary, marginTop: -8}]}>{scheduledAt}</Text>
+          )}
 
           <View style={s.infoGrid}>
             <View style={s.infoCell}>
               <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.carType')}</Text>
-              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{order.car.brand} {order.car.model}</Text>
+              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{carDisplay}</Text>
             </View>
             <View style={s.infoCell}>
               <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.location')}</Text>
               <View style={s.locationRow}>
                 <View style={[s.locationDot, {backgroundColor: colors.primary}]} />
-                <Text style={[s.infoValue, {color: colors.textPrimary}]} numberOfLines={1}>{order.address}</Text>
+                <Text style={[s.infoValue, {color: colors.textPrimary}]} numberOfLines={1}>{address}</Text>
               </View>
             </View>
             <View style={s.infoCell}>
               <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.washType')}</Text>
-              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{order.service.name}</Text>
+              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{serviceName}</Text>
             </View>
             <View style={s.infoCell}>
               <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.plate')}</Text>
-              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{order.car.plateNumber}</Text>
+              <Text style={[s.infoValue, {color: colors.textPrimary}]}>{carPlate}</Text>
             </View>
           </View>
 
           <View style={[s.divider, {backgroundColor: colors.border}]} />
 
-          {order.extras && order.extras.length > 0 && (
+          {/* itemsSnapshot — عناصر الخدمة كـ chips */}
+          {order.itemsSnapshot && order.itemsSnapshot.length > 1 && (
             <View>
               <Text style={[s.extrasTitle, {color: colors.textPrimary}]}>{t('orders.fields.extras')}</Text>
               <View style={s.extrasRow}>
-                {order.extras.map((ex, i) => (
+                {order.itemsSnapshot.slice(1).map((item, i) => (
                   <View key={i} style={s.extraChip}>
                     <Text style={s.extraChipStar}>✦</Text>
-                    <Text style={[s.extraChipText, {color: colors.textPrimary}]}>{ex}</Text>
+                    <Text style={[s.extraChipText, {color: colors.textPrimary}]}>
+                      {item.nameSnapshot?.ar ?? item.nameSnapshot?.en ?? ''}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -283,6 +328,119 @@ export default function OrderDetailsScreen({order, onBack}) {
             />
           </View>
         )}
+
+        {currentStatus === 'COMPLETED' && completedOrder && (() => {
+          const co = completedOrder;
+          // support both new shape (car/client/services/location) and old shape
+          const cName  = co.client?.name
+            ?? (co.client ? `${co.client.firstName ?? ''} ${co.client.lastName ?? ''}`.trim() : '');
+          const cPhone = co.client?.phoneNumber ?? '';
+          const cPlate = co.car?.plateNumber ?? co.userCar?.plateNumber ?? '';
+          const cBrand = co.car?.brand ?? co.userCar?.brand?.name ?? '';
+          const cModel = co.car?.model ?? co.userCar?.model?.name ?? '';
+          const cColor = co.car?.color?.ar ?? co.car?.color?.en ?? '';
+          const cAddr  = co.location?.addressText ?? co.location?.district
+            ?? co.addressSnapshot?.addressText ?? co.addressSnapshot?.district ?? '';
+          const services = co.services ?? [];
+          const beforePhotos = co.proof?.beforePhotos ?? [];
+          const afterPhotos  = co.proof?.afterPhotos  ?? [];
+
+          const firstSvcName = services[0]?.name?.ar ?? services[0]?.name?.en ?? serviceName;
+
+          return (
+            <View style={[s.summaryCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+
+              {/* Header — client + service type */}
+              <View style={s.summaryHeader}>
+                <View style={{flex: 1, gap: 4}}>
+                  {!!cName && (
+                    <Text style={[s.summaryClientName, {color: colors.textPrimary}]}>{cName}</Text>
+                  )}
+                  {!!firstSvcName && (
+                    <View style={[s.svcBadge, {backgroundColor: colors.primary + '15'}]}>
+                      <Text style={[s.svcBadgeText, {color: colors.primary}]}>{firstSvcName}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={[s.completedBadge, {backgroundColor: '#22C55E15'}]}>
+                  <Text style={[s.completedBadgeText, {color: '#22C55E'}]}>{t('orders.status.COMPLETED')}</Text>
+                </View>
+              </View>
+
+              <View style={[s.divider, {backgroundColor: colors.border}]} />
+
+              {/* Car */}
+              {(!!cBrand || !!cModel || !!cPlate) && (
+                <View style={s.summaryRow}>
+                  <Text style={[s.summaryRowLabel, {color: colors.textSecondary}]}>{t('orders.fields.carType')}</Text>
+                  <Text style={[s.summaryRowValue, {color: colors.textPrimary}]}>
+                    {[cBrand, cModel, cColor].filter(Boolean).join(' ')}{cPlate ? ` · ${cPlate}` : ''}
+                  </Text>
+                </View>
+              )}
+
+              {/* Location */}
+              {!!cAddr && (
+                <View style={s.summaryRow}>
+                  <Text style={[s.summaryRowLabel, {color: colors.textSecondary}]}>{t('orders.fields.location')}</Text>
+                  <Text style={[s.summaryRowValue, {color: colors.textPrimary}]}>{cAddr}</Text>
+                </View>
+              )}
+
+              {/* Extra services */}
+              {services.length > 1 && (
+                <View style={s.summaryRow}>
+                  <Text style={[s.summaryRowLabel, {color: colors.textSecondary}]}>{t('orders.fields.extras')}</Text>
+                  <View style={s.servicesWrap}>
+                    {services.slice(1).map((svc, i) => (
+                      <View key={i} style={[s.svcChip, {borderColor: colors.border, backgroundColor: colors.bg}]}>
+                        <Text style={[s.svcChipText, {color: colors.textPrimary}]}>
+                          {svc.name?.ar ?? svc.name?.en ?? ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Before / After photos side by side */}
+              {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
+                <View style={s.photosGrid}>
+                  {beforePhotos.length > 0 && (
+                    <View style={s.photoCol}>
+                      <Text style={[s.photoColLabel, {color: colors.textSecondary}]}>{t('orderDetails.summary.beforePhotos')}</Text>
+                      <View style={s.photoThumbRow}>
+                        {beforePhotos.slice(0, 4).map((item, i) => (
+                          <Image
+                            key={`b${i}`}
+                            source={{uri: typeof item === 'string' ? item : item.url ?? item.uri}}
+                            style={[s.photoThumb, beforePhotos.length === 1 && s.photoThumbFull]}
+                            resizeMode="cover"
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  {afterPhotos.length > 0 && (
+                    <View style={s.photoCol}>
+                      <Text style={[s.photoColLabel, {color: colors.textSecondary}]}>{t('orderDetails.summary.afterPhotos')}</Text>
+                      <View style={s.photoThumbRow}>
+                        {afterPhotos.slice(0, 4).map((item, i) => (
+                          <Image
+                            key={`a${i}`}
+                            source={{uri: typeof item === 'string' ? item : item.url ?? item.uri}}
+                            style={[s.photoThumb, afterPhotos.length === 1 && s.photoThumbFull]}
+                            resizeMode="cover"
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         <View style={{height: 24}} />
       </ScrollView>
@@ -434,6 +592,19 @@ const s = StyleSheet.create({
   backBtnWrap: {padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16, borderTopWidth: 1},
   backToListBtn: {paddingVertical: 16, borderRadius: 14, alignItems: 'center'},
   backToListText: {color: '#fff', fontSize: 16, fontWeight: '700'},
+  summaryCard:       {borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, gap: 14},
+  summaryTitle:      {fontSize: 16, fontWeight: '800'},
+  summaryRow:        {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8},
+  summaryRowLabel:   {fontSize: 12, flex: 1},
+  summaryRowValue:   {fontSize: 13, fontWeight: '700', flex: 2},
+  photoSection:      {gap: 8},
+  photoSectionLabel: {fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5},
+  photoRow:          {gap: 10, paddingVertical: 4},
+  summaryPhoto:      {width: 110, height: 110, borderRadius: 14},
+  servicesWrap:      {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
+  svcChip:           {borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, gap: 2},
+  svcChipText:       {fontSize: 13, fontWeight: '700'},
+  svcCategory:       {fontSize: 11},
 });
 
 const ms = StyleSheet.create({

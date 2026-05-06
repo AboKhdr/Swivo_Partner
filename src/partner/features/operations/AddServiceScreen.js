@@ -1,5 +1,6 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,52 +12,80 @@ import {ArrowRight} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import ImagePickerField from '../../../shared/components/ImagePickerField';
 import SelectField from '../../../shared/components/SelectField';
-
-const CATEGORY_OPTIONS = [
-  {value: 'غسيل',   label: 'غسيل'},
-  {value: 'تلميع',  label: 'تلميع'},
-  {value: 'تعقيم',  label: 'تعقيم'},
-  {value: 'إضافية', label: 'إضافية'},
-];
+import {getCategories, createService, updateService} from '../../../services/partner';
 
 const SERVICE_TYPES = [
-  {key: 'inWash', label: 'في المغسل'},
-  {key: 'mobile', label: 'في الجوال'},
-  {key: 'both',   label: 'الاثنين معا'},
+  {key: 'IN_SHOP', label: 'في المغسل'},
+  {key: 'MOBILE',  label: 'في الجوال'},
+  {key: 'BOTH',    label: 'الاثنين معا'},
 ];
 
 const SIZE_CONFIG = [
-  {key: 'S', label: 'صغيرة'},
-  {key: 'M', label: 'متوسطة'},
-  {key: 'L', label: 'كبيرة'},
+  {key: 'small',  label: 'صغيرة'},
+  {key: 'medium', label: 'متوسطة'},
+  {key: 'large',  label: 'كبيرة'},
 ];
 
-export default function AddServiceScreen({onBack, onSave, initialData}) {
+export default function AddServiceScreen({onBack, onSaved, initialData}) {
   const {colors} = useTheme();
-  const isEdit = !!initialData;
+  const isEdit = !!initialData?._id;
 
-  const [name,     setName]     = useState(initialData?.nameAr   ?? '');
-  const [category, setCategory] = useState(initialData?.category ?? '');
-  const [type,     setType]     = useState(initialData?.type     ?? '');
-  const [image,    setImage]    = useState(initialData?.image    ?? null);
-  const [prices,   setPrices]   = useState(
-    initialData?.prices ?? {S: '', M: '', L: ''},
+  const [nameAr,         setNameAr]         = useState(initialData?.name?.ar   ?? '');
+  const [nameEn,         setNameEn]         = useState(initialData?.name?.en   ?? '');
+  const [categoryId,     setCategoryId]     = useState(initialData?.category?._id ?? initialData?.categoryId ?? '');
+  const [type,           setType]           = useState(initialData?.availableFor ?? '');
+  const [image,          setImage]          = useState(initialData?.image ?? null);
+  const [prices,         setPrices]         = useState(
+    initialData?.price ?? {small: '', medium: '', large: ''},
   );
+  const [estimationTime, setEstimationTime] = useState(
+    initialData?.estimationTime ? String(initialData.estimationTime) : '',
+  );
+  const [categories,     setCategories]     = useState([]);
+  const [saving,         setSaving]         = useState(false);
+
+  useEffect(() => {
+    getCategories().then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setCategories(
+          (Array.isArray(list) ? list : []).map(c => ({
+            value: c._id,
+            label: c.name?.ar ?? c.name?.en ?? c._id,
+          })),
+        );
+      }
+    });
+  }, []);
 
   const setPrice = (key, val) =>
     setPrices(prev => ({...prev, [key]: val.replace(/[^0-9]/g, '')}));
 
-  const canSave = name.trim() && category && type && prices.S && prices.M && prices.L;
+  const canSave = nameAr.trim() && type && prices.small && prices.medium && prices.large && estimationTime.trim();
 
-  const handleSave = () => {
-    if (!canSave) return;
-    onSave?.({name, category, type, image, prices});
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    const payload = {
+      name:           {ar: nameAr.trim(), en: nameEn.trim() || nameAr.trim()},
+      price:          {small: Number(prices.small), medium: Number(prices.medium), large: Number(prices.large)},
+      availableFor:   type,
+      estimationTime: Number(estimationTime),
+      ...(categoryId ? {categoryId} : {}),
+      ...(image && !image.startsWith('http') ? {imageUri: image} : image ? {image} : {}),
+    };
+    if (isEdit) {
+      await updateService(initialData._id, payload);
+    } else {
+      await createService(payload);
+    }
+    setSaving(false);
+    onSaved?.();
     onBack();
   };
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
-      {/* Header */}
       <View style={[s.header, {backgroundColor: colors.bg}]}>
         <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
           <ArrowRight size={22} color={colors.textPrimary} />
@@ -71,37 +100,60 @@ export default function AddServiceScreen({onBack, onSave, initialData}) {
 
         <ImagePickerField value={image} onChange={setImage} label="صورة الخدمة" />
 
-        <Text style={[s.label, {color: colors.textPrimary}]}>اسم الخدمة</Text>
+        <Text style={[s.label, {color: colors.textPrimary}]}>اسم الخدمة (عربي)</Text>
         <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <TextInput
             style={[s.input, {color: colors.textPrimary}]}
             placeholder="مثال: غسلة سريعة"
             placeholderTextColor={colors.textSecondary}
-            value={name}
-            onChangeText={setName}
+            value={nameAr}
+            onChangeText={setNameAr}
+          />
+        </View>
+
+        <Text style={[s.label, {color: colors.textPrimary}]}>اسم الخدمة (إنجليزي)</Text>
+        <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <TextInput
+            style={[s.input, {color: colors.textPrimary}]}
+            placeholder="Example: Quick Wash"
+            placeholderTextColor={colors.textSecondary}
+            value={nameEn}
+            onChangeText={setNameEn}
+          />
+        </View>
+
+        <Text style={[s.label, {color: colors.textPrimary}]}>مدة الخدمة (بالدقائق)</Text>
+        <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <TextInput
+            style={[s.input, {color: colors.textPrimary}]}
+            placeholder="مثال: 30"
+            placeholderTextColor={colors.textSecondary}
+            keyboardType="numeric"
+            value={estimationTime}
+            onChangeText={v => setEstimationTime(v.replace(/[^0-9]/g, ''))}
           />
         </View>
 
         <SelectField
           label="فئة الخدمة"
           placeholder="اختر فئة الخدمة"
-          options={CATEGORY_OPTIONS}
-          value={category}
-          onChange={setCategory}
+          options={categories}
+          value={categoryId}
+          onChange={setCategoryId}
         />
 
         <Text style={[s.label, {color: colors.textPrimary}]}>أنواع الخدمة</Text>
         <View style={[s.typeRow, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          {SERVICE_TYPES.map((t, i) => {
-            const active = type === t.key;
+          {SERVICE_TYPES.map((tp, i) => {
+            const active = type === tp.key;
             return (
-              <React.Fragment key={t.key}>
+              <React.Fragment key={tp.key}>
                 <TouchableOpacity
                   style={[s.typeBtn, active && {backgroundColor: colors.primary}]}
-                  onPress={() => setType(t.key)}
+                  onPress={() => setType(tp.key)}
                   activeOpacity={0.75}>
                   <Text style={[s.typeTxt, {color: active ? '#FFF' : colors.textSecondary}]}>
-                    {t.label}
+                    {tp.label}
                   </Text>
                 </TouchableOpacity>
                 {i < SERVICE_TYPES.length - 1 && (
@@ -127,7 +179,7 @@ export default function AddServiceScreen({onBack, onSave, initialData}) {
                     placeholder="0"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
-                    value={String(prices[sz.key])}
+                    value={String(prices[sz.key] ?? '')}
                     onChangeText={val => setPrice(sz.key, val)}
                   />
                 </View>
@@ -140,11 +192,14 @@ export default function AddServiceScreen({onBack, onSave, initialData}) {
         </View>
 
         <TouchableOpacity
-          style={[s.saveBtn, {backgroundColor: canSave ? colors.primary : colors.border}]}
+          style={[s.saveBtn, {backgroundColor: canSave && !saving ? colors.primary : colors.border}]}
           onPress={handleSave}
-          disabled={!canSave}
+          disabled={!canSave || saving}
           activeOpacity={0.85}>
-          <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'حفظ الخدمة'}</Text>
+          {saving
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'حفظ الخدمة'}</Text>
+          }
         </TouchableOpacity>
 
       </ScrollView>

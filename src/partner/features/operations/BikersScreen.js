@@ -1,5 +1,6 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   StyleSheet,
@@ -11,13 +12,7 @@ import {
 import {ArrowRight, Plus, Bike, Star, Phone, UserX, PauseCircle, Trash2, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import AddBikerScreen from './AddBikerScreen';
-
-const MOCK_BIKERS = [
-  {id: 'b1', name: 'خالد العتيبي',     phone: '0501111111', trips: 25, rating: 4.8, isOnDuty: true},
-  {id: 'b2', name: 'محمد الشمري',      phone: '0502222222', trips: 18, rating: 4.6, isOnDuty: true},
-  {id: 'b3', name: 'عبدالرحمن السعدي', phone: '0503333333', trips: 40, rating: 4.9, isOnDuty: false},
-  {id: 'b4', name: 'فيصل القحطاني',    phone: '0504444444', trips: 12, rating: 4.3, isOnDuty: false},
-];
+import {getStaff, setStaffStatus, removeStaff} from '../../../services/partner';
 
 const STOP_OPTIONS = [
   {key: 'suspend',  label: 'إيقاف مؤقت',   sub: 'إيقاف البايكر مؤقتاً عن استقبال الطلبات', Icon: PauseCircle, color: '#F59E0B'},
@@ -108,21 +103,40 @@ const ss = StyleSheet.create({
 });
 
 function BikerCard({item, colors, onOptions}) {
+  const name   = item.userId
+    ? `${item.userId.firstName ?? ''} ${item.userId.lastName ?? ''}`.trim()
+    : item.name ?? '';
+  const phone  = item.userId?.phoneNumber ?? item.phone ?? '';
+  const trips  = item.activeOrdersCount ?? item.trips ?? 0;
+  const rating = item.rating ?? 0;
+
   return (
     <TouchableOpacity
       style={[s.card, {backgroundColor: colors.card}]}
       onPress={() => onOptions(item)}
       activeOpacity={0.85}>
-      <View style={[s.phoneBtn, {backgroundColor: colors.bg}]}>
+      <TouchableOpacity
+        style={[s.phoneBtn, {backgroundColor: colors.bg}]}
+        activeOpacity={0.8}
+        onPress={() => {
+          if (phone) {
+            const {Linking} = require('react-native');
+            Linking.openURL(`tel:${phone}`);
+          }
+        }}>
         <Phone size={18} color={colors.textSecondary} />
-      </View>
+      </TouchableOpacity>
       <View style={s.info}>
-        <Text style={[s.name, {color: colors.textPrimary}]}>{item.name}</Text>
+        <Text style={[s.name, {color: colors.textPrimary}]}>{name}</Text>
         <View style={s.statsRow}>
           <Bike size={14} color="#F59E0B" />
-          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{item.trips} Trips</Text>
-          <Star size={13} color="#F59E0B" fill="#F59E0B" />
-          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{item.rating}</Text>
+          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{trips} رحلة</Text>
+          {rating > 0 && (
+            <>
+              <Star size={13} color="#F59E0B" fill="#F59E0B" />
+              <Text style={[s.statTxt, {color: colors.textSecondary}]}>{rating}</Text>
+            </>
+          )}
         </View>
       </View>
       <AvatarPlaceholder size={56} colors={colors} />
@@ -132,20 +146,37 @@ function BikerCard({item, colors, onOptions}) {
 
 export default function BikersScreen({onBack}) {
   const {colors} = useTheme();
-  const [bikers,      setBikers]      = useState(MOCK_BIKERS);
-  const [sheetBiker,  setSheetBiker]  = useState(null);
-  const [showAdd,     setShowAdd]     = useState(false);
-  const [editingBiker,setEditingBiker]= useState(null);
+  const [bikers,       setBikers]       = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [sheetBiker,   setSheetBiker]   = useState(null);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [editingBiker, setEditingBiker] = useState(null);
+
+  const fetchBikers = useCallback(async () => {
+    setLoading(true);
+    const res = await getStaff({role: 'BIKER', limit: 100});
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setBikers(Array.isArray(list) ? list : []);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchBikers(); }, [fetchBikers]);
 
   const handleOptions = useCallback(item => setSheetBiker(item), []);
 
-  const handleAction = useCallback((action, biker) => {
+  const handleAction = useCallback(async (action, biker) => {
+    const id = biker._id ?? biker.id;
     if (action === 'delete') {
-      setBikers(prev => prev.filter(b => b.id !== biker.id));
-    } else {
-      setBikers(prev => prev.map(b =>
-        b.id === biker.id ? {...b, isOnDuty: false} : b,
-      ));
+      await removeStaff(id);
+      setBikers(prev => prev.filter(b => (b._id ?? b.id) !== id));
+    } else if (action === 'suspend') {
+      await setStaffStatus(id, 'suspended');
+      setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'suspended'} : b));
+    } else if (action === 'deactive') {
+      await setStaffStatus(id, 'deactivated');
+      setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'deactivated'} : b));
     }
   }, []);
 
@@ -153,10 +184,10 @@ export default function BikersScreen({onBack}) {
     <BikerCard item={item} colors={colors} onOptions={handleOptions} />
   ), [colors, handleOptions]);
 
-  const keyExtractor = useCallback(item => item.id, []);
+  const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   const activeCount = bikers.filter(b => b.isOnDuty).length;
-  const showList = !showAdd && !editingBiker;
+  const showList    = !showAdd && !editingBiker;
 
   return (
     <View style={s.flex}>
@@ -169,7 +200,7 @@ export default function BikersScreen({onBack}) {
             <View style={s.headerText}>
               <Text style={[s.headerTitle, {color: colors.textPrimary}]}>البايكرز</Text>
               <Text style={[s.headerSub, {color: colors.textSecondary}]}>
-                {activeCount} نشطين - {bikers.length} انواع
+                {activeCount} نشطين - {bikers.length}
               </Text>
             </View>
             <TouchableOpacity
@@ -180,6 +211,9 @@ export default function BikersScreen({onBack}) {
             </TouchableOpacity>
           </View>
 
+          {loading
+            ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            : (
           <FlatList
             data={bikers}
             renderItem={renderItem}
@@ -187,6 +221,8 @@ export default function BikersScreen({onBack}) {
             contentContainerStyle={s.list}
             showsVerticalScrollIndicator={false}
           />
+            )
+          }
 
           <StopSheet
             visible={!!sheetBiker}
@@ -198,13 +234,16 @@ export default function BikersScreen({onBack}) {
         </View>
       </View>
 
-      <View style={[s.flex, showAdd ? s.visible : s.hidden]}>
-        <AddBikerScreen onBack={() => setShowAdd(false)} />
-      </View>
-
-      <View style={[s.flex, editingBiker ? s.visible : s.hidden]}>
-        <AddBikerScreen initialData={editingBiker} onBack={() => setEditingBiker(null)} />
-      </View>
+      {showAdd && (
+        <View style={s.flex}>
+          <AddBikerScreen onBack={() => setShowAdd(false)} onSaved={fetchBikers} />
+        </View>
+      )}
+      {editingBiker && (
+        <View style={s.flex}>
+          <AddBikerScreen initialData={editingBiker} onBack={() => setEditingBiker(null)} onSaved={fetchBikers} />
+        </View>
+      )}
     </View>
   );
 }
@@ -214,6 +253,7 @@ const s = StyleSheet.create({
   visible:     {},
   hidden:      {display: 'none'},
   root:        {flex: 1},
+  center:      {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16},
   backBtn:     {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   addBtn:      {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},

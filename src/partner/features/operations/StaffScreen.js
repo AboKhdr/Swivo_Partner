@@ -1,5 +1,6 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   StyleSheet,
@@ -11,19 +12,7 @@ import {
 import {ArrowRight, Plus, Bike, Star, Phone, UserX, PauseCircle, Trash2, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-
-const MOCK_STAFF = {
-  bikers: [
-    {id: 'b1', name: 'خالد العتيبي',     phone: '0501111111', trips: 25, rating: 4.8, isOnDuty: true,  status: 'active'},
-    {id: 'b2', name: 'محمد الشمري',      phone: '0502222222', trips: 18, rating: 4.6, isOnDuty: true,  status: 'active'},
-    {id: 'b3', name: 'عبدالرحمن السعدي', phone: '0503333333', trips: 40, rating: 4.9, isOnDuty: false, status: 'suspended'},
-    {id: 'b4', name: 'فيصل القحطاني',    phone: '0504444444', trips: 12, rating: 4.3, isOnDuty: false, status: 'active'},
-  ],
-  managers: [
-    {id: 'm1', name: 'سالم العتيبي',     phone: '0505555555', trips: 0, rating: 5.0, isOnDuty: true,  status: 'active'},
-    {id: 'm2', name: 'عبدالله الزهراني', phone: '0506666666', trips: 0, rating: 4.7, isOnDuty: false, status: 'active'},
-  ],
-};
+import {getStaff, setStaffStatus, removeStaff} from '../../../services/partner';
 
 function buildStopOptions(t) {
   return [
@@ -51,6 +40,10 @@ const ap = StyleSheet.create({
 function StopSheet({visible, biker, onClose, onAction, colors, t}) {
   if (!biker) return null;
   const stopOptions = buildStopOptions(t);
+  const memberName = biker.userId
+    ? `${biker.userId.firstName ?? ''} ${biker.userId.lastName ?? ''}`.trim()
+    : biker.name ?? '';
+  const trips = biker.activeOrdersCount ?? biker.trips ?? 0;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -63,8 +56,8 @@ function StopSheet({visible, biker, onClose, onAction, colors, t}) {
           <View style={ss.bikerRow}>
             <AvatarPlaceholder size={40} colors={colors} />
             <View style={ss.bikerInfo}>
-              <Text style={[ss.bikerName, {color: colors.textPrimary}]}>{biker.name}</Text>
-              <Text style={[ss.bikerSub,  {color: colors.textSecondary}]}>{biker.trips} {t('partner.bikers.trips')}</Text>
+              <Text style={[ss.bikerName, {color: colors.textPrimary}]}>{memberName}</Text>
+              <Text style={[ss.bikerSub,  {color: colors.textSecondary}]}>{trips} {t('partner.bikers.trips')}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={ss.closeBtn}>
               <X size={18} color={colors.textSecondary} />
@@ -117,23 +110,42 @@ const ss = StyleSheet.create({
 });
 
 function BikerCard({item, colors, tripsLabel, onOptions}) {
+  const name   = item.userId
+    ? `${item.userId.firstName ?? ''} ${item.userId.lastName ?? ''}`.trim()
+    : item.name ?? '';
+  const phone  = item.userId?.phoneNumber ?? item.phone ?? '';
+  const trips  = item.activeOrdersCount ?? item.trips ?? 0;
+  const rating = item.rating ?? 0;
+
   return (
     <TouchableOpacity
       style={[s.card, {backgroundColor: colors.card}]}
       onPress={() => onOptions(item)}
       activeOpacity={0.85}>
 
-      <View style={[s.phoneBtn, {backgroundColor: colors.bg}]}>
+      <TouchableOpacity
+        style={[s.phoneBtn, {backgroundColor: colors.bg}]}
+        activeOpacity={0.8}
+        onPress={() => {
+          if (phone) {
+            const {Linking} = require('react-native');
+            Linking.openURL(`tel:${phone}`);
+          }
+        }}>
         <Phone size={18} color={colors.textSecondary} />
-      </View>
+      </TouchableOpacity>
 
       <View style={s.info}>
-        <Text style={[s.name, {color: colors.textPrimary}]}>{item.name}</Text>
+        <Text style={[s.name, {color: colors.textPrimary}]}>{name}</Text>
         <View style={s.statsRow}>
           <Bike size={14} color="#F59E0B" />
-          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{item.trips} {tripsLabel}</Text>
-          <Star size={13} color="#F59E0B" fill="#F59E0B" />
-          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{item.rating}</Text>
+          <Text style={[s.statTxt, {color: colors.textSecondary}]}>{trips} {tripsLabel}</Text>
+          {rating > 0 && (
+            <>
+              <Star size={13} color="#F59E0B" fill="#F59E0B" />
+              <Text style={[s.statTxt, {color: colors.textSecondary}]}>{rating}</Text>
+            </>
+          )}
         </View>
       </View>
 
@@ -146,7 +158,9 @@ export default function StaffScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
   const [activeTab,  setActiveTab]  = useState('bikers');
-  const [staff,      setStaff]      = useState(MOCK_STAFF);
+  const [bikers,     setBikers]     = useState([]);
+  const [managers,   setManagers]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
   const [sheetBiker, setSheetBiker] = useState(null);
 
   const tabs = [
@@ -154,32 +168,50 @@ export default function StaffScreen({onBack}) {
     {key: 'managers', label: t('partner.staff.managers')},
   ];
 
+  const fetchStaff = useCallback(async () => {
+    setLoading(true);
+    const [bikersRes, managersRes] = await Promise.all([
+      getStaff({role: 'BIKER',    limit: 100}),
+      getStaff({role: 'MANAGER',  limit: 100}),
+    ]);
+    if (bikersRes.success)   setBikers(bikersRes.data?.data     ?? bikersRes.data   ?? []);
+    if (managersRes.success) setManagers(managersRes.data?.data ?? managersRes.data ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchStaff(); }, [fetchStaff]);
+
+  const currentList = activeTab === 'bikers' ? bikers : managers;
+  const setCurrentList = activeTab === 'bikers' ? setBikers : setManagers;
+
   const handleOptions = useCallback(item => setSheetBiker(item), []);
 
-  const handleAction = useCallback((action, biker) => {
+  const handleAction = useCallback(async (action, member) => {
+    const id = member._id ?? member.id;
     if (action === 'delete') {
-      setStaff(prev => ({
-        ...prev,
-        [activeTab]: prev[activeTab].filter(b => b.id !== biker.id),
-      }));
-    } else if (action === 'suspend' || action === 'deactive') {
-      setStaff(prev => ({
-        ...prev,
-        [activeTab]: prev[activeTab].map(b =>
-          b.id === biker.id ? {...b, isOnDuty: false, status: action === 'suspend' ? 'suspended' : 'deactive'} : b,
-        ),
-      }));
+      await removeStaff(id);
+      setCurrentList(prev => prev.filter(b => (b._id ?? b.id) !== id));
+    } else if (action === 'suspend') {
+      await setStaffStatus(id, 'suspended');
+      setCurrentList(prev => prev.map(b =>
+        (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'suspended'} : b,
+      ));
+    } else if (action === 'deactive') {
+      await setStaffStatus(id, 'deactivated');
+      setCurrentList(prev => prev.map(b =>
+        (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'deactivated'} : b,
+      ));
     }
-  }, [activeTab]);
+  }, [setCurrentList]);
 
   const tripsLabel = t('partner.bikers.trips');
   const renderItem = useCallback(({item}) => (
     <BikerCard item={item} colors={colors} tripsLabel={tripsLabel} onOptions={handleOptions} />
   ), [colors, tripsLabel, handleOptions]);
 
-  const keyExtractor = useCallback(item => item.id, []);
+  const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
-  const totalActive = staff[activeTab].filter(st => st.isOnDuty).length;
+  const totalActive = currentList.filter(st => st.isOnDuty).length;
   const tabLabel    = activeTab === 'bikers' ? t('partner.staff.bikers') : t('partner.staff.managers');
 
   return (
@@ -191,7 +223,7 @@ export default function StaffScreen({onBack}) {
         <View style={s.headerText}>
           <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{tabLabel}</Text>
           <Text style={[s.headerSub, {color: colors.textSecondary}]}>
-            {totalActive} {t('partner.operations.menu.bikersSub').split(' - ')[0].replace(/\d+ /, '')} - {staff[activeTab].length}
+            {totalActive} {t('partner.operations.menu.bikersSub').split(' - ')[0].replace(/\d+ /, '')} - {currentList.length}
           </Text>
         </View>
         <TouchableOpacity style={[s.addBtn, {backgroundColor: colors.primary}]} activeOpacity={0.85}>
@@ -200,30 +232,38 @@ export default function StaffScreen({onBack}) {
       </View>
 
       <View style={[s.tabs, {borderBottomColor: colors.border}]}>
-        {tabs.map(tab => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[s.tab, activeTab === tab.key && {borderBottomColor: colors.primary, borderBottomWidth: 2}]}
-            onPress={() => setActiveTab(tab.key)}>
-            <Text style={[s.tabTxt, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
-              {tab.label}
-            </Text>
-            <View style={[s.tabBadge, {backgroundColor: activeTab === tab.key ? colors.primary + '18' : colors.card}]}>
-              <Text style={[s.tabBadgeTxt, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
-                {staff[tab.key].length}
+        {tabs.map(tab => {
+          const count = tab.key === 'bikers' ? bikers.length : managers.length;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[s.tab, activeTab === tab.key && {borderBottomColor: colors.primary, borderBottomWidth: 2}]}
+              onPress={() => setActiveTab(tab.key)}>
+              <Text style={[s.tabTxt, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
+                {tab.label}
               </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              <View style={[s.tabBadge, {backgroundColor: activeTab === tab.key ? colors.primary + '18' : colors.card}]}>
+                <Text style={[s.tabBadgeTxt, {color: activeTab === tab.key ? colors.primary : colors.textSecondary}]}>
+                  {count}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
+      {loading
+        ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+        : (
       <FlatList
-        data={staff[activeTab]}
+        data={currentList}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
       />
+        )
+      }
 
       <StopSheet
         visible={!!sheetBiker}
@@ -239,6 +279,7 @@ export default function StaffScreen({onBack}) {
 
 const s = StyleSheet.create({
   root:        {flex: 1},
+  center:      {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16},
   backBtn:     {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   addBtn:      {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},

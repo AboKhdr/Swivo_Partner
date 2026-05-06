@@ -1,5 +1,6 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -29,23 +30,38 @@ import {
 } from 'lucide-react-native';
 import {launchCamera} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
+import {getOrderById, acceptOrder, rejectOrder, assignBiker, startOnshopOrder, completeOnshopOrder} from '../../../services/partner';
+import {uploadToCloudinary} from '../../../services/cloudinary';
 import AssignBikerScreen from './AssignBikerScreen';
 import RejectOrderModal from './RejectOrderModal';
 
-const TIMELINE_STEPS = [
+const TIMELINE_STEPS_MOBILE = [
   {key: 'received', label: 'وصول الطلب',   Icon: CarFront},
   {key: 'arrived',  label: 'وصول البايكر', Icon: MapPin},
   {key: 'started',  label: 'بدء الغسيل',   Icon: Droplets},
   {key: 'done',     label: 'انهاء الغسيل', Icon: Sparkles},
 ];
 
-const STATUS_ACTIVE_STEPS = {
+const TIMELINE_STEPS_ONSHOP = [
+  {key: 'received', label: 'وصول الطلب',   Icon: CarFront},
+  {key: 'started',  label: 'بدء الغسيل',   Icon: Droplets},
+  {key: 'done',     label: 'انهاء الغسيل', Icon: Sparkles},
+];
+
+const STATUS_ACTIVE_STEPS_MOBILE = {
   PENDING_PARTNER: 0,
   ACCEPTED:        1,
   ASSIGNED:        1,
   ON_THE_WAY:      2,
   STARTED:         3,
   COMPLETED:       4,
+};
+
+const STATUS_ACTIVE_STEPS_ONSHOP = {
+  PENDING_PARTNER: 0,
+  ACCEPTED:        1,
+  STARTED:         2,
+  COMPLETED:       3,
 };
 
 async function requestCameraPermission() {
@@ -102,41 +118,71 @@ function PhotoConfirmModal({visible, photo, onConfirm, onRetake, onClose, colors
 export default function OrderDetailsScreen({order, onBack}) {
   const {colors} = useTheme();
 
-  const orderType = order?.type ?? 'mobile'; // 'mobile' | 'onshop'
+  const orderId   = order?._id ?? order?.id;
+  const orderType = order?.orderType ?? order?.type ?? 'mobile';
 
-  const [status,      setStatus]      = useState(order?.status ?? 'PENDING_PARTNER');
-  const [showAssign,  setShowAssign]  = useState(false);
-  const [showReject,  setShowReject]  = useState(false);
+  const [orderData,    setOrderData]    = useState(order ?? null);
+  const [loading,      setLoading]      = useState(!order);
+  const [status,       setStatus]       = useState(order?.status ?? 'PENDING_PARTNER');
+  const [showAssign,   setShowAssign]   = useState(false);
+  const [showReject,   setShowReject]   = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Photo states for onshop flow
   const [startPhoto,   setStartPhoto]   = useState(null);
-  const [finishPhotos, setFinishPhotos] = useState([]); // up to 3
-  const [pendingPhoto, setPendingPhoto] = useState(null);  // uri captured, waiting confirm
-  const [photoStage,   setPhotoStage]   = useState(null);  // 'start' | 'finish'
+  const [finishPhotos, setFinishPhotos] = useState([]);
+  const [pendingPhoto, setPendingPhoto] = useState(null);
+  const [photoStage,   setPhotoStage]   = useState(null);
 
-  const isPending  = status === 'PENDING_PARTNER';
-  const isAccepted = status === 'ACCEPTED';
-  const isStarted  = status === 'STARTED';
+  const isPending   = status === 'PENDING_PARTNER';
+  const isAccepted  = status === 'ACCEPTED';
+  const isStarted   = status === 'STARTED';
   const isCompleted = status === 'COMPLETED';
-  const activeStep = STATUS_ACTIVE_STEPS[status] ?? 0;
+  const isOnshop    = orderType === 'onshop' || orderType === 'IN_SHOP';
+  const timelineSteps  = isOnshop ? TIMELINE_STEPS_ONSHOP  : TIMELINE_STEPS_MOBILE;
+  const activeStepMap  = isOnshop ? STATUS_ACTIVE_STEPS_ONSHOP : STATUS_ACTIVE_STEPS_MOBILE;
+  const activeStep     = activeStepMap[status] ?? 0;
+
+  // Load full order details from API if only a summary was passed
+  useEffect(() => {
+    if (!orderId || orderData?._id) return;
+    setLoading(true);
+    getOrderById(orderId).then(res => {
+      if (res.success) {
+        const d = res.data?.data ?? res.data;
+        setOrderData(d);
+        setStatus(d?.status ?? status);
+      }
+      setLoading(false);
+    });
+  }, [orderId]);
+
+  const d = orderData ?? order ?? {};
 
   // ── Accept ──────────────────────────────────────────────────────────────
-  const handleAccept = useCallback(() => {
+  const handleAccept = useCallback(async () => {
     if (orderType === 'mobile') {
       setShowAssign(true);
     } else {
-      setStatus('ACCEPTED');
+      setActionLoading(true);
+      const res = await acceptOrder(orderId);
+      if (res.success) setStatus('ACCEPTED');
+      setActionLoading(false);
     }
-  }, [orderType]);
+  }, [orderType, orderId]);
 
-  const handleAssigned = useCallback(() => {
+  const handleAssigned = useCallback((bikerId) => {
     setShowAssign(false);
     setStatus('ASSIGNED');
   }, []);
 
-  const handleRejectConfirm = useCallback(() => {
+  const handleRejectConfirm = useCallback(async (reason) => {
     setShowReject(false);
-  }, []);
+    setActionLoading(true);
+    await rejectOrder(orderId, reason);
+    setActionLoading(false);
+    onBack();
+  }, [orderId, onBack]);
 
   // ── Camera ───────────────────────────────────────────────────────────────
   const openCamera = useCallback(async (stage) => {
@@ -155,16 +201,21 @@ export default function OrderDetailsScreen({order, onBack}) {
     });
   }, []);
 
-  const handlePhotoConfirm = useCallback(() => {
-    if (photoStage === 'start') {
-      setStartPhoto(pendingPhoto);
-      setStatus('STARTED');
-    } else if (photoStage === 'finish') {
-      setFinishPhotos(prev => [...prev, pendingPhoto]);
-    }
+  const handlePhotoConfirm = useCallback(async () => {
+    const uri = pendingPhoto;
+    const stage = photoStage;
     setPendingPhoto(null);
     setPhotoStage(null);
-  }, [photoStage, pendingPhoto]);
+    if (stage === 'start') {
+      setStartPhoto(uri);
+      setActionLoading(true);
+      const res = await startOnshopOrder(orderId, uri);
+      if (res.success) setStatus('STARTED');
+      setActionLoading(false);
+    } else if (stage === 'finish') {
+      setFinishPhotos(prev => [...prev, uri]);
+    }
+  }, [photoStage, pendingPhoto, orderId]);
 
   const handlePhotoRetake = useCallback(() => {
     setPendingPhoto(null);
@@ -177,13 +228,16 @@ export default function OrderDetailsScreen({order, onBack}) {
     setPhotoStage(null);
   }, []);
 
-  const handleFinishOrder = useCallback(() => {
+  const handleFinishOrder = useCallback(async () => {
     if (finishPhotos.length === 0) {
       Alert.alert('تنبيه', 'يرجى التقاط صورة لإنهاء الطلب');
       return;
     }
-    setStatus('COMPLETED');
-  }, [finishPhotos]);
+    setActionLoading(true);
+    const res = await completeOnshopOrder(orderId, finishPhotos);
+    if (res.success) setStatus('COMPLETED');
+    setActionLoading(false);
+  }, [finishPhotos, orderId]);
 
   // ── Photo modal title ────────────────────────────────────────────────────
   const photoModalTitle = photoStage === 'start' ? 'صورة بدء الغسيل' : 'صورة إنهاء الطلب';
@@ -202,32 +256,41 @@ export default function OrderDetailsScreen({order, onBack}) {
             <Text style={[s.rejectText, {color: '#EF4444'}]}>رفض</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[s.acceptBtn, {backgroundColor: colors.primary}]}
+            style={[s.acceptBtn, {backgroundColor: actionLoading ? colors.border : colors.primary}]}
             onPress={handleAccept}
+            disabled={actionLoading}
             activeOpacity={0.8}>
-            {orderType === 'mobile'
-              ? <Bike size={20} color="#FFF" />
-              : <CheckCircle size={20} color="#FFF" />}
-            <Text style={s.acceptBtnText}>
-              {orderType === 'mobile' ? 'قبول وتعيين بايكر' : 'قبول الطلب'}
-            </Text>
+            {actionLoading
+              ? <ActivityIndicator color="#FFF" />
+              : <>
+                  {orderType === 'mobile'
+                    ? <Bike size={20} color="#FFF" />
+                    : <CheckCircle size={20} color="#FFF" />}
+                  <Text style={s.acceptBtnText}>
+                    {orderType === 'mobile' ? 'قبول وتعيين بايكر' : 'قبول الطلب'}
+                  </Text>
+                </>
+            }
           </TouchableOpacity>
         </View>
       </View>
     );
-  } else if (orderType === 'onshop' && isAccepted) {
+  } else if (isOnshop && isAccepted) {
     footerContent = (
       <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
         <TouchableOpacity
-          style={[s.fullBtn, {backgroundColor: colors.primary}]}
+          style={[s.fullBtn, {backgroundColor: actionLoading ? colors.border : colors.primary}]}
           onPress={() => openCamera('start')}
+          disabled={actionLoading}
           activeOpacity={0.8}>
-          <Camera size={20} color="#FFF" />
-          <Text style={s.fullBtnText}>بدء الغسيل والتقاط صورة</Text>
+          {actionLoading
+            ? <ActivityIndicator color="#FFF" />
+            : <><Camera size={20} color="#FFF" /><Text style={s.fullBtnText}>بدء الغسيل والتقاط صورة</Text></>
+          }
         </TouchableOpacity>
       </View>
     );
-  } else if (orderType === 'onshop' && isStarted) {
+  } else if (isOnshop && isStarted) {
     footerContent = (
       <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
         <View style={s.footerCol}>
@@ -246,17 +309,63 @@ export default function OrderDetailsScreen({order, onBack}) {
           </View>
           <TouchableOpacity
             style={[s.fullBtn, {
-              backgroundColor: finishPhotos.length > 0 ? colors.primary : colors.border,
+              backgroundColor: finishPhotos.length > 0 && !actionLoading ? colors.primary : colors.border,
             }]}
             onPress={handleFinishOrder}
+            disabled={finishPhotos.length === 0 || actionLoading}
             activeOpacity={0.8}>
-            <Sparkles size={20} color="#FFF" />
-            <Text style={s.fullBtnText}>إنهاء الطلب</Text>
+            {actionLoading
+              ? <ActivityIndicator color="#FFF" />
+              : <><Sparkles size={20} color="#FFF" /><Text style={s.fullBtnText}>إنهاء الطلب</Text></>
+            }
           </TouchableOpacity>
         </View>
       </View>
     );
   }
+
+  // Derived display values from API response
+  const orderNumber  = d.orderNumber ?? d._id ?? '';
+  const serviceName  =
+    d.itemsSnapshot?.[0]?.nameSnapshot?.ar
+    ?? d.itemsSnapshot?.[0]?.nameSnapshot?.en
+    ?? d.items?.[0]?.service?.name?.ar
+    ?? d.items?.[0]?.service?.name?.en
+    ?? d.items?.[0]?.name?.ar
+    ?? d.items?.[0]?.name?.en
+    ?? d.service?.name?.ar
+    ?? d.service?.name?.en
+    ?? (typeof d.service?.name === 'string' ? d.service.name : '')
+    ?? '';
+  const branchName   = d.branch?.name?.ar ?? d.branch?.name?.en ?? (typeof d.branch?.name === 'string' ? d.branch.name : '') ?? '';
+  const clientName   = d.client
+    ? `${d.client.firstName ?? ''} ${d.client.lastName ?? ''}`.trim()
+    : '';
+  const clientPhone  = d.client?.phoneNumber ?? '';
+  const carDesc      = [
+    d.userCar?.brand?.name?.ar ?? d.userCar?.brand?.name?.en ?? (typeof d.userCar?.brand?.name === 'string' ? d.userCar.brand.name : ''),
+    d.userCar?.model?.name?.ar ?? d.userCar?.model?.name?.en ?? (typeof d.userCar?.model?.name === 'string' ? d.userCar.model.name : ''),
+  ].filter(Boolean).join(' ');
+  const plate        = d.userCar?.plate ?? d.plate ?? '';
+  const price        = d.tenantNetSnapshot ?? d.totalAmount ?? '';
+  const notes        = d.notes ?? '';
+  const scheduledAt  = d.scheduledAt
+    ? new Date(d.scheduledAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
+    : '';
+
+  const fmt = ts => ts ? new Date(ts).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'}) : '';
+  const timelineTimestamps = isOnshop
+    ? [
+        fmt(d.createdAt),
+        fmt(d.startedAt),
+        fmt(d.completedAt ?? d.finishedAt),
+      ]
+    : [
+        fmt(d.createdAt),
+        fmt(d.arrivedAt ?? d.bikerArrivedAt),
+        fmt(d.startedAt),
+        fmt(d.completedAt ?? d.finishedAt),
+      ];
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -265,15 +374,20 @@ export default function OrderDetailsScreen({order, onBack}) {
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[s.headerTitle, {color: colors.textPrimary}]}>
-          Order #{order?.id ? `SW-${order.id.padStart(4, '0')}` : 'SW-0001'}
+          {orderNumber ? `#${orderNumber}` : 'تفاصيل الطلب'}
         </Text>
-        {orderType === 'onshop' && (
+        {isOnshop && (
           <View style={[s.typeBadge, {backgroundColor: colors.primary + '18'}]}>
             <Text style={[s.typeBadgeText, {color: colors.primary}]}>في الموقع</Text>
           </View>
         )}
       </View>
 
+      {loading ? (
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
         {/* Service card */}
@@ -283,9 +397,9 @@ export default function OrderDetailsScreen({order, onBack}) {
               <ShoppingBag size={20} color={colors.primary} />
             </View>
             <View style={s.cardInfo}>
-              <Text style={[s.cardTime, {color: colors.textSecondary}]}>{order?.time || '10:42 AM'}</Text>
-              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{order?.service || 'غسيل داخلي + خارجي'}</Text>
-              <Text style={[s.cardSub, {color: colors.textSecondary}]}>فرع: الرياض</Text>
+              {!!scheduledAt && <Text style={[s.cardTime, {color: colors.textSecondary}]}>{scheduledAt}</Text>}
+              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{serviceName || 'خدمة'}</Text>
+              {!!branchName && <Text style={[s.cardSub, {color: colors.textSecondary}]}>فرع: {branchName}</Text>}
             </View>
           </View>
         </View>
@@ -295,16 +409,24 @@ export default function OrderDetailsScreen({order, onBack}) {
           <View style={s.cardRow}>
             <View style={[s.avatar, {backgroundColor: colors.primary + '15'}]}>
               <Text style={[s.avatarText, {color: colors.primary}]}>
-                {(order?.customerName || 'خالد العتيبي').charAt(0)}
+                {(clientName || 'ع').charAt(0)}
               </Text>
             </View>
             <View style={s.cardInfo}>
-              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{order?.customerName || 'خالد العتيبي'}</Text>
-              <Text style={[s.cardSub, {color: colors.textSecondary}]}>+966 213 3212 213</Text>
+              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{clientName || '—'}</Text>
+              {!!clientPhone && <Text style={[s.cardSub, {color: colors.textSecondary}]}>{clientPhone}</Text>}
             </View>
-            <TouchableOpacity style={[s.phoneBtn, {backgroundColor: colors.bg, borderColor: colors.border}]} activeOpacity={0.75}>
-              <Phone size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+            {!!clientPhone && (
+              <TouchableOpacity
+                style={[s.phoneBtn, {backgroundColor: colors.bg, borderColor: colors.border}]}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const {Linking} = require('react-native');
+                  Linking.openURL(`tel:${clientPhone}`);
+                }}>
+                <Phone size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -315,10 +437,12 @@ export default function OrderDetailsScreen({order, onBack}) {
               <Car size={20} color={colors.primary} />
             </View>
             <View style={s.cardInfo}>
-              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>White Toyota Land Cruiser</Text>
-              <View style={[s.plateBadge, {backgroundColor: colors.bg, borderColor: colors.border}]}>
-                <Text style={[s.plateText, {color: colors.textPrimary}]}>{order?.plate || 'RKA 4821'}</Text>
-              </View>
+              {!!carDesc && <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{carDesc}</Text>}
+              {!!plate && (
+                <View style={[s.plateBadge, {backgroundColor: colors.bg, borderColor: colors.border}]}>
+                  <Text style={[s.plateText, {color: colors.textPrimary}]}>{plate}</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -331,22 +455,26 @@ export default function OrderDetailsScreen({order, onBack}) {
             </View>
             <View style={s.mapBottom}>
               <View style={s.mapDistCol}>
-                <Text style={[s.mapDist, {color: colors.primary}]}>2.4 km</Text>
-                <Text style={[s.mapTime, {color: colors.textSecondary}]}>12 min</Text>
+                <Text style={[s.mapDist, {color: colors.primary}]}>{d.distanceKm ? `${d.distanceKm} km` : '—'}</Text>
+                <Text style={[s.mapTime, {color: colors.textSecondary}]}>{d.estimatedMinutes ? `${d.estimatedMinutes} min` : ''}</Text>
               </View>
               <View style={s.mapAddrCol}>
                 <View style={s.mapAddrRow}>
                   <MapPin size={14} color={colors.primary} />
-                  <Text style={[s.mapAddrTitle, {color: colors.textPrimary}]}>طريق الملك فهد</Text>
+                  <Text style={[s.mapAddrTitle, {color: colors.textPrimary}]}>
+                    {d.addressSnapshot?.district ?? d.addressSnapshot?.addressText ?? '—'}
+                  </Text>
                 </View>
-                <Text style={[s.mapAddrSub, {color: colors.textSecondary}]}>البرج 4، شارع الياسمين</Text>
+                <Text style={[s.mapAddrSub, {color: colors.textSecondary}]}>
+                  {d.addressSnapshot?.addressText ?? ''}
+                </Text>
               </View>
             </View>
           </View>
         )}
 
         {/* Start photo preview — onshop started */}
-        {orderType === 'onshop' && startPhoto && (
+        {isOnshop && startPhoto && (
           <>
             <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>صورة قبل الغسيل</Text>
             <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border, padding: 8}]}>
@@ -356,7 +484,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         )}
 
         {/* Finish photos preview — onshop completed */}
-        {orderType === 'onshop' && finishPhotos.length > 0 && (
+        {isOnshop && finishPhotos.length > 0 && (
           <>
             <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>صور بعد الغسيل</Text>
             <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -374,7 +502,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={s.payRow}>
             <View style={s.payTextCol}>
-              <Text style={[s.payAmount, {color: colors.textPrimary}]}> {order?.price || '120.90'}</Text>
+              <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price ? `${price} ر.س` : '—'}</Text>
               <Text style={[s.cardSub, {color: colors.textSecondary}]}>تمت عملية الدفع عن طريق: بطاقة الائتمان</Text>
             </View>
             <View style={[s.payIconBox, {backgroundColor: colors.primary + '15'}]}>
@@ -391,7 +519,7 @@ export default function OrderDetailsScreen({order, onBack}) {
               <Info size={16} color={colors.primary} />
             </View>
             <Text style={[s.notesText, {color: colors.textPrimary}]}>
-              {order?.notes || 'بدي انا شوو بدي،  انا غيرك ما بدي لعمري خلي وبدي اريدك تقفي حدي، يما يما يما يما يما يما يما'}
+              {notes || '—'}
             </Text>
           </View>
         </View>
@@ -399,7 +527,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         {/* Timeline */}
         <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>وقت العملية</Text>
         <View style={s.timelineRow}>
-          {TIMELINE_STEPS.map((step, i) => {
+          {timelineSteps.map((step, i) => {
             const {Icon} = step;
             const isActive    = i < activeStep;
             const isCurrent   = i === activeStep - 1;
@@ -417,9 +545,9 @@ export default function OrderDetailsScreen({order, onBack}) {
                     <Icon size={22} color={highlighted ? colors.primary : colors.textSecondary} />
                   </View>
                   <Text style={[s.timelineLabel, {color: colors.textPrimary}]}>{step.label}</Text>
-                  <Text style={[s.timelineTime, {color: colors.textSecondary}]}>02:30 PM</Text>
+                  <Text style={[s.timelineTime, {color: colors.textSecondary}]}>{timelineTimestamps[i] || ''}</Text>
                 </View>
-                {i < TIMELINE_STEPS.length - 1 && (
+                {i < timelineSteps.length - 1 && (
                   <View style={[s.timelineConnector, {backgroundColor: lineActive ? colors.primary : colors.border}]} />
                 )}
               </React.Fragment>
@@ -437,11 +565,13 @@ export default function OrderDetailsScreen({order, onBack}) {
 
         <View style={s.bottomPad} />
       </ScrollView>
+      )}
 
       {footerContent}
 
       <AssignBikerScreen
         visible={showAssign}
+        orderId={orderId}
         onClose={() => setShowAssign(false)}
         onAssigned={handleAssigned}
       />
@@ -467,6 +597,7 @@ export default function OrderDetailsScreen({order, onBack}) {
 
 const s = StyleSheet.create({
   root:            {flex: 1},
+  center:          {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:          {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, gap: 8},
   backBtn:         {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   headerTitle:     {flex: 1, fontSize: 17, fontWeight: '800'},

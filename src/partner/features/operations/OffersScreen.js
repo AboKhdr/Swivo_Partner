@@ -1,5 +1,6 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   ScrollView,
@@ -10,38 +11,10 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import {ArrowRight, Plus, Pencil, Tag, X, ChevronDown, Trash2, CalendarDays} from 'lucide-react-native';
+import {ArrowRight, Plus, Pencil, Tag, ChevronDown, Trash2, CalendarDays} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-
-const ALL_SERVICES = [
-  {id: 's1', nameAr: 'غسلة سريعة'},
-  {id: 's2', nameAr: 'غسلة متقدمة'},
-  {id: 's3', nameAr: 'غسيل داخلي'},
-  {id: 's4', nameAr: 'تلميع خارجي'},
-  {id: 's5', nameAr: 'تعقيم'},
-  {id: 's6', nameAr: 'غيار زيت'},
-  {id: 's7', nameAr: 'بوليش'},
-];
-
-const MOCK_OFFERS = [
-  {
-    id: 'o1',
-    name: 'عرض نهاية الأسبوع',
-    serviceIds: ['s1', 's3'],
-    prices: {s1: {S: '25', M: '35', L: ''}, s3: {S: '', M: '45', L: '60'}},
-    active: true,
-  },
-  {
-    id: 'o2',
-    name: 'عرض الصيف',
-    serviceIds: ['s2', 's4', 's5'],
-    prices: {s2: {S: '40', M: '55', L: '70'}, s4: {S: '30', M: '', L: ''}, s5: {S: '', M: '50', L: '65'}},
-    active: true,
-  },
-];
-
-const SIZE_LABELS = {S: 'صغير', M: 'وسط', L: 'كبير'};
+import {getOffers, getServices, createOffer, updateOffer, deleteOffer, toggleOffer} from '../../../services/partner';
 
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 
@@ -146,7 +119,7 @@ function DatePickerModal({visible, date, onChange, onClose, colors}) {
 }
 
 // ─── Service picker modal (single select) ────────────────────────────────────
-function ServicePickerModal({visible, selectedId, onSelect, onClose, colors}) {
+function ServicePickerModal({visible, selectedId, onSelect, onClose, colors, allServices}) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -156,22 +129,23 @@ function ServicePickerModal({visible, selectedId, onSelect, onClose, colors}) {
         <View style={[ms.card, {backgroundColor: colors.card}]}>
           <Text style={[ms.title, {color: colors.textPrimary}]}>اختر الخدمة</Text>
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-            {ALL_SERVICES.map((srv, i) => {
-              const active = selectedId === srv.id;
+            {allServices.map((srv, i) => {
+              const id = srv._id ?? srv.id;
+              const active = selectedId === id;
               return (
-                <View key={srv.id}>
+                <View key={id}>
                   <TouchableOpacity
                     style={ms.row}
-                    onPress={() => { onSelect(srv.id); onClose(); }}
+                    onPress={() => { onSelect(id); onClose(); }}
                     activeOpacity={0.75}>
                     <View style={[ms.radio, {borderColor: active ? colors.primary : colors.border}]}>
                       {active && <View style={[ms.radioDot, {backgroundColor: colors.primary}]} />}
                     </View>
                     <Text style={[ms.rowTxt, {color: active ? colors.primary : colors.textPrimary, fontWeight: active ? '700' : '500'}]}>
-                      {srv.nameAr}
+                      {srv.name?.ar ?? srv.nameAr ?? ''}
                     </Text>
                   </TouchableOpacity>
-                  {i < ALL_SERVICES.length - 1 && <View style={[ms.sep, {backgroundColor: colors.border}]} />}
+                  {i < allServices.length - 1 && <View style={[ms.sep, {backgroundColor: colors.border}]} />}
                 </View>
               );
             })}
@@ -183,16 +157,17 @@ function ServicePickerModal({visible, selectedId, onSelect, onClose, colors}) {
 }
 
 // ─── Price row per service ────────────────────────────────────────────────────
-function ServicePriceRow({service, prices, onChange, colors}) {
+function ServicePriceRow({service, prices, onChange, colors, sizeLabelMap}) {
+  const labels = sizeLabelMap ?? {small: 'صغير', medium: 'وسط', large: 'كبير'};
   return (
     <View style={[sp.wrap, {backgroundColor: colors.bg, borderColor: colors.border}]}>
       <View style={sp.header}>
         <Text style={[sp.name, {color: colors.textPrimary}]}>{service.nameAr}</Text>
       </View>
       <View style={sp.sizesRow}>
-        {['S', 'M', 'L'].map(size => (
+        {['small', 'medium', 'large'].map(size => (
           <View key={size} style={sp.sizeCol}>
-            <Text style={[sp.sizeLabel, {color: colors.textSecondary}]}>{SIZE_LABELS[size]}</Text>
+            <Text style={[sp.sizeLabel, {color: colors.textSecondary}]}>{labels[size]}</Text>
             <View style={[sp.inputBox, {backgroundColor: colors.card, borderColor: prices[size] ? colors.primary + '60' : colors.border}]}>
               <TextInput
                 style={[sp.input, {color: colors.textPrimary}]}
@@ -220,47 +195,55 @@ function ServicePriceRow({service, prices, onChange, colors}) {
 }
 
 // ─── Add / Edit offer screen ──────────────────────────────────────────────────
-function AddOfferScreen({onBack, onSave, initialData}) {
+function AddOfferScreen({onBack, onSave, initialData, allServices}) {
   const {colors} = useTheme();
   const isEdit = !!initialData;
 
   const initServiceId = initialData?.serviceIds?.[0] ?? null;
-  const initPrices    = initServiceId ? (initialData?.prices?.[initServiceId] ?? {S: '', M: '', L: ''}) : {S: '', M: '', L: ''};
+  const initPrices    = initServiceId ? (initialData?.prices?.[initServiceId] ?? {small: '', medium: '', large: ''}) : {small: '', medium: '', large: ''};
 
-  const [name,          setName]          = useState(initialData?.name    ?? '');
+  const [name,          setName]          = useState(initialData?.name?.ar ?? initialData?.name ?? '');
   const [serviceId,     setServiceId]     = useState(initServiceId);
   const [prices,        setPrices]        = useState(initPrices);
   const [endDate,       setEndDate]       = useState(initialData?.endDate ?? null);
   const [showPicker,    setShowPicker]    = useState(false);
   const [showDatePicker,setShowDatePicker]= useState(false);
+  const [saving,        setSaving]        = useState(false);
 
   const pad = n => String(n).padStart(2, '0');
   const endDateLabel = endDate ? `${pad(endDate.day)} / ${pad(endDate.month)} / ${endDate.year}` : null;
 
-  const selectedService = ALL_SERVICES.find(s => s.id === serviceId) ?? null;
+  const selectedService = allServices.find(s => (s._id ?? s.id) === serviceId) ?? null;
 
   const handleSelectService = id => {
     setServiceId(id);
-    setPrices({S: '', M: '', L: ''});
+    setPrices({small: '', medium: '', large: ''});
   };
 
   const updatePrice = (size, val) =>
     setPrices(p => ({...p, [size]: val.replace(/[^0-9.]/g, '')}));
 
-  const hasAtLeastOnePrice = ['S', 'M', 'L'].some(sz => prices[sz]?.trim());
-  const canSave = name.trim() && serviceId && hasAtLeastOnePrice;
+  const hasAtLeastOnePrice = ['small', 'medium', 'large'].some(sz => prices[sz]?.trim());
+  const canSave = name.trim() && serviceId && hasAtLeastOnePrice && !saving;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) return;
-    onSave?.({
-      name,
+    setSaving(true);
+    const endDateIso = endDate
+      ? new Date(endDate.year, endDate.month - 1, endDate.day).toISOString()
+      : undefined;
+    await onSave?.({
+      name: {ar: name, en: name},
       serviceIds: [serviceId],
       prices: {[serviceId]: prices},
-      endDate: endDate ? `${String(endDate.day).padStart(2,'0')} / ${String(endDate.month).padStart(2,'0')} / ${endDate.year}` : null,
-      active: true,
+      ...(endDateIso ? {endDate: endDateIso} : {}),
+      isActive: true,
     });
+    setSaving(false);
     onBack();
   };
+
+  const SIZE_LABELS_FULL = {small: 'صغير', medium: 'وسط', large: 'كبير'};
 
   return (
     <View style={[a.root, {backgroundColor: colors.bg}]}>
@@ -307,7 +290,7 @@ function AddOfferScreen({onBack, onSave, initialData}) {
           onPress={() => setShowPicker(true)}
           activeOpacity={0.8}>
           <Text style={[a.triggerTxt, {color: selectedService ? colors.textPrimary : colors.textSecondary}]}>
-            {selectedService ? selectedService.nameAr : 'اختر الخدمة'}
+            {selectedService ? (selectedService.name?.ar ?? selectedService.nameAr ?? '') : 'اختر الخدمة'}
           </Text>
           <ChevronDown size={18} color={colors.textSecondary} />
         </TouchableOpacity>
@@ -315,10 +298,11 @@ function AddOfferScreen({onBack, onSave, initialData}) {
         {/* Price inputs */}
         {selectedService && (
           <ServicePriceRow
-            service={selectedService}
+            service={{...selectedService, nameAr: selectedService.name?.ar ?? selectedService.nameAr ?? ''}}
             prices={prices}
             onChange={updatePrice}
             colors={colors}
+            sizeLabelMap={SIZE_LABELS_FULL}
           />
         )}
 
@@ -327,7 +311,10 @@ function AddOfferScreen({onBack, onSave, initialData}) {
           onPress={handleSave}
           disabled={!canSave}
           activeOpacity={0.85}>
-          <Text style={a.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'إضافة العرض'}</Text>
+          {saving
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={a.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'إضافة العرض'}</Text>
+          }
         </TouchableOpacity>
       </ScrollView>
 
@@ -337,6 +324,7 @@ function AddOfferScreen({onBack, onSave, initialData}) {
         onSelect={handleSelectService}
         onClose={() => setShowPicker(false)}
         colors={colors}
+        allServices={allServices}
       />
 
       <DatePickerModal
@@ -350,13 +338,25 @@ function AddOfferScreen({onBack, onSave, initialData}) {
   );
 }
 
+const SIZE_LABELS = {small: 'صغير', medium: 'وسط', large: 'كبير'};
+
 // ─── Offer card ───────────────────────────────────────────────────────────────
-function OfferCard({item, colors, onEdit, onToggleActive, onDelete}) {
-  const activeServices = ALL_SERVICES.filter(s => item.serviceIds.includes(s.id));
-  const activeSizes = activeServices.map(srv => {
-    const filled = ['S', 'M', 'L'].filter(sz => item.prices[srv.id]?.[sz]?.trim());
-    return {name: srv.nameAr, sizes: filled};
+function OfferCard({item, colors, onEdit, onToggleActive, onDelete, allServices}) {
+  const id       = item._id ?? item.id;
+  const isActive = item.isActive ?? item.active ?? false;
+  const label    = item.name?.ar ?? item.name ?? '';
+  const serviceIds = item.serviceIds ?? [];
+
+  const activeSizes = serviceIds.map(sid => {
+    const srv = allServices.find(s => (s._id ?? s.id) === sid);
+    const srvName = srv ? (srv.name?.ar ?? srv.nameAr ?? sid) : sid;
+    const filled = ['small', 'medium', 'large'].filter(sz => item.prices?.[sid]?.[sz]?.toString().trim());
+    return {name: srvName, sizes: filled};
   });
+
+  const endDateLabel = item.endDate
+    ? new Date(item.endDate).toLocaleDateString('ar-SA')
+    : null;
 
   return (
     <View style={[oc.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -365,21 +365,21 @@ function OfferCard({item, colors, onEdit, onToggleActive, onDelete}) {
           <Tag size={13} color={colors.primary} />
           <Text style={[oc.tagTxt, {color: colors.primary}]}>عرض</Text>
         </View>
-        <Text style={[oc.name, {color: colors.textPrimary}]}>{item.name}</Text>
+        <Text style={[oc.name, {color: colors.textPrimary}]}>{label}</Text>
         <View style={oc.actions}>
           <TouchableOpacity onPress={() => onEdit(item)} style={oc.actionBtn} activeOpacity={0.7}>
             <Pencil size={15} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => onDelete(item.id)} style={oc.actionBtn} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => onDelete(id)} style={oc.actionBtn} activeOpacity={0.7}>
             <Trash2 size={15} color={colors.danger} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => onToggleActive(item.id)}
-            style={[oc.statusPill, {backgroundColor: item.active ? colors.primary + '15' : colors.border}]}
+            onPress={() => onToggleActive(id, isActive)}
+            style={[oc.statusPill, {backgroundColor: isActive ? colors.primary + '15' : colors.border}]}
             activeOpacity={0.75}>
-            <View style={[oc.statusDot, {backgroundColor: item.active ? colors.primary : colors.textSecondary}]} />
-            <Text style={[oc.statusTxt, {color: item.active ? colors.primary : colors.textSecondary}]}>
-              {item.active ? 'فعال' : 'معطل'}
+            <View style={[oc.statusDot, {backgroundColor: isActive ? colors.primary : colors.textSecondary}]} />
+            <Text style={[oc.statusTxt, {color: isActive ? colors.primary : colors.textSecondary}]}>
+              {isActive ? 'فعال' : 'معطل'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -402,9 +402,9 @@ function OfferCard({item, colors, onEdit, onToggleActive, onDelete}) {
         ))}
       </View>
 
-      {item.endDate ? (
+      {endDateLabel ? (
         <View style={[oc.endDateRow, {backgroundColor: colors.warning + '15'}]}>
-          <Text style={[oc.endDateTxt, {color: colors.warning}]}>ينتهي: {item.endDate}</Text>
+          <Text style={[oc.endDateTxt, {color: colors.warning}]}>ينتهي: {endDateLabel}</Text>
         </View>
       ) : null}
     </View>
@@ -415,31 +415,79 @@ function OfferCard({item, colors, onEdit, onToggleActive, onDelete}) {
 export default function OffersScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [offers, setOffers]       = useState(MOCK_OFFERS);
-  const [showAdd, setShowAdd]     = useState(false);
-  const [editing, setEditing]     = useState(null);
+  const [offers,      setOffers]    = useState([]);
+  const [allServices, setAllServices] = useState([]);
+  const [loading,     setLoading]   = useState(true);
+  const [showAdd,     setShowAdd]   = useState(false);
+  const [editing,     setEditing]   = useState(null);
 
-  const handleToggleActive = useCallback(id => {
-    setOffers(prev => prev.map(o => o.id === id ? {...o, active: !o.active} : o));
+  const fetchOffers = useCallback(() => {
+    getOffers({limit: 100}).then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setOffers(Array.isArray(list) ? list : []);
+      }
+      setLoading(false);
+    });
   }, []);
 
-  const handleSave = useCallback(data => {
-    setOffers(prev => {
-      if (editing) return prev.map(o => o.id === editing.id ? {...o, ...data} : o);
-      return [...prev, {...data, id: `o${Date.now()}`}];
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      getOffers({limit: 100}),
+      getServices({limit: 200}),
+    ]).then(([offRes, srvRes]) => {
+      if (offRes.success) {
+        const list = offRes.data?.data ?? offRes.data ?? [];
+        setOffers(Array.isArray(list) ? list : []);
+      }
+      if (srvRes.success) {
+        const list = srvRes.data?.data ?? srvRes.data ?? [];
+        setAllServices(Array.isArray(list) ? list : []);
+      }
+      setLoading(false);
     });
+  }, []);
+
+  const handleToggleActive = useCallback(async (id, currentActive) => {
+    setOffers(prev => prev.map(o => (o._id ?? o.id) === id ? {...o, isActive: !currentActive} : o));
+    await toggleOffer(id, !currentActive);
+  }, []);
+
+  const handleSave = useCallback(async data => {
+    if (editing) {
+      const id = editing._id ?? editing.id;
+      await updateOffer(id, data);
+    } else {
+      await createOffer(data);
+    }
     setEditing(null);
     setShowAdd(false);
-  }, [editing]);
+    fetchOffers();
+  }, [editing, fetchOffers]);
 
   const handleEdit   = useCallback(item => setEditing(item), []);
-  const handleDelete = useCallback(id => setOffers(prev => prev.filter(o => o.id !== id)), []);
+
+  const handleDelete = useCallback(async id => {
+    setOffers(prev => prev.filter(o => (o._id ?? o.id) !== id));
+    await deleteOffer(id);
+  }, []);
 
   const renderItem = useCallback(({item}) => (
-    <OfferCard item={item} colors={colors} onEdit={handleEdit} onToggleActive={handleToggleActive} onDelete={handleDelete} />
-  ), [colors, handleEdit, handleToggleActive, handleDelete]);
+    <OfferCard
+      item={item}
+      colors={colors}
+      onEdit={handleEdit}
+      onToggleActive={handleToggleActive}
+      onDelete={handleDelete}
+      allServices={allServices}
+    />
+  ), [colors, handleEdit, handleToggleActive, handleDelete, allServices]);
+
+  const keyExtractor = useCallback(item => item._id ?? item.id ?? Math.random().toString(), []);
 
   const showList = !showAdd && !editing;
+  const activeCount = offers.filter(o => o.isActive ?? o.active).length;
 
   return (
     <View style={s.flex}>
@@ -452,7 +500,7 @@ export default function OffersScreen({onBack}) {
             <View style={s.headerText}>
               <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('partner.operations.menu.offers')}</Text>
               <Text style={[s.headerSub, {color: colors.textSecondary}]}>
-                {offers.filter(o => o.active).length} {' عروض فعالة'}
+                {activeCount} عروض فعالة
               </Text>
             </View>
             <TouchableOpacity
@@ -463,24 +511,34 @@ export default function OffersScreen({onBack}) {
             </TouchableOpacity>
           </View>
 
-          <FlatList
-            data={offers}
-            renderItem={renderItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={s.list}
-            showsVerticalScrollIndicator={false}
-          />
+          {loading
+            ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            : (
+              <FlatList
+                data={offers}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                contentContainerStyle={s.list}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={s.center}>
+                    <Text style={{color: colors.textSecondary, fontSize: 14}}>لا توجد عروض</Text>
+                  </View>
+                }
+              />
+            )
+          }
         </View>
       </View>
 
       {showAdd && (
         <View style={s.flex}>
-          <AddOfferScreen onBack={() => setShowAdd(false)} onSave={handleSave} />
+          <AddOfferScreen onBack={() => setShowAdd(false)} onSave={handleSave} allServices={allServices} />
         </View>
       )}
       {editing && (
         <View style={s.flex}>
-          <AddOfferScreen initialData={editing} onBack={() => setEditing(null)} onSave={handleSave} />
+          <AddOfferScreen initialData={editing} onBack={() => setEditing(null)} onSave={handleSave} allServices={allServices} />
         </View>
       )}
     </View>
@@ -491,6 +549,7 @@ const s = StyleSheet.create({
   flex:        {flex: 1},
   hidden:      {display: 'none'},
   root:        {flex: 1},
+  center:      {flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60},
   header:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16},
   backBtn:     {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   addBtn:      {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},

@@ -1,15 +1,10 @@
-import React, {useCallback, useState} from 'react';
-import {FlatList, Image, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, FlatList, Image, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
 import {ArrowRight, Plus, Pencil, Camera} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import {getPackages, togglePackage} from '../../../services/partner';
 import AddPackageScreen from './AddPackageScreen';
-
-const MOCK_PACKAGES = [
-  {id: 'p1', nameAr: 'باقة ابو بلس خي ولعند المفتي', serviceIds: ['s1', 's6', 's7'], services: ['3 غسلات داخلية', 'بوليش', 'غيار زيت'], uses: 4,  validityDays: 30},
-  {id: 'p2', nameAr: 'باقة بريميوم',                  serviceIds: ['s2', 's4', 's5'], services: ['غسيل كامل', 'تلميع', 'تعقيم'],         uses: 4,  validityDays: 30},
-  {id: 'p3', nameAr: 'باقة ربعية',                    serviceIds: ['s1', 's4'],       services: ['غسيل خارجي', 'تلميع خارجي'],           uses: 12, validityDays: 90},
-];
 
 function PackageBanner({image, colors, hint, onChangeImage}) {
   return (
@@ -35,22 +30,32 @@ function PackageBanner({image, colors, hint, onChangeImage}) {
   );
 }
 
-function PackageCard({item, colors, hint, onEdit}) {
+function PackageCard({item, colors, hint, onEdit, onToggle}) {
   const [banner, setBanner] = useState(item.banner ?? null);
+  const nameAr   = item.name?.ar ?? item.name?.en ?? item.nameAr ?? '';
+  const services = item.services?.map(sv => sv.name?.ar ?? sv.name?.en ?? sv) ?? [];
 
   return (
     <View style={[s.card, {backgroundColor: colors.card}]}>
       <PackageBanner image={banner} colors={colors} hint={hint} onChangeImage={() => setBanner(null)} />
       <View style={s.cardBody}>
         <View style={s.cardTop}>
-          <Text style={[s.nameAr, {color: colors.textPrimary}]}>{item.nameAr}</Text>
+          <Text style={[s.nameAr, {color: colors.textPrimary}]}>{nameAr}</Text>
+          <Switch
+            value={item.isActive ?? true}
+            onValueChange={val => onToggle(item._id ?? item.id, val)}
+            trackColor={{false: colors.border, true: colors.primary + 'AA'}}
+            thumbColor={item.isActive ? colors.primary : '#ccc'}
+          />
           <TouchableOpacity style={s.editBtn} onPress={() => onEdit(item)} activeOpacity={0.75}>
             <Pencil size={15} color={colors.primary} />
           </TouchableOpacity>
         </View>
-        <Text style={[s.servicesTxt, {color: colors.primary}]}>
-          {item.services.join(' , ')}
-        </Text>
+        {services.length > 0 && (
+          <Text style={[s.servicesTxt, {color: colors.primary}]}>
+            {services.join(' , ')}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -59,15 +64,38 @@ function PackageCard({item, colors, hint, onEdit}) {
 export default function PackagesScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [packages]       = useState(MOCK_PACKAGES);
+  const [packages,       setPackages]       = useState([]);
+  const [loading,        setLoading]        = useState(true);
   const [showAdd,        setShowAdd]        = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
 
+  const fetchPackages = useCallback(async () => {
+    setLoading(true);
+    const res = await getPackages();
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setPackages(Array.isArray(list) ? list : []);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchPackages(); }, [fetchPackages]);
+
+  const handleToggle = useCallback(async (id, val) => {
+    setPackages(prev => prev.map(p => (p._id ?? p.id) === id ? {...p, isActive: val} : p));
+    await togglePackage(id, val);
+  }, []);
+
   const handleEdit   = useCallback(item => setEditingPackage(item), []);
+
+  const onSaved = useCallback(() => {
+    fetchPackages();
+  }, [fetchPackages]);
+
   const renderItem   = useCallback(({item}) => (
-    <PackageCard item={item} colors={colors} hint={t('partner.packages.addPhoto')} onEdit={handleEdit} />
-  ), [colors, t, handleEdit]);
-  const keyExtractor = useCallback(item => item.id, []);
+    <PackageCard item={item} colors={colors} hint={t('partner.packages.addPhoto')} onEdit={handleEdit} onToggle={handleToggle} />
+  ), [colors, t, handleEdit, handleToggle]);
+  const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   const showList = !showAdd && !editingPackage;
 
@@ -92,6 +120,9 @@ export default function PackagesScreen({onBack}) {
               <Plus size={20} color="#FFF" />
             </TouchableOpacity>
           </View>
+          {loading
+            ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            : (
           <FlatList
             data={packages}
             renderItem={renderItem}
@@ -99,17 +130,19 @@ export default function PackagesScreen({onBack}) {
             contentContainerStyle={s.list}
             showsVerticalScrollIndicator={false}
           />
+            )
+          }
         </View>
       </View>
 
       {showAdd && (
         <View style={s.flex}>
-          <AddPackageScreen onBack={() => setShowAdd(false)} />
+          <AddPackageScreen onBack={() => setShowAdd(false)} onSaved={onSaved} />
         </View>
       )}
       {editingPackage && (
         <View style={s.flex}>
-          <AddPackageScreen initialData={editingPackage} onBack={() => setEditingPackage(null)} />
+          <AddPackageScreen initialData={editingPackage} onBack={() => setEditingPackage(null)} onSaved={onSaved} />
         </View>
       )}
     </View>
@@ -120,6 +153,7 @@ const s = StyleSheet.create({
   flex:        {flex: 1},
   hidden:      {display: 'none'},
   root:        {flex: 1},
+  center:      {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16},
   backBtn:     {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
   addBtn:      {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},

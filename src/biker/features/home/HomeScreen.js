@@ -1,17 +1,19 @@
 import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
-  Animated, FlatList, Platform, RefreshControl,
+  ActivityIndicator, Animated, FlatList, Modal, Platform, RefreshControl,
   ScrollView, StatusBar, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
-import {Bell, DollarSign, Droplets, Star, MapPin, Car, CircleUserRound} from 'lucide-react-native';
+import {Bell, DollarSign, Droplets, Star, MapPin, Car, CircleUserRound, ChevronDown, Check} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {MOCK_USER, MOCK_ORDERS} from '../../../shared/data/mockData';
+import useAuthStore from '../../../store/authStore';
+import {getBikerProfile, setDutyStatus, getHomeStats, getBranches, getNotifications} from '../../../services/biker';
+import {getOrders} from '../../../services/orders';
 import NotificationsScreen from './NotificationsScreen';
 
 // ─── Service Circle Button ────────────────────────────────────────────────────
-function ServiceButton({active, onToggle, colors, t}) {
+function ServiceButton({active, onToggle, loading, colors, t}) {
   const pulse = useRef(new Animated.Value(1)).current;
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -31,6 +33,7 @@ function ServiceButton({active, onToggle, colors, t}) {
   }, [active, pulse]);
 
   const handlePress = () => {
+    if (loading) return;
     Animated.sequence([
       Animated.spring(scale, {toValue: 0.93, useNativeDriver: true, tension: 120, friction: 8}),
       Animated.spring(scale, {toValue: 1,    useNativeDriver: true, tension: 80,  friction: 7}),
@@ -47,7 +50,7 @@ function ServiceButton({active, onToggle, colors, t}) {
       {active && (
         <Animated.View style={[sb.outerRing, {backgroundColor: colors.primary + '28', transform: [{scale: pulse}]}]} />
       )}
-      <TouchableOpacity onPress={handlePress} activeOpacity={1}>
+      <TouchableOpacity onPress={handlePress} activeOpacity={1} disabled={loading}>
         <Animated.View style={[
           sb.circle,
           active
@@ -55,15 +58,19 @@ function ServiceButton({active, onToggle, colors, t}) {
             : {backgroundColor: colors.card, borderWidth: 2, borderColor: colors.primary + '35', shadowColor: '#000', shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4},
           {transform: [{scale}]},
         ]}>
-          <View style={[sb.innerCircle, {borderColor: active ? 'rgba(255,255,255,0.35)' : colors.primary + '20'}]}>
-            <Bell size={32} color={iconColor} strokeWidth={active ? 2 : 1.8} />
-            <Text style={[sb.statusLabel, {color: labelColor}]}>
-              {active ? t('home.inService') : t('home.outOfService')}
-            </Text>
-            <Text style={[sb.tapHint, {color: hintColor}]}>
-              {active ? t('home.tapToStop') : t('home.tapToStart')}
-            </Text>
-          </View>
+          {loading ? (
+            <ActivityIndicator size="large" color={active ? '#fff' : colors.primary} />
+          ) : (
+            <View style={[sb.innerCircle, {borderColor: active ? 'rgba(255,255,255,0.35)' : colors.primary + '20'}]}>
+              <Bell size={32} color={iconColor} strokeWidth={active ? 2 : 1.8} />
+              <Text style={[sb.statusLabel, {color: labelColor}]}>
+                {active ? t('home.inService') : t('home.outOfService')}
+              </Text>
+              <Text style={[sb.tapHint, {color: hintColor}]}>
+                {active ? t('home.tapToStop') : t('home.tapToStart')}
+              </Text>
+            </View>
+          )}
         </Animated.View>
       </TouchableOpacity>
     </View>
@@ -96,15 +103,77 @@ function StatItem({IconComponent, iconBg, iconColor, label, value, unit, delay, 
   );
 }
 
+// ─── Branch Picker Modal ──────────────────────────────────────────────────────
+function BranchPicker({branches, selectedId, onSelect, colors, t}) {
+  const [visible, setVisible] = useState(false);
+  const selected = branches.find(b => b._id === selectedId);
+
+  return (
+    <>
+      <TouchableOpacity
+        style={[bp.trigger, {backgroundColor: colors.card, borderColor: colors.border}]}
+        onPress={() => setVisible(true)}
+        activeOpacity={0.8}>
+        <MapPin size={15} color={colors.primary} strokeWidth={2} />
+        <Text style={[bp.triggerText, {color: colors.textPrimary}]} numberOfLines={1}>
+          {selected ? selected.name : t('home.selectBranch')}
+        </Text>
+        <ChevronDown size={15} color={colors.textSecondary} strokeWidth={2} />
+      </TouchableOpacity>
+
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
+        <TouchableOpacity style={bp.overlay} activeOpacity={1} onPress={() => setVisible(false)} />
+        <View style={[bp.sheet, {backgroundColor: colors.card}]}>
+          <View style={[bp.handle, {backgroundColor: colors.border}]} />
+          <Text style={[bp.sheetTitle, {color: colors.textPrimary}]}>{t('home.selectBranch')}</Text>
+          <FlatList
+            data={branches}
+            keyExtractor={b => b._id}
+            renderItem={({item}) => (
+              <TouchableOpacity
+                style={[bp.row, {borderBottomColor: colors.border}]}
+                onPress={() => { onSelect(item._id); setVisible(false); }}
+                activeOpacity={0.7}>
+                <Text style={[bp.rowText, {color: colors.textPrimary}]}>{item.name}</Text>
+                {item._id === selectedId && <Check size={16} color={colors.primary} strokeWidth={2.5} />}
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <Text style={[bp.empty, {color: colors.textSecondary}]}>{t('home.noBranches')}</Text>
+            }
+          />
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 // ─── New Order Card ───────────────────────────────────────────────────────────
-function NewOrderCard({order, colors}) {
+function NewOrderCard({order, colors, t}) {
+  const clientName = order.client
+    ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
+    : '';
+  const brand = order.userCar?.brand?.name ?? '';
+  const model = order.userCar?.model?.name ?? '';
+  const plate = order.userCar?.plateNumber ?? '';
+  const address = order.addressSnapshot?.addressText
+    ?? order.addressSnapshot?.district
+    ?? order.branch?.address
+    ?? order.address
+    ?? '';
+  const firstItem   = order.itemsSnapshot?.[0];
+  const serviceName = firstItem?.nameSnapshot?.ar
+    ?? firstItem?.nameSnapshot?.en
+    ?? order.service?.name
+    ?? '';
+
   return (
     <View style={[nc.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={nc.topRow}>
-        <Text style={[nc.serviceName, {color: colors.textPrimary}]}>{order.service.name}</Text>
+        <Text style={[nc.serviceName, {color: colors.textPrimary}]}>{serviceName}</Text>
       </View>
       <View style={nc.addrRow}>
-        <Text style={[nc.addr, {color: colors.textSecondary}]} numberOfLines={1}>{order.address}</Text>
+        <Text style={[nc.addr, {color: colors.textSecondary}]} numberOfLines={1}>{address}</Text>
         <MapPin size={13} color={colors.textSecondary} strokeWidth={2} />
       </View>
       <View style={[nc.divider, {backgroundColor: colors.border}]} />
@@ -114,8 +183,8 @@ function NewOrderCard({order, colors}) {
             <CircleUserRound size={15} color={colors.textSecondary} strokeWidth={1.8} />
           </View>
           <View>
-            <Text style={[nc.metaLabel, {color: colors.textSecondary}]}>اللوحة</Text>
-            <Text style={[nc.metaValue, {color: colors.textPrimary}]}>{order.car.plateNumber}</Text>
+            <Text style={[nc.metaLabel, {color: colors.textSecondary}]}>{t('orderMap.customer')}</Text>
+            <Text style={[nc.metaValue, {color: colors.textPrimary}]}>{clientName}</Text>
           </View>
         </View>
         <View style={nc.metaItem}>
@@ -123,13 +192,13 @@ function NewOrderCard({order, colors}) {
             <Car size={15} color={colors.primary} strokeWidth={1.8} />
           </View>
           <View>
-            <Text style={[nc.metaLabel, {color: colors.textSecondary}]}>نوع السيارة</Text>
-            <Text style={[nc.metaValue, {color: colors.textPrimary}]}>{order.car.brand} {order.car.model}</Text>
+            <Text style={[nc.metaLabel, {color: colors.textSecondary}]}>{t('orders.fields.carType')}</Text>
+            <Text style={[nc.metaValue, {color: colors.textPrimary}]}>{brand} {model}{plate ? ` | ${plate}` : ''}</Text>
           </View>
         </View>
       </View>
       <TouchableOpacity style={[nc.btn, {backgroundColor: colors.primary}]} activeOpacity={0.85}>
-        <Text style={nc.btnText}>بدء الغسيل</Text>
+        <Text style={nc.btnText}>{t('orderDetails.actions.ASSIGNED')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -139,9 +208,19 @@ function NewOrderCard({order, colors}) {
 export default function HomeScreen() {
   const {colors, isDark} = useTheme();
   const {t} = useI18n();
+  const user = useAuthStore(s => s.user);
+
+  const [loading, setLoading]             = useState(true);
   const [active, setActive]               = useState(false);
+  const [dutyLoading, setDutyLoading]     = useState(false);
   const [refreshing, setRefreshing]       = useState(false);
   const [showNotifications, setShowNotif] = useState(false);
+  const [orders, setOrders]               = useState([]);
+  const [profile, setProfile]             = useState(null);
+  const [stats, setStats]                 = useState({weeklyEarnings: 0, ordersCount: 0, rating: 0});
+  const [branches, setBranches]           = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState(null);
+  const [unreadCount, setUnreadCount]     = useState(0);
 
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerY       = useRef(new Animated.Value(-20)).current;
@@ -153,15 +232,107 @@ export default function HomeScreen() {
     ]).start();
   }, [headerOpacity, headerY]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+  const selectedBranchRef = useRef(null);
+
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const [profileRes, ordersRes, statsRes, branchesRes, notifRes] = await Promise.all([
+      getBikerProfile(),
+      getOrders({filter: 'active', limit: 10}),
+      getHomeStats(),
+      getBranches(),
+      getNotifications({page: 1, limit: 1}),
+    ]);
+
+    if (profileRes.success) {
+      const p = profileRes.data?.data ?? profileRes.data ?? {};
+      setProfile(p);
+      setActive(p.isActive ?? p.isOnDuty ?? false);
+    }
+
+    if (ordersRes.success) {
+      const data = ordersRes.data?.data ?? ordersRes.data ?? [];
+      setOrders(Array.isArray(data) ? data : []);
+    }
+
+    if (statsRes.success) {
+      const d = statsRes.data?.data ?? statsRes.data ?? {};
+      setStats({
+        weeklyEarnings: d.weeklyEarnings ?? 0,
+        ordersCount:    d.ordersCount    ?? 0,
+        rating:         d.rating         ?? 0,
+      });
+    }
+
+    if (branchesRes.success) {
+      const list = branchesRes.data?.data ?? branchesRes.data ?? [];
+      setBranches(Array.isArray(list) ? list : []);
+      if (list.length > 0 && !selectedBranchRef.current) {
+        selectedBranchRef.current = list[0]._id;
+        setSelectedBranch(list[0]._id);
+      }
+    }
+
+    if (notifRes.success) {
+      setUnreadCount(
+        notifRes.data?.unreadCount ??
+        notifRes.data?.total ??
+        notifRes.data?.pagination?.total ?? 0,
+      );
+    }
+    setLoading(false);
   }, []);
 
-  const renderOrder = useCallback(({item}) => <NewOrderCard order={item} colors={colors} />, [colors]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData(true);
+    setRefreshing(false);
+  }, [fetchData]);
+
+  const handleToggleDuty = useCallback(async () => {
+    setDutyLoading(true);
+    const res = await setDutyStatus(!active);
+    if (res.success) {
+      const profileRes = await getBikerProfile();
+      if (profileRes.success && profileRes.data?.data) {
+        const p = profileRes.data.data;
+        setProfile(p);
+        setActive(p.isActive ?? p.isOnDuty ?? active);
+      }
+    }
+    setDutyLoading(false);
+  }, [active]);
+
+  const renderOrder = useCallback(({item}) => <NewOrderCard order={item} colors={colors} t={t} />, [colors, t]);
+
+  const displayName = profile
+    ? (profile.name ?? `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim())
+    : (user?.name ?? '');
+
+  const avatarLetter   = displayName.charAt(0) || '؟';
+  const weeklyEarnings = stats.weeklyEarnings;
+  const ordersCount    = stats.ordersCount;
+  const rating         = stats.rating;
+
+  const handleCloseNotifications = useCallback(() => {
+    setShowNotif(false);
+    getNotifications({page: 1, limit: 1}).then(res => {
+      if (res.success) {
+        setUnreadCount(
+          res.data?.unreadCount ??
+          res.data?.total ??
+          res.data?.pagination?.total ?? 0,
+        );
+      }
+    }).catch(() => {});
+  }, []);
 
   if (showNotifications) {
-    return <NotificationsScreen onBack={() => setShowNotif(false)} />;
+    return <NotificationsScreen onBack={handleCloseNotifications} />;
   }
 
   return (
@@ -171,22 +342,45 @@ export default function HomeScreen() {
       <Animated.View style={[s.header, {backgroundColor: colors.bg, opacity: headerOpacity, transform: [{translateY: headerY}]}]}>
         <View style={s.avatarBox}>
           <View style={[s.avatar, {backgroundColor: colors.primary}]}>
-            <Text style={s.avatarText}>{MOCK_USER.firstName.charAt(0)}</Text>
+            <Text style={s.avatarText}>{avatarLetter}</Text>
           </View>
-          <Text style={[s.userName, {color: colors.textPrimary}]}>{MOCK_USER.firstName} {MOCK_USER.lastName}</Text>
+          <Text style={[s.userName, {color: colors.textPrimary}]}>{displayName}</Text>
         </View>
         <TouchableOpacity style={[s.notifBtn, {backgroundColor: colors.card}]} onPress={() => setShowNotif(true)} activeOpacity={0.7}>
           <Bell size={20} color={colors.textSecondary} strokeWidth={1.8} />
+          {unreadCount > 0 && (
+            <View style={[s.badge, {backgroundColor: colors.error ?? '#EF4444'}]}>
+              <Text style={s.badgeText}>{unreadCount > 99 ? '99+' : `${unreadCount}`}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </Animated.View>
 
+      {loading ? (
+        <View style={s.skeletonRoot}>
+          <View style={[s.skeletonCircle, {backgroundColor: colors.card}]} />
+          <View style={[s.skeletonPill,   {backgroundColor: colors.card}]} />
+          <View style={s.statsRow}>
+            {[0,1,2].map(i => (
+              <View key={i} style={[st.wrap, {backgroundColor: colors.card, flex: 1}]}>
+                <View style={[s.skeletonIconBox, {backgroundColor: colors.border}]} />
+                <View style={[s.skeletonLine, {width: 40, backgroundColor: colors.border}]} />
+                <View style={[s.skeletonLine, {width: 60, backgroundColor: colors.border}]} />
+              </View>
+            ))}
+          </View>
+          <View style={[s.skeletonCard, {backgroundColor: colors.card, borderColor: colors.border}]} />
+          <View style={[s.skeletonCard, {backgroundColor: colors.card, borderColor: colors.border}]} />
+          <ActivityIndicator size="small" color={colors.primary} style={{marginTop: 8}} />
+        </View>
+      ) : (
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}>
 
-        <ServiceButton active={active} onToggle={() => setActive(v => !v)} colors={colors} t={t} />
+        <ServiceButton active={active} onToggle={handleToggleDuty} loading={dutyLoading} colors={colors} t={t} />
 
         <View style={[s.statusPill, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={[s.statusDot, {backgroundColor: active ? colors.success : colors.textSecondary}]} />
@@ -202,33 +396,47 @@ export default function HomeScreen() {
           <StatItem
             IconComponent={DollarSign}
             iconBg={colors.success + '20'} iconColor={colors.success}
-            label={t('home.earnings')} value={`${MOCK_USER.wallet.weeklyEarnings}`} unit="﷼"
+            label={t('home.earnings')} value={`${weeklyEarnings}`} unit="﷼"
             delay={200} colors={colors}
           />
           <StatItem
             IconComponent={Droplets}
             iconBg={colors.primary + '18'} iconColor={colors.primary}
-            label={t('home.ordersCount')} value={`${MOCK_ORDERS.length}`}
+            label={t('home.orders')} value={`${ordersCount}`}
             delay={300} colors={colors}
           />
           <StatItem
             IconComponent={Star}
             iconBg="#F59E0B20" iconColor="#F59E0B"
-            label={t('home.rating')} value={`${MOCK_USER.rating}`}
+            label={t('home.rating')} value={rating ? rating.toFixed(1) : '0.0'}
             delay={400} colors={colors}
           />
         </View>
 
-        {active && MOCK_ORDERS.length > 0 && (
+
+        {/* Branch Selector */}
+        {branches.length > 0 && (
+          <View style={[s.branchSection, {paddingHorizontal: 20}]}>
+            <BranchPicker
+              branches={branches}
+              selectedId={selectedBranch}
+              onSelect={id => { selectedBranchRef.current = id; setSelectedBranch(id); }}
+              colors={colors}
+              t={t}
+            />
+          </View>
+        )}
+
+        {active && orders.length > 0 && (
           <View style={s.section}>
             <View style={s.sectionHeader}>
               <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('home.newOrder')}</Text>
               <TouchableOpacity activeOpacity={0.7}>
-                <Text style={[s.seeAll, {color: colors.primary}]}>{t('home.seeAll')}</Text>
+                <Text style={[s.seeAll, {color: colors.primary}]}>{t('home.viewAll')}</Text>
               </TouchableOpacity>
             </View>
             <FlatList
-              data={MOCK_ORDERS}
+              data={orders}
               keyExtractor={i => i._id}
               renderItem={renderOrder}
               showsVerticalScrollIndicator={false}
@@ -247,6 +455,7 @@ export default function HomeScreen() {
 
         <View style={{height: 24}} />
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -263,13 +472,25 @@ const s = StyleSheet.create({
   avatarText:    {color: '#fff', fontSize: 16, fontWeight: '800'},
   userName:      {fontSize: 16, fontWeight: '700'},
   notifBtn:      {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: {width: 0, height: 2}, shadowOpacity: 0.08, elevation: 3},
+  badge:         {position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3},
+  badgeText:     {color: '#fff', fontSize: 9, fontWeight: '800'},
   scroll:        {flex: 1},
   scrollContent: {paddingBottom: 16, alignItems: 'center'},
   statusPill:    {flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 30, paddingHorizontal: 18, paddingVertical: 9, marginTop: 16},
   statusDot:     {width: 7, height: 7, borderRadius: 3.5},
   statusPillText:{fontSize: 13, fontWeight: '500'},
   statusHint:    {fontSize: 12, textAlign: 'center', marginTop: 10, marginBottom: 22, paddingHorizontal: 28, lineHeight: 19},
-  statsRow:      {flexDirection: 'row', gap: 10, marginBottom: 24, paddingHorizontal: 20, width: '100%'},
+  statsRow:      {flexDirection: 'row', gap: 10, marginBottom: 20, paddingHorizontal: 20, width: '100%'},
+  walletCard:    {marginHorizontal: 20, marginBottom: 16, borderRadius: 20, padding: 18, borderWidth: 1, width: '100%', gap: 8, alignSelf: 'stretch'},
+  walletTop:     {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
+  walletLabel:   {fontSize: 12, fontWeight: '500'},
+  walletCurrency:{fontSize: 12, fontWeight: '600'},
+  walletAmount:  {fontSize: 28, fontWeight: '900'},
+  walletDivider: {height: 1},
+  walletRow:     {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
+  walletSubLabel:{fontSize: 12},
+  walletSubValue:{fontSize: 14, fontWeight: '700'},
+  branchSection: {width: '100%', marginBottom: 20},
   section:       {width: '100%', paddingHorizontal: 20, marginBottom: 16},
   sectionHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12},
   sectionTitle:  {fontSize: 17, fontWeight: '700'},
@@ -278,6 +499,12 @@ const s = StyleSheet.create({
   offlineCard:   {marginHorizontal: 20, marginTop: 8, borderRadius: 20, padding: 28, alignItems: 'center', gap: 6, borderWidth: 1},
   offlineTitle:  {fontSize: 16, fontWeight: '700'},
   offlineSub:    {fontSize: 13, textAlign: 'center'},
+  skeletonRoot:  {flex: 1, alignItems: 'center', paddingTop: 32, paddingHorizontal: 20},
+  skeletonCircle:{width: 190, height: 190, borderRadius: 95, marginBottom: 20},
+  skeletonPill:  {width: 140, height: 34, borderRadius: 30, marginBottom: 22},
+  skeletonIconBox:{width: 40, height: 40, borderRadius: 20, marginBottom: 8},
+  skeletonLine:  {height: 12, borderRadius: 6, marginBottom: 6},
+  skeletonCard:  {width: '100%', height: 120, borderRadius: 18, borderWidth: 1, marginBottom: 12},
 });
 
 const sb = StyleSheet.create({
@@ -298,18 +525,30 @@ const st = StyleSheet.create({
   label:    {fontSize: 11, fontWeight: '500'},
 });
 
+const bp = StyleSheet.create({
+  trigger:     {flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12},
+  triggerText: {flex: 1, fontSize: 14, fontWeight: '600'},
+  overlay:     {flex: 1, backgroundColor: 'rgba(0,0,0,0.4)'},
+  sheet:       {borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '60%'},
+  handle:      {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16},
+  sheetTitle:  {fontSize: 17, fontWeight: '700', marginBottom: 12},
+  row:         {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1},
+  rowText:     {fontSize: 15},
+  empty:       {textAlign: 'center', paddingTop: 24, fontSize: 14},
+});
+
 const nc = StyleSheet.create({
   card:        {borderRadius: 18, padding: 16, borderWidth: 1, shadowColor: '#000', shadowOffset: {width: 0, height: 3}, shadowOpacity: 0.07, elevation: 3, gap: 12},
   topRow:      {flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between'},
-  serviceName: {fontSize: 16, fontWeight: '700', textAlign: 'right', flex: 1, paddingLeft: 8},
+  serviceName: {fontSize: 16, fontWeight: '700', flex: 1, paddingLeft: 8},
   addrRow:     {flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5},
-  addr:        {fontSize: 12, textAlign: 'right'},
+  addr:        {fontSize: 12},
   divider:     {height: 1},
   metaRow:     {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
   metaItem:    {flexDirection: 'row', alignItems: 'center', gap: 8},
   metaIconBox: {width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center'},
-  metaLabel:   {fontSize: 10, textAlign: 'right'},
-  metaValue:   {fontSize: 13, fontWeight: '700', textAlign: 'right'},
+  metaLabel:   {fontSize: 10},
+  metaValue:   {fontSize: 13, fontWeight: '700'},
   btn:         {borderRadius: 14, paddingVertical: 15, alignItems: 'center', justifyContent: 'center'},
   btnText:     {color: '#fff', fontSize: 15, fontWeight: '700'},
 });

@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from './App';
 import {name as appName} from './app.json';
 
-const CHANNEL_ID = 'incoming_orders_v5';
+const CHANNEL_ID = 'incoming_orders_v6';
 
 async function displayOrderNotification(order) {
   await notifee.createChannel({
@@ -26,13 +26,14 @@ async function displayOrderNotification(order) {
     importance: AndroidImportance.HIGH,
     visibility: AndroidVisibility.PUBLIC,
     vibration: true,
-    vibrationPattern: [0, 600, 400, 600],
+    vibrationPattern: [600, 400, 600, 400],
     sound: 'incoming_order',
     bypassDnd: true,
   });
 
+  // Use id _0 first — FirebaseContext will take over looping when app opens
   await notifee.displayNotification({
-    id: 'incoming_order',
+    id: 'incoming_order_0',
     title: '🚗 طلب جديد وارد!',
     body: `${order?.service ?? order?.customerName ?? 'خدمة غسيل'} — ${order?.location ?? ''}`,
     android: {
@@ -41,7 +42,7 @@ async function displayOrderNotification(order) {
       visibility: AndroidVisibility.PUBLIC,
       category: AndroidCategory.CALL,
       sound: 'incoming_order',
-      vibrationPattern: [0, 600, 400, 600],
+      vibrationPattern: [600, 400, 600, 400],
       ongoing: true,
       autoCancel: false,
       lightUpScreen: true,

@@ -1,4 +1,8 @@
 {
+  "common": {
+    "retry": "पुनः प्रयास",
+    "offlineContent": "सामग्री अपडेट नहीं हो सकी, कैश्ड संस्करण दिखाया जा रहा है।"
+  },
   "nav": {
     "home": "होम",
     "orders": "ऑर्डर",
@@ -36,8 +40,10 @@
         "ON_THE_WAY": "रास्ते में",
         "STARTED": "शुरू",
         "COMPLETED": "पूर्ण",
-        "CANCELLED": "रद्द"
-      }
+        "CANCELLED": "रद्द",
+        "REJECTED": "अस्वीकृत"
+      },
+      "onshop": "साइट पर"
     },
     "orderDetails": {
       "title": "ऑर्डर विवरण",
@@ -355,14 +361,19 @@
     "offlineSub": "ऑर्डर प्राप्त करना शुरू करने के लिए ऊपर दिए बटन को दबाएं",
     "plate": "नंबर प्लेट",
     "carType": "कार का प्रकार",
-    "startWash": "वॉश शुरू करें"
+    "startWash": "वॉश शुरू करें",
+    "walletBalance": "आपकी शेष राशि",
+    "weeklyEarnings": "इस सप्ताह की कमाई",
+    "selectBranch": "अपनी शाखा चुनें",
+    "noBranches": "कोई शाखा उपलब्ध नहीं"
   },
   "notifications": {
     "title": "सूचनाएं",
     "today": "आज",
     "cancelledOrder": "निर्धारित ऑर्डर रद्द",
     "newReview": "नई समीक्षा!",
-    "completedWash": "कार वॉश पूरा हुआ"
+    "completedWash": "कार वॉश पूरा हुआ",
+    "empty": "अभी तक कोई सूचना नहीं"
   },
   "orders": {
     "title": "ऑर्डर",
@@ -440,7 +451,14 @@
     "title": "ऑर्डर स्थान",
     "customer": "ग्राहक",
     "service": "सेवा",
-    "time": "समय"
+    "time": "समय",
+    "call": "कॉल करें",
+    "whatsapp": "WhatsApp",
+    "navigate": "नेविगेशन शुरू करें",
+    "mapUnavailable": "मानचित्र उपलब्ध नहीं",
+    "webviewNotInstalled": "लाइब्रेरी इंस्टॉल नहीं है",
+    "mapLoading": "मानचित्र लोड हो रहा है...",
+    "mapError": "मानचित्र लोड करने में विफल"
   },
   "reviews": {
     "title": "समीक्षाएं",
@@ -472,16 +490,25 @@
     "title": "व्यक्तिगत जानकारी",
     "myInfo": "मेरी जानकारी",
     "name": "नाम",
+    "firstName": "पहला नाम",
+    "lastName": "उपनाम",
     "phone": "फ़ोन नंबर",
     "email": "ईमेल",
     "dob": "जन्म तिथि",
     "workArea": "कार्य क्षेत्र",
-    "edit": "संपादित करें"
+    "edit": "संपादित करें",
+    "save": "बदलाव सहेजें",
+    "changePhoto": "फ़ोटो बदलें",
+    "takePhoto": "फ़ोटो लें",
+    "chooseGallery": "गैलरी से चुनें",
+    "tapToChange": "फ़ोटो बदलने के लिए टैप करें",
+    "uploadFailed": "फ़ोटो अपलोड विफल, पुनः प्रयास करें"
   },
   "wallet": {
     "title": "मेरा वॉलेट",
     "balance": "वर्तमान शेष:",
-    "today": "आज"
+    "today": "आज",
+    "noTransactions": "अभी तक कोई लेनदेन नहीं"
   },
   "language": {
     "title": "भाषा",
@@ -497,7 +524,10 @@
   "support": {
     "title": "सहायता",
     "placeholder": "यहां अपना संदेश लिखें...",
-    "send": "भेजें"
+    "send": "भेजें",
+    "sentTitle": "सफलतापूर्वक भेजा गया",
+    "sentSub": "हमारी सहायता टीम जल्द आपसे संपर्क करेगी",
+    "sendAnother": "एक और संदेश भेजें"
   },
   "terms": {
     "title": "नियम एवं शर्तें",

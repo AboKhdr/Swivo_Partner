@@ -1,8 +1,9 @@
-import React, {useCallback, useState} from 'react';
-import {FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {Search} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import {getOrders} from '../../../services/partner';
 
 const STATUS_COLORS = {
   PENDING_PARTNER: '#F59E0B',
@@ -15,27 +16,42 @@ const STATUS_COLORS = {
   CANCELLED:       '#EF4444',
 };
 
-const MOCK_ORDERS = [
-  {id: '1', customerName: 'أحمد محمد',    service: 'غسيل خارجي', status: 'PENDING_PARTNER', time: '10:30', price: '80',  plate: 'ABC 1234', biker: null,         type: 'mobile'},
-  {id: '2', customerName: 'سارة العمري',  service: 'غسيل كامل',  status: 'ON_THE_WAY',      time: '10:15', price: '150', plate: 'XYZ 5678', biker: 'محمد علي',   type: 'mobile'},
-  {id: '3', customerName: 'خالد الغامدي', service: 'تلميع',       status: 'COMPLETED',       time: '09:00', price: '200', plate: 'DEF 9012', biker: 'أنس كريم',   type: 'mobile'},
-  {id: '4', customerName: 'منى السعيد',   service: 'غسيل داخلي', status: 'STARTED',         time: '10:00', price: '120', plate: 'GHI 3456', biker: 'محمد علي',   type: 'onshop'},
-  {id: '5', customerName: 'فيصل الحربي',  service: 'غسيل خارجي', status: 'ASSIGNED',        time: '09:45', price: '80',  plate: 'JKL 7890', biker: 'أنس كريم',   type: 'mobile'},
-  {id: '6', customerName: 'ريم الدوسري',  service: 'غسيل كامل',  status: 'ACCEPTED',        time: '09:30', price: '150', plate: 'MNO 1234', biker: null,         type: 'onshop'},
-  {id: '7', customerName: 'تركي المطيري', service: 'غسيل خارجي', status: 'PENDING_PARTNER', time: '11:00', price: '80',  plate: 'PQR 4567', biker: null,         type: 'onshop'},
-];
-
 function OrderCard({item, colors, t, onPress}) {
-  const color = STATUS_COLORS[item.status] || '#64748B';
-  const statusLabel = t(`partner.orders.status.${item.status}`) || item.status;
+  const color        = STATUS_COLORS[item.status] ?? '#64748B';
+  const statusLabel  = t(`partner.orders.status.${item.status}`);
+  const orderNumber  = item.orderNumber ?? item._id ?? '';
+  const isOnshop     = (item.orderType ?? item.type ?? '').toUpperCase() === 'IN_SHOP'
+    || (item.orderType ?? item.type ?? '') === 'onshop';
+  const serviceName  =
+    item.itemsSnapshot?.[0]?.nameSnapshot?.ar
+    ?? item.itemsSnapshot?.[0]?.nameSnapshot?.en
+    ?? item.items?.[0]?.service?.name?.ar
+    ?? item.items?.[0]?.service?.name?.en
+    ?? item.items?.[0]?.name?.ar
+    ?? item.items?.[0]?.name?.en
+    ?? item.service?.name?.ar
+    ?? item.service?.name?.en
+    ?? (typeof item.service?.name === 'string' ? item.service.name : '')
+    ?? '';
+  const branchName   = item.branch?.name?.ar ?? item.branch?.name?.en ?? (typeof item.branch?.name === 'string' ? item.branch.name : '') ?? '';
+  const location     = item.addressSnapshot?.addressText
+    ?? item.addressSnapshot?.district
+    ?? branchName;
+  const price        = item.tenantNetSnapshot ?? item.totalAmount ?? '';
+  const scheduledAt  = item.scheduledAt
+    ? new Date(item.scheduledAt).toLocaleString('ar-SA', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+      })
+    : '';
+
   return (
     <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={s.cardTop}>
         <View style={s.cardIdRow}>
-          <Text style={[s.cardId, {color: colors.primary}]}>#{item.id ? `KF-${item.id.padStart(4, '0')}` : ''}</Text>
-          {item.type === 'onshop' && (
+          <Text style={[s.cardId, {color: colors.primary}]}>#{orderNumber}</Text>
+          {isOnshop && (
             <View style={[s.typePill, {backgroundColor: colors.primary + '18'}]}>
-              <Text style={[s.typePillText, {color: colors.primary}]}>في الموقع</Text>
+              <Text style={[s.typePillText, {color: colors.primary}]}>{t('partner.orders.onshop') || 'في الموقع'}</Text>
             </View>
           )}
         </View>
@@ -44,11 +60,11 @@ function OrderCard({item, colors, t, onPress}) {
         </View>
       </View>
 
-      <Text style={[s.serviceName, {color: colors.textPrimary}]}>{item.service}</Text>
+      <Text style={[s.serviceName, {color: colors.textPrimary}]}>{serviceName}</Text>
 
       <View style={s.cardMeta}>
-        <Text style={[s.metaText, {color: colors.textSecondary}]}>📍 {item.location || 'حي الملقا، الرياض'}</Text>
-        <Text style={[s.metaText, {color: colors.textSecondary}]}>📅 {item.date || `اليوم، ${item.time} - 13 أكتوبر`}</Text>
+        {!!location    && <Text style={[s.metaText, {color: colors.textSecondary}]}>📍 {location}</Text>}
+        {!!scheduledAt && <Text style={[s.metaText, {color: colors.textSecondary}]}>📅 {scheduledAt}</Text>}
       </View>
 
       <View style={[s.cardDivider, {backgroundColor: colors.border}]} />
@@ -56,10 +72,13 @@ function OrderCard({item, colors, t, onPress}) {
       <View style={s.cardBottom}>
         <View style={s.priceCol}>
           <Text style={[s.priceLabel, {color: colors.textSecondary}]}>{t('partner.orders.fullAmount')}</Text>
-          <Text style={[s.priceValue, {color: colors.textPrimary}]}>{item.price}</Text>
+          <Text style={[s.priceValue, {color: colors.textPrimary}]}>{price} {price ? '﷼' : '—'}</Text>
         </View>
-        <TouchableOpacity style={{backgroundColor: colors.primary + '10', borderRadius: 50, paddingHorizontal: 12, paddingVertical: 2}} onPress={() => onPress(item)}>
-          <Text style={[s.badge, {color: colors.primary}]}>{t('partner.orders.viewDetails')}</Text>
+        <TouchableOpacity
+          style={[s.detailsBtn, {backgroundColor: colors.primary + '12'}]}
+          onPress={() => onPress(item)}
+          activeOpacity={0.75}>
+          <Text style={[s.detailsBtnText, {color: colors.primary}]}>{t('partner.orders.viewDetails')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -71,32 +90,67 @@ export default function OrdersScreen({onSelectOrder}) {
   const {t, isRTL} = useI18n();
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch]             = useState('');
+  const [orders, setOrders]             = useState([]);
+  const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
+  const [page, setPage]                 = useState(1);
+  const [hasNext, setHasNext]           = useState(false);
+  const [loadingMore, setLoadingMore]   = useState(false);
 
   const FILTERS = [
     {key: 'all',             label: t('partner.orders.all')},
     {key: 'PENDING_PARTNER', label: t('partner.orders.status.PENDING_PARTNER')},
-    {key: 'COMPLETED',       label: t('partner.orders.status.COMPLETED')},
+    {key: 'ACCEPTED',        label: t('partner.orders.status.ACCEPTED')},
+    {key: 'ASSIGNED',        label: t('partner.orders.status.ASSIGNED')},
+    {key: 'ON_THE_WAY',      label: t('partner.orders.status.ON_THE_WAY')},
     {key: 'STARTED',         label: t('partner.orders.status.STARTED')},
+    {key: 'COMPLETED',       label: t('partner.orders.status.COMPLETED')},
   ];
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+  const fetchOrders = useCallback(async (filter, pageNum, append = false) => {
+    if (!append) setLoading(true);
+    const params = {page: pageNum, limit: 20};
+    if (filter !== 'all') params.status = filter;
+    const res = await getOrders(params);
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setOrders(prev => append ? [...prev, ...list] : list);
+      setHasNext(res.data?.pagination?.hasNextPage ?? false);
+      setPage(pageNum);
+    }
+    if (!append) setLoading(false);
   }, []);
 
-  const filtered = MOCK_ORDERS.filter(o => {
-    const matchFilter = activeFilter === 'all' || o.status === activeFilter;
-    const q = search.trim().toLowerCase();
-    const matchSearch = !q || o.customerName.includes(q) || o.plate.toLowerCase().includes(q);
-    return matchFilter && matchSearch;
-  });
+  useEffect(() => {
+    fetchOrders(activeFilter, 1);
+  }, [activeFilter, fetchOrders]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrders(activeFilter, 1);
+    setRefreshing(false);
+  }, [activeFilter, fetchOrders]);
+
+  const onEndReached = useCallback(() => {
+    if (!hasNext || loadingMore) return;
+    setLoadingMore(true);
+    fetchOrders(activeFilter, page + 1, true).finally(() => setLoadingMore(false));
+  }, [hasNext, loadingMore, activeFilter, page, fetchOrders]);
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? orders.filter(o => {
+        const name = `${o.client?.firstName ?? ''} ${o.client?.lastName ?? ''}`.toLowerCase();
+        const num  = (o.orderNumber ?? o._id ?? '').toLowerCase();
+        return name.includes(q) || num.includes(q);
+      })
+    : orders;
 
   const renderItem = useCallback(({item}) => (
     <OrderCard item={item} colors={colors} t={t} onPress={onSelectOrder || (() => {})} />
   ), [colors, t, onSelectOrder]);
 
-  const keyExtractor = useCallback(item => item.id, []);
+  const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -141,25 +195,39 @@ export default function OrdersScreen({onSelectOrder}) {
         />
       </View>
 
-      <FlatList
-        data={filtered}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        contentContainerStyle={s.list}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-        ListEmptyComponent={
-          <View style={s.empty}>
-            <Text style={[s.emptyText, {color: colors.textSecondary}]}>{t('partner.orders.noOrders')}</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          contentContainerStyle={s.list}
+          showsVerticalScrollIndicator={false}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.3}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Text style={[s.emptyText, {color: colors.textSecondary}]}>{t('partner.orders.noOrders')}</Text>
+            </View>
+          }
+          ListFooterComponent={
+            loadingMore
+              ? <ActivityIndicator size="small" color={colors.primary} style={s.footer} />
+              : null
+          }
+        />
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root:         {flex: 1},
+  center:       {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:       {paddingHorizontal: 16, paddingTop: 56, paddingBottom: 4},
   headerTitle:  {fontSize: 26, fontWeight: '800', marginBottom: 14},
   searchBox:    {flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 50, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 12},
@@ -181,7 +249,8 @@ const s = StyleSheet.create({
   metaText:     {fontSize: 13},
   cardDivider:  {height: 1},
   cardBottom:   {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
-  detailsBtn:   {fontSize: 14, fontWeight: '700'},
+  detailsBtn:   {paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20},
+  footer:       {paddingVertical: 16},
   priceCol:     {gap: 2},
   priceLabel:   {fontSize: 11},
   priceValue:   {fontSize: 24, fontWeight: '800'},

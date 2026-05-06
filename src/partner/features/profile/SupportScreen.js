@@ -6,6 +6,7 @@ import {
 import {ArrowRight, MessageCircle, Phone, Mail, Send} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import {sendSupportMessage} from '../../../services/partner';
 
 const CONTACT_ITEMS = [
   {Icon: Phone, key: 'callUs',  value: '920001234',        color: '#22C55E'},
@@ -19,10 +20,14 @@ export default function SupportScreen({onBack}) {
   const [message, setMessage] = useState('');
   const [sent,    setSent]    = useState(false);
 
+  const [sending, setSending] = useState(false);
   const canSend = subject.trim() && message.trim();
 
-  const handleSend = () => {
-    if (!canSend) return;
+  const handleSend = async () => {
+    if (!canSend || sending) return;
+    setSending(true);
+    await sendSupportMessage(subject.trim(), message.trim());
+    setSending(false);
     setSent(true);
     setSubject('');
     setMessage('');

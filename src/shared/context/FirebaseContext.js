@@ -39,6 +39,7 @@ async function bootstrap(role) {
     const token = await getToken(getMessaging());
     if (!token) return;
     await AsyncStorage.setItem('fcm_token', token);
+    console.log('[FCM Token]', token);
     if (role) await registerFCMToken(token, role).catch(() => {});
   } catch (e) {
     console.log('bootstrap error:', e);

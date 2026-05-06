@@ -1,4 +1,8 @@
 {
+  "common": {
+    "retry": "إعادة المحاولة",
+    "offlineContent": "تعذّر تحديث المحتوى، يتم عرض النسخة المحفوظة."
+  },
   "nav": {
     "home": "الرئيسية",
     "orders": "الطلبات",
@@ -36,8 +40,10 @@
         "ON_THE_WAY": "في الطريق",
         "STARTED": "بدأ",
         "COMPLETED": "مكتمل",
-        "CANCELLED": "ملغي"
-      }
+        "CANCELLED": "ملغي",
+        "REJECTED": "مرفوض"
+      },
+      "onshop": "في الموقع"
     },
     "orderDetails": {
       "title": "تفاصيل الطلب",
@@ -355,14 +361,19 @@
     "offlineSub": "اضغط الزر أعلاه لبدء استقبال الطلبات",
     "plate": "اللوحة",
     "carType": "نوع السيارة",
-    "startWash": "بدء الغسيل"
+    "startWash": "بدء الغسيل",
+    "walletBalance": "رصيدك الحالي",
+    "weeklyEarnings": "أرباح هذا الأسبوع",
+    "selectBranch": "اختر فرعك",
+    "noBranches": "لا توجد فروع متاحة"
   },
   "notifications": {
     "title": "الإشعارات",
     "today": "اليوم",
     "cancelledOrder": "تم الغاء طلب مجدول",
     "newReview": "تقييم جديد!",
-    "completedWash": "تم انهاء غسيل سيارة"
+    "completedWash": "تم انهاء غسيل سيارة",
+    "empty": "لا توجد إشعارات بعد"
   },
   "orders": {
     "title": "الطلبات",
@@ -449,13 +460,27 @@
       "back": "تراجع",
       "yes": "نعم، إلغاء"
     },
-    "backToOrders": "العودة للطلبات"
+    "backToOrders": "العودة للطلبات",
+    "summary": {
+      "title": "ملخص الطلب",
+      "earning": "أرباحك",
+      "beforePhotos": "صور قبل الغسيل",
+      "afterPhotos": "صور بعد الغسيل",
+      "photos": "الصور"
+    }
   },
   "orderMap": {
     "title": "موقع الطلب",
     "customer": "العميل",
     "service": "الخدمة",
-    "time": "الوقت"
+    "time": "الوقت",
+    "call": "اتصال",
+    "whatsapp": "واتساب",
+    "navigate": "ابدأ الملاحة",
+    "mapUnavailable": "الخريطة غير متاحة",
+    "webviewNotInstalled": "المكتبة غير مثبتة",
+    "mapLoading": "جارٍ تحميل الخريطة...",
+    "mapError": "تعذّر تحميل الخريطة"
   },
   "reviews": {
     "title": "التقييمات",
@@ -487,16 +512,25 @@
     "title": "المعلومات الشخصية",
     "myInfo": "معلوماتي",
     "name": "الاسم",
+    "firstName": "الاسم الأول",
+    "lastName": "اسم العائلة",
     "phone": "رقم الهاتف",
-    "email": "البريد الالكتروني",
+    "email": "البريد الإلكتروني",
     "dob": "تاريخ الميلاد",
     "workArea": "منطقة عملي",
-    "edit": "تعديل"
+    "edit": "تعديل",
+    "save": "حفظ التغييرات",
+    "changePhoto": "تغيير الصورة",
+    "takePhoto": "التقاط صورة",
+    "chooseGallery": "اختر من المعرض",
+    "tapToChange": "اضغط لتغيير الصورة",
+    "uploadFailed": "فشل رفع الصورة، حاول مرة أخرى"
   },
   "wallet": {
     "title": "محفظتي",
     "balance": "رصيد الحالي:",
-    "today": "اليوم"
+    "today": "اليوم",
+    "noTransactions": "لا توجد معاملات بعد"
   },
   "language": {
     "title": "اللغة",
@@ -512,7 +546,10 @@
   "support": {
     "title": "قسم الدعم",
     "placeholder": "اكتب رسالتك هنا...",
-    "send": "إرسال"
+    "send": "إرسال",
+    "sentTitle": "تم الإرسال بنجاح",
+    "sentSub": "سيتواصل معك فريق الدعم قريباً",
+    "sendAnother": "إرسال رسالة أخرى"
   },
   "terms": {
     "title": "الشروط والأحكام",

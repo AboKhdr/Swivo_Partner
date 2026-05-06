@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
 import {ArrowRight, MapPin, Navigation, Plus, Trash2, Clock, ChevronUp, ChevronDown} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import DeleteConfirmModal from '../../../shared/components/DeleteConfirmModal';
+import {updateBranch} from '../../../services/partner';
 
 // ─── Time stepper (hour + minute with +/- buttons) ───────────────────────────
 function TimeStepper({value, onChange, colors}) {
@@ -155,13 +157,15 @@ function DaySlotsModal({visible, day, slots, onAddSlot, onUpdateSlot, onDeleteSl
 }
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
-export default function EditBranchScreen({branch, onBack}) {
+export default function EditBranchScreen({branch, onBack, onSaved}) {
   const {colors} = useTheme();
 
-  const [branchName, setBranchName] = useState(branch?.nameAr || 'مغسلة فينيسيوس - فرع شارع الياسمين');
-  const [isMain,     setIsMain]     = useState(branch?.isMain ?? true);
+  const branchId = branch?._id ?? branch?.id;
+  const [branchName, setBranchName] = useState(branch?.name?.ar ?? branch?.nameAr ?? '');
+  const [isMain,     setIsMain]     = useState(branch?.isMain ?? false);
   const [showDelete, setShowDelete] = useState(false);
   const [editingDay, setEditingDay] = useState(null);
+  const [saving,     setSaving]     = useState(false);
 
   const [days, setDays] = useState(() =>
     DAYS.reduce((acc, d) => {
@@ -306,8 +310,31 @@ export default function EditBranchScreen({branch, onBack}) {
         </View>
 
         <View style={s.footer}>
-          <TouchableOpacity style={[s.saveBtn, {backgroundColor: colors.primary}]} activeOpacity={0.85}>
-            <Text style={s.saveTxt}>حفظ</Text>
+          <TouchableOpacity
+            style={[s.saveBtn, {backgroundColor: colors.primary}]}
+            activeOpacity={0.85}
+            disabled={saving}
+            onPress={async () => {
+              if (saving || !branchId) return;
+              setSaving(true);
+              const workingHours = DAYS.map(d => ({
+                day: d.key,
+                isClosed: !days[d.key].enabled,
+                open:  days[d.key].slots[0]?.from ?? '09:00',
+                close: days[d.key].slots[0]?.to   ?? '22:00',
+              }));
+              await updateBranch(branchId, {
+                name: {ar: branchName.trim(), en: branchName.trim()},
+                workingHours,
+              });
+              setSaving(false);
+              onSaved?.();
+              onBack();
+            }}>
+            {saving
+              ? <ActivityIndicator color="#FFF" />
+              : <Text style={s.saveTxt}>حفظ</Text>
+            }
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.deleteBtn, {backgroundColor: '#FEE2E2', borderColor: '#FCA5A5'}]}

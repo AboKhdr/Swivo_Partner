@@ -52,7 +52,7 @@ export default function LoginScreen({onLogin, onGuest}) {
     }
     setError(null);
     setIsLoading(true);
-    const res = await login(`+966${phone.trim()}`);
+    const res = await login({phone: `${phone.trim()}`, prefix : '966'});
     setIsLoading(false);
     if (res.success) {
       setShowOtp(true);
@@ -68,7 +68,8 @@ export default function LoginScreen({onLogin, onGuest}) {
   if (showOtp) {
     return (
       <OtpScreen
-        phone={`+966 ${phone}`}
+        phone={`${phone}`}
+        prefix={`966`}
         onVerified={onLogin}
         onBack={() => setShowOtp(false)}
       />

@@ -1,5 +1,6 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,18 +12,9 @@ import {
 } from 'react-native';
 import {ArrowRight, ChevronDown, Check, Minus, Plus} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
+import {getServices, createPackage, updatePackage} from '../../../services/partner';
 
-const ALL_SERVICES = [
-  {id: 's1', nameAr: 'غسلة سريعة'},
-  {id: 's2', nameAr: 'غسلة متقدمة'},
-  {id: 's3', nameAr: 'غسيل داخلي'},
-  {id: 's4', nameAr: 'تلميع خارجي'},
-  {id: 's5', nameAr: 'تعقيم'},
-  {id: 's6', nameAr: 'غيار زيت'},
-  {id: 's7', nameAr: 'بوليش'},
-];
-
-function ServicesModal({visible, selected, onToggle, onClose, colors}) {
+function ServicesModal({visible, allServices, selected, onToggle, onClose, colors}) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -32,23 +24,25 @@ function ServicesModal({visible, selected, onToggle, onClose, colors}) {
         <View style={[ms.card, {backgroundColor: colors.card}]}>
           <Text style={[ms.title, {color: colors.textPrimary}]}>الخدمات ضمن الباقة</Text>
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-            {ALL_SERVICES.map((srv, i) => {
-              const active = selected.includes(srv.id);
+            {allServices.map((srv, i) => {
+              const id     = srv._id ?? srv.id;
+              const nameAr = srv.name?.ar ?? srv.name?.en ?? '';
+              const active = selected.includes(id);
               return (
-                <View key={srv.id}>
+                <View key={id}>
                   <TouchableOpacity
                     style={ms.row}
-                    onPress={() => onToggle(srv.id)}
+                    onPress={() => onToggle(id)}
                     activeOpacity={0.75}>
                     <Text style={[ms.rowTxt, {
                       color:      active ? colors.primary : colors.textPrimary,
                       fontWeight: active ? '700' : '500',
                     }]}>
-                      {srv.nameAr}
+                      {nameAr}
                     </Text>
                     {active && <Check size={16} color={colors.primary} />}
                   </TouchableOpacity>
-                  {i < ALL_SERVICES.length - 1 && (
+                  {i < allServices.length - 1 && (
                     <View style={[ms.sep, {backgroundColor: colors.border}]} />
                   )}
                 </View>
@@ -68,17 +62,15 @@ function ServicesModal({visible, selected, onToggle, onClose, colors}) {
 }
 
 function ServiceStepper({service, count, onIncrement, onDecrement, onRemove, colors}) {
+  const nameAr = service.name?.ar ?? service.name?.en ?? '';
   return (
     <View style={[ss.row, {backgroundColor: colors.card}]}>
-      {/* Service name + remove */}
       <View style={ss.nameWrap}>
-        <Text style={[ss.name, {color: colors.textPrimary}]}>{service.nameAr}</Text>
+        <Text style={[ss.name, {color: colors.textPrimary}]}>{nameAr}</Text>
         <TouchableOpacity onPress={onRemove} hitSlop={8} activeOpacity={0.7}>
           <Text style={[ss.remove, {color: colors.danger ?? '#EF4444'}]}>إزالة</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Stepper */}
       <View style={[ss.stepper, {borderColor: colors.border}]}>
         <TouchableOpacity
           style={[ss.stepBtn, {backgroundColor: colors.bg}]}
@@ -108,14 +100,32 @@ const ss = StyleSheet.create({
   stepVal:  {flex: 1, fontSize: 16, fontWeight: '800', textAlign: 'center'},
 });
 
-export default function AddPackageScreen({onBack, onSave, initialData}) {
+export default function AddPackageScreen({onBack, onSaved, initialData}) {
   const {colors} = useTheme();
-  const isEdit = !!initialData;
+  const isEdit = !!initialData?._id;
 
-  const [name,             setName]             = useState(initialData?.nameAr     ?? '');
-  const [selectedServices, setSelectedServices] = useState(initialData?.serviceIds ?? []);
-  const [counts,           setCounts]           = useState(initialData?.counts     ?? {});
+  const [nameAr,           setNameAr]           = useState(initialData?.name?.ar ?? '');
+  const [nameEn,           setNameEn]           = useState(initialData?.name?.en ?? '');
+  const [selectedServices, setSelectedServices]  = useState(() => {
+    if (initialData?.services) return initialData.services.map(s => s._id ?? s.id ?? s);
+    if (initialData?.serviceIds) return initialData.serviceIds;
+    return [];
+  });
+  const [counts,           setCounts]           = useState({});
   const [showServices,     setShowServices]     = useState(false);
+  const [allServices,      setAllServices]      = useState([]);
+  const [loadingSvcs,      setLoadingSvcs]      = useState(true);
+  const [saving,           setSaving]           = useState(false);
+
+  useEffect(() => {
+    getServices().then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setAllServices(Array.isArray(list) ? list : []);
+      }
+      setLoadingSvcs(false);
+    });
+  }, []);
 
   const toggleService = id => {
     setSelectedServices(prev => {
@@ -132,23 +142,33 @@ export default function AddPackageScreen({onBack, onSave, initialData}) {
   const setCount = (id, val) =>
     setCounts(prev => ({...prev, [id]: Math.max(1, val)}));
 
-  const selectedServiceObjs = ALL_SERVICES.filter(s => selectedServices.includes(s.id));
+  const selectedServiceObjs = allServices.filter(s => selectedServices.includes(s._id ?? s.id));
 
   const summaryTxt = selectedServiceObjs.length > 0
-    ? selectedServiceObjs.map(s => `${counts[s.id] ?? 1}× ${s.nameAr}`).join(' ، ')
+    ? selectedServiceObjs.map(s => `${counts[s._id ?? s.id] ?? 1}× ${s.name?.ar ?? ''}`).join(' ، ')
     : '—';
 
-  const canSave = name.trim() && selectedServices.length > 0;
+  const canSave = nameAr.trim() && selectedServices.length > 0;
 
-  const handleSave = () => {
-    if (!canSave) return;
-    onSave?.({name, serviceIds: selectedServices, counts});
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    const payload = {
+      name:       {ar: nameAr.trim(), en: nameEn.trim() || nameAr.trim()},
+      serviceIds: selectedServices,
+    };
+    if (isEdit) {
+      await updatePackage(initialData._id, payload);
+    } else {
+      await createPackage(payload);
+    }
+    setSaving(false);
+    onSaved?.();
     onBack();
   };
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
-      {/* Header */}
       <View style={[s.header, {backgroundColor: colors.bg}]}>
         <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
           <ArrowRight size={22} color={colors.textPrimary} />
@@ -161,67 +181,81 @@ export default function AddPackageScreen({onBack, onSave, initialData}) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* Summary */}
         <View style={[s.summaryCard, {backgroundColor: colors.card}]}>
           <Text style={[s.summaryLabel, {color: colors.textSecondary}]}>ملخص الباقة</Text>
           <Text style={[s.summaryTxt, {color: colors.primary}]}>{summaryTxt}</Text>
         </View>
 
-        {/* Package name */}
-        <Text style={[s.label, {color: colors.textPrimary}]}>اسم الباقة</Text>
+        <Text style={[s.label, {color: colors.textPrimary}]}>اسم الباقة (عربي)</Text>
         <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <TextInput
             style={[s.input, {color: colors.textPrimary}]}
             placeholder="مثال: باقة شهرية"
             placeholderTextColor={colors.textSecondary}
-            value={name}
-            onChangeText={setName}
+            value={nameAr}
+            onChangeText={setNameAr}
           />
         </View>
 
-        {/* Services picker trigger */}
+        <Text style={[s.label, {color: colors.textPrimary}]}>اسم الباقة (إنجليزي)</Text>
+        <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <TextInput
+            style={[s.input, {color: colors.textPrimary}]}
+            placeholder="Example: Monthly Package"
+            placeholderTextColor={colors.textSecondary}
+            value={nameEn}
+            onChangeText={setNameEn}
+          />
+        </View>
+
         <Text style={[s.label, {color: colors.textPrimary}]}>الخدمات ضمن الباقة</Text>
         <TouchableOpacity
           style={[s.trigger, {backgroundColor: colors.card, borderColor: colors.border}]}
           onPress={() => setShowServices(true)}
-          activeOpacity={0.8}>
+          activeOpacity={0.8}
+          disabled={loadingSvcs}>
           <Text style={[s.triggerTxt, {color: selectedServices.length > 0 ? colors.textPrimary : colors.textSecondary}]}>
-            {selectedServices.length > 0 ? `${selectedServices.length} خدمات مختارة` : 'اختر الخدمات'}
+            {loadingSvcs ? 'جاري التحميل...' : selectedServices.length > 0 ? `${selectedServices.length} خدمات مختارة` : 'اختر الخدمات'}
           </Text>
           <ChevronDown size={18} color={colors.textSecondary} />
         </TouchableOpacity>
 
-        {/* Per-service steppers */}
         {selectedServiceObjs.length > 0 && (
           <View style={s.steppersWrap}>
             <Text style={[s.label, {color: colors.textPrimary}]}>العدد لكل خدمة</Text>
-            {selectedServiceObjs.map(srv => (
-              <ServiceStepper
-                key={srv.id}
-                service={srv}
-                count={counts[srv.id] ?? 1}
-                onIncrement={() => setCount(srv.id, (counts[srv.id] ?? 1) + 1)}
-                onDecrement={() => setCount(srv.id, (counts[srv.id] ?? 1) - 1)}
-                onRemove={() => toggleService(srv.id)}
-                colors={colors}
-              />
-            ))}
+            {selectedServiceObjs.map(srv => {
+              const id = srv._id ?? srv.id;
+              return (
+                <ServiceStepper
+                  key={id}
+                  service={srv}
+                  count={counts[id] ?? 1}
+                  onIncrement={() => setCount(id, (counts[id] ?? 1) + 1)}
+                  onDecrement={() => setCount(id, (counts[id] ?? 1) - 1)}
+                  onRemove={() => toggleService(id)}
+                  colors={colors}
+                />
+              );
+            })}
           </View>
         )}
 
-        {/* Save */}
         <TouchableOpacity
-          style={[s.saveBtn, {backgroundColor: canSave ? colors.primary : colors.border}]}
+          style={[s.saveBtn, {backgroundColor: canSave && !saving ? colors.primary : colors.border}]}
           onPress={handleSave}
-          disabled={!canSave}
+          disabled={!canSave || saving}
           activeOpacity={0.85}>
-          <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'حفظ الباقة'}</Text>
+          {saving
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'حفظ الباقة'}</Text>
+          }
         </TouchableOpacity>
 
       </ScrollView>
 
       <ServicesModal
         visible={showServices}
+        allServices={allServices}
         selected={selectedServices}
         onToggle={toggleService}
         onClose={() => setShowServices(false)}

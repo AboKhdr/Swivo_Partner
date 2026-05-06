@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   Platform, ScrollView, StatusBar, StyleSheet,
   Switch, Text, TouchableOpacity, View,
@@ -9,7 +9,9 @@ import {
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {MOCK_USER} from '../../../shared/data/mockData';
+import useAuthStore from '../../../store/authStore';
+import {logout} from '../../../services/auth';
+import {getBikerProfile} from '../../../services/biker';
 
 function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, colors}) {
   return (
@@ -31,7 +33,24 @@ function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, co
 export default function ProfileScreen({onNavigate}) {
   const {colors, isDark, toggleTheme} = useTheme();
   const {t} = useI18n();
+  const user = useAuthStore(s => s.user);
   const darkMode = isDark;
+  const [rating, setRating] = useState(user?.rating ?? 0);
+  const [balance, setBalance] = useState(user?.wallet?.balance ?? 0);
+
+  useEffect(() => {
+    getBikerProfile().then(res => {
+      if (res.success && res.data) {
+        const p = res.data.data ?? res.data;
+        setRating(p.rating ?? 0);
+        setBalance(p.wallet?.balance ?? 0);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -43,18 +62,11 @@ export default function ProfileScreen({onNavigate}) {
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
 
         <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('profile.personalSettings')}</Text>
-        <TouchableOpacity style={[s.ratingCard, {backgroundColor: colors.card, borderColor: '#F59E0B55'}]} onPress={() => onNavigate('info')} activeOpacity={0.85}>
-          <View style={s.ratingRight}>
-            <Text style={[s.ratingLabel, {color: colors.textSecondary}]}>{t('profile.rating')}</Text>
-            <Text style={[s.ratingValue, {color: colors.textPrimary}]}>{MOCK_USER.rating} / 5</Text>
-          </View>
-          <Star size={22} color="#F59E0B" fill="#F59E0B" strokeWidth={0} />
-        </TouchableOpacity>
 
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <NavRow Icon={User} iconColor={colors.primary} iconBg={colors.primary + '18'} label={t('profile.personalInfo')} sub={t('profile.personalInfoSub')} onPress={() => onNavigate('info')} colors={colors} />
           <View style={[s.divider, {backgroundColor: colors.border}]} />
-          <NavRow Icon={Wallet} iconColor="#10B981" iconBg="#10B98118" label={t('profile.wallet')} sub={`${t('wallet.balance')} ${MOCK_USER.wallet.balance.toFixed(0)} ﷼`} onPress={() => onNavigate('wallet')} colors={colors} />
+          <NavRow Icon={Wallet} iconColor="#10B981" iconBg="#10B98118" label={t('profile.wallet')} sub={`${t('wallet.balance')} ${balance.toFixed(0)} ﷼`} onPress={() => onNavigate('wallet')} colors={colors} />
         </View>
 
         <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('profile.options')}</Text>
@@ -81,7 +93,7 @@ export default function ProfileScreen({onNavigate}) {
         </View>
 
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <NavRow Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.logout')} sub={t('profile.logoutSub')} onPress={() => {}} danger colors={colors} />
+          <NavRow Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.logout')} sub={t('profile.logoutSub')} onPress={handleLogout} danger colors={colors} />
         </View>
 
         <View style={{height: 16}} />
@@ -102,45 +114,20 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: {fontSize: 20, fontWeight: '800'},
-  headerIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
   scroll: {flex: 1},
   content: {padding: 16, gap: 12},
-  sectionTitle: {
-    fontSize: 13, fontWeight: '700',
-    paddingHorizontal: 4, marginTop: 4,
-  },
+  sectionTitle: {fontSize: 13, fontWeight: '700', paddingHorizontal: 4, marginTop: 4},
   ratingCard: {
-    borderRadius: 18,
-    borderWidth: 1.5,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderRadius: 18, borderWidth: 1.5, paddingHorizontal: 20, paddingVertical: 18,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   ratingRight: {gap: 2},
   ratingLabel: {fontSize: 12},
   ratingValue: {fontSize: 22, fontWeight: '900'},
-  card: {
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
+  card: {borderRadius: 18, borderWidth: 1, overflow: 'hidden'},
   divider: {height: 1, marginHorizontal: 16},
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 14,
-  },
-  navIcon: {
-    width: 38, height: 38, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  navRow: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 14},
+  navIcon: {width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
   navText: {flex: 1, gap: 2},
   navLabel: {fontSize: 14, fontWeight: '600'},
   navSub: {fontSize: 12},
