@@ -27,7 +27,10 @@ function NotifItem({item, colors}) {
   const body  = item.body?.ar ?? item.body?.en ?? (typeof item.body === 'string' ? item.body : '')
     ?? item.message ?? item.content ?? '';
   const time  = item.createdAt
-    ? new Date(item.createdAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
+    ? new Date(item.createdAt).toLocaleString('ar-SA', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
     : item.time ?? '';
 
   return (

@@ -25,7 +25,10 @@ const ic = StyleSheet.create({
 function NotifRow({item, userId, onPress, colors}) {
   const isRead = Array.isArray(item.readBy) && item.readBy.includes(userId);
   const timeStr = item.createdAt
-    ? new Date(item.createdAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
+    ? new Date(item.createdAt).toLocaleString('ar-SA', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
     : '';
 
   return (

@@ -26,9 +26,9 @@ npm test
 ## Architecture & Current State
 
 ### App Entry Point
-`index.js` → `App.tsx`. After login, `App.tsx` routes by role (`Role = 'biker' | 'manager' | null`):
+`index.js` → `App.tsx`. After login, `App.tsx` routes by role (`Role = 'biker' | 'admin' | null`):
 - `role === 'biker'` → `src/biker/navigation/AppNavigator.js`
-- `role === 'manager'` → `src/partner/navigation/PartnerNavigator.js`
+- `role === 'admin'` → `src/partner/navigation/PartnerNavigator.js`
 - `role === null` → `src/features/auth/LoginScreen.js`
 
 The two apps are **fully isolated** — no shared screens or navigators between `src/biker/` and `src/partner/`. Both share `src/shared/` only.
@@ -53,7 +53,8 @@ The two apps are **fully isolated** — no shared screens or navigators between 
                      IncomingOrderScreen.js, AssignBikerScreen.js, SkipReviewScreen.js
       /operations  — OperationsNavigator.js, ServicesScreen.js, PackagesScreen.js,
                      StaffScreen.js, BranchesScreen.js
-      /profile     — PartnerProfileNavigator.js
+      /profile     — PartnerProfileNavigator.js, PartnerPersonalInfoScreen.js,
+                   SupportScreen.js, TermsScreen.js
     /navigation
       PartnerNavigator.js        — hand-rolled bottom tab bar (Dashboard, Orders, Operations, Profile)
   /features                      — legacy scaffold (auth still used)
@@ -68,7 +69,10 @@ The two apps are **fully isolated** — no shared screens or navigators between 
     /types         — JSDoc typedefs (index.js)
   /assets
     /steps         — 1.png–5.png (step guide illustrations)
-  /hooks, /services, /store      — planned, not yet created
+  /hooks                         — planned, not yet created
+  /services                      — api.js, auth.js, biker.js, orders.js, partner.js,
+                                   notifications.js, notificationChannel.js, cloudinary.js
+  /store                         — authStore.js, appStore.js, ordersStore.js (Zustand)
 ```
 
 **Rules:**
@@ -117,7 +121,17 @@ ASSIGNED → ON_THE_WAY → ARRIVED → STARTED → COMPLETED
 - `CAMERA`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` permissions in manifest
 
 ### API Layer
-No HTTP client wired up. Screens use mock data from `src/shared/data/mockData.js` and `setTimeout` placeholders. Planned base URL: `https://<domain>/api/biker`. Auth uses JWT as `Authorization: Bearer <token>`. When implementing, create service functions in `/src/services` using `fetch` + `AbortController`.
+`src/services/api.js` — central HTTP client using `fetch` + `AbortController` (15s timeout). Attaches `Authorization: Bearer <token>` from AsyncStorage. On 401 auto-attempts token refresh via `/auth/refresh`; on failure calls the `_onUnauthorized` handler registered by `setUnauthorizedHandler(fn)` (wired in `App.tsx`). Returns `{success, data, error}` uniformly.
+
+Service modules:
+- `src/services/auth.js` — `login`, `verifyOTP`, `resendOTP`, `logout` (calls `useAuthStore.getState().setSession`)
+- `src/services/orders.js` — biker order endpoints (`/biker/order`)
+- `src/services/biker.js` — biker profile/duty endpoints
+- `src/services/partner.js` — partner dashboard, orders (`/tenant/orders`), staff, services, packages, branches
+- `src/services/notifications.js` — FCM token registration, notification list/read
+- `src/services/cloudinary.js` — direct image upload to Cloudinary (unsigned preset `tteamdashboard`)
+
+Image uploads: `uploadToCloudinary(uri)` → `{success, url, error}`. Profile photos go to Cloudinary first, then the returned URL is saved to the backend. Base URL is set in `src/config.js` (`BASE_URL1`) — update for dev/ngrok.
 
 ### MapContainer
 `src/shared/components/MapContainer.js` — intended to show Google Maps via WebView. `react-native-webview` is NOT installed. MapContainer is non-functional until WebView is installed.
@@ -136,6 +150,15 @@ NativeWind v4 is installed but **not configured** — `babel.config.js` does not
 ### Profile Navigator (Biker)
 `src/biker/features/profile/ProfileNavigator.js` — sub-screens: `PersonalInfoScreen`, `WalletScreen`, `LanguageScreen`, `SupportScreen`, `TermsScreen`. Navigation via `onNavigate(screenName)` / `onBack()` props.
 
+### State Management (Zustand Stores)
+Three stores in `src/store/`:
+- `authStore.js` — `{ user, token, role, isReady }`. `hydrate()` called once on app start. `setSession(token, user)` persists to AsyncStorage and auto-registers the FCM token. `role` is `'biker' | 'admin' | null` (backend sends `'admin'` for managers; `App.tsx` maps `'admin'` → `role === 'manager'` for routing).
+- `appStore.js` — global UI state: loading keys, toast queue, `incomingOrder` / `clearIncomingOrder`, `autoAccept` toggle, `unreadCount` badge.
+- `ordersStore.js` — cached orders list for the biker app.
+
+### Notifications (Push)
+`src/services/notificationChannel.js` — uses `@notifee/react-native`. `showIncomingOrderNotification(order)` creates channel `incoming_orders_v6` and re-displays a sound-bearing notification every 8s in a loop (Android requires cancel+redisplay with a new id to re-trigger the sound). Call `cancelIncomingOrderNotification()` after accept/reject/timeout. `@react-native-firebase/messaging` is used for FCM token retrieval and background message handling (configured in `App.tsx`).
+
 ---
 
 ## Partner App (role: 'manager')
@@ -148,7 +171,7 @@ Completely separate from the biker app. Same shared context (Theme, i18n, colors
 - `DashboardScreen` — 4 stat cards (today's orders, pending, completed, bikers on duty) + recent orders list. Tapping a `PENDING_PARTNER` order opens `IncomingOrderScreen` inline (replaces the whole screen).
 
 **Orders tab (`src/partner/features/orders/`)**
-- `IncomingOrderScreen` — full-screen ring UI with 60-second countdown. Auto-calls `onReject('AUTO_TIMEOUT')` when timer hits 0. Reject requires selecting a reason (enum); if "أخرى" is selected, a note field becomes mandatory.
+- `IncomingOrderScreen` — full-screen ring UI with 60-second countdown. Auto-calls `onReject('AUTO_TIMEOUT')` when timer hits 0. Reject opens `RejectOrderModal` (same folder) which requires selecting a reason enum; if "أخرى" is selected, a note field becomes mandatory.
 - `OrdersScreen` — filterable list by status (PENDING_PARTNER, ACCEPTED, ASSIGNED, ON_THE_WAY, STARTED, COMPLETED).
 - `OrderDetailsScreen` — shows customer info, service, timeline, biker assignment. Contains a "تعيين بايكر" button that mounts `AssignBikerScreen` inline (only shown when `status === 'ACCEPTED'` and no biker assigned).
 - `AssignBikerScreen` — lists bikers where `isOnDuty=true`, shows `activeOrdersCount` per biker. Confirm triggers assignment.
@@ -227,7 +250,9 @@ Rejection only from `PENDING_PARTNER`. Cancellation from `ACCEPTED / ASSIGNED / 
 - Icons: `lucide-react-native` + `react-native-svg` (pinned at `15.11.2`)
 - Styling: `StyleSheet.create` (NativeWind installed but not configured)
 - Camera/Images: `react-native-image-picker` v7.1.2
-- Storage: `@react-native-async-storage/async-storage` (used by ThemeContext and I18nContext)
+- Storage: `@react-native-async-storage/async-storage`
+- State: `zustand`
+- Push Notifications: `@notifee/react-native` + `@react-native-firebase/messaging` + `@react-native-firebase/app`
 
 ## Forbidden
 - Expo or any Expo SDK

@@ -13,7 +13,7 @@ import {ArrowRight, User, Phone, Clock} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import SelectField from '../../../shared/components/SelectField';
 import ImagePickerField from '../../../shared/components/ImagePickerField';
-import {getBranches, addStaff} from '../../../services/partner';
+import {getBranches, addStaff, updateStaff} from '../../../services/partner';
 
 const DAYS = [
   {key: 'sat', label: 'السبت'},
@@ -46,17 +46,28 @@ function InputRow({icon: Icon, placeholder, value, onChangeText, keyboardType, c
   );
 }
 
-export default function AddBikerScreen({onBack, onSaved, initialData}) {
+export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BIKER'}) {
   const {colors} = useTheme();
-  const isEdit = !!initialData;
+  const isEdit = !!(initialData?._id ?? initialData?.id);
 
-  const [photo,    setPhoto]    = useState(initialData?.photo    ?? null);
-  const [name,     setName]     = useState(initialData?.name     ?? '');
-  const [phone,    setPhone]    = useState(initialData?.phone    ?? '');
-  const [branch,   setBranch]   = useState(initialData?.branchId ?? '');
-  const [days,     setDays]     = useState(initialData?.days     ?? DEFAULT_DAYS);
+  const existingBranchId = initialData?.branchId
+    ?? initialData?.userId?.branchId
+    ?? '';
+
+  const existingName = initialData?.userId
+    ? `${initialData.userId.firstName ?? ''} ${initialData.userId.lastName ?? ''}`.trim()
+    : initialData?.name ?? '';
+
+  const existingPhone = initialData?.userId?.phoneNumber ?? initialData?.phone ?? '';
+
+  const [photo,    setPhoto]    = useState(null);
+  const [name,     setName]     = useState(existingName);
+  const [phone,    setPhone]    = useState(existingPhone);
+  const [branch,   setBranch]   = useState(existingBranchId);
+  const [days,     setDays]     = useState(DEFAULT_DAYS);
   const [branches, setBranches] = useState([]);
   const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState('');
 
   useEffect(() => {
     getBranches().then(res => {
@@ -75,42 +86,60 @@ export default function AddBikerScreen({onBack, onSaved, initialData}) {
   const toggleDay = key =>
     setDays(prev => ({...prev, [key]: {...prev[key], enabled: !prev[key].enabled}}));
 
-  const canSave = name.trim() && phone.trim() && branch;
+  const canSave = isEdit
+    ? !!branch
+    : name.trim().length > 0 && phone.trim().length > 0 && !!branch;
 
   const handleSave = async () => {
     if (!canSave || saving) return;
+    setError('');
     setSaving(true);
-    await addStaff({
-      phoneNumber: phone.trim(),
-      firstName:   name.trim().split(' ')[0] ?? name.trim(),
-      lastName:    name.trim().split(' ').slice(1).join(' ') || '',
-      branchId:    branch,
-      role:        'BIKER',
-    });
+
+    let res;
+    if (isEdit) {
+      const id = initialData._id ?? initialData.id;
+      res = await updateStaff(id, {branchId: branch});
+    } else {
+      res = await addStaff({
+        phoneNumber: phone.trim(),
+        firstName:   name.trim().split(' ')[0] ?? name.trim(),
+        lastName:    name.trim().split(' ').slice(1).join(' ') || undefined,
+        branchId:    branch,
+        role,
+      });
+    }
+
     setSaving(false);
-    onSaved?.();
-    onBack();
+
+    if (res.success) {
+      onSaved?.();
+    } else {
+      setError(res.error ?? 'حدث خطأ، حاول مجدداً');
+    }
   };
+
+  const isBiker = role === 'BIKER';
+  const titleNew  = isBiker ? 'إضافة بايكر' : 'إضافة مدير';
+  const titleEdit = isBiker ? 'تعديل بايكر' : 'تعديل مدير';
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
-      {/* Header */}
       <View style={[s.header, {backgroundColor: colors.bg}]}>
         <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
           <ArrowRight size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[s.headerTitle, {color: colors.textPrimary}]}>
-          {isEdit ? 'تعديل بايكر' : 'إضافة بايكر'}
+          {isEdit ? titleEdit : titleNew}
         </Text>
         <View style={s.backBtn} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
 
-        {/* Photo */}
-        <ImagePickerField value={photo} onChange={setPhoto} label="صورة البايكر" />
+        {!isEdit && (
+          <ImagePickerField value={photo} onChange={setPhoto} label={isBiker ? 'صورة البايكر' : 'صورة المدير'} />
+        )}
 
-        {/* Personal info */}
         <View style={s.sectionHeader}>
           <View style={[s.sectionIcon, {backgroundColor: colors.primary + '15'}]}>
             <User size={16} color={colors.primary} />
@@ -118,26 +147,35 @@ export default function AddBikerScreen({onBack, onSaved, initialData}) {
           <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>المعلومات الشخصية</Text>
         </View>
 
-        <View style={[s.card, {backgroundColor: colors.card}]}>
-          <InputRow
-            icon={User}
-            placeholder="الاسم الكامل"
-            value={name}
-            onChangeText={setName}
-            colors={colors}
-          />
-          <View style={[s.cardSep, {backgroundColor: colors.border}]} />
-          <InputRow
-            icon={Phone}
-            placeholder="رقم الجوال"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            colors={colors}
-          />
-        </View>
+        {isEdit ? (
+          <View style={[s.readonlyCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+            <Text style={[s.readonlyLabel, {color: colors.textSecondary}]}>الاسم</Text>
+            <Text style={[s.readonlyValue, {color: colors.textPrimary}]}>{name || '—'}</Text>
+            <View style={[s.cardSep, {backgroundColor: colors.border}]} />
+            <Text style={[s.readonlyLabel, {color: colors.textSecondary}]}>رقم الجوال</Text>
+            <Text style={[s.readonlyValue, {color: colors.textPrimary}]}>{phone || '—'}</Text>
+          </View>
+        ) : (
+          <View style={[s.card, {backgroundColor: colors.card}]}>
+            <InputRow
+              icon={User}
+              placeholder="الاسم الكامل"
+              value={name}
+              onChangeText={setName}
+              colors={colors}
+            />
+            <View style={[s.cardSep, {backgroundColor: colors.border}]} />
+            <InputRow
+              icon={Phone}
+              placeholder="رقم الجوال"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              colors={colors}
+            />
+          </View>
+        )}
 
-        {/* Branch */}
         <SelectField
           label="الفرع التابع له"
           placeholder="اختر الفرع"
@@ -146,52 +184,58 @@ export default function AddBikerScreen({onBack, onSaved, initialData}) {
           onChange={setBranch}
         />
 
-        {/* Working hours */}
-        <View style={s.sectionHeader}>
-          <View style={[s.sectionIcon, {backgroundColor: colors.primary + '15'}]}>
-            <Clock size={16} color={colors.primary} />
-          </View>
-          <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>ساعات العمل</Text>
-        </View>
-
-        <View style={[s.daysCard, {backgroundColor: colors.card}]}>
-          {DAYS.map((day, i) => {
-            const d = days[day.key];
-            return (
-              <View key={day.key}>
-                <View style={s.dayRow}>
-                  <Switch
-                    value={d.enabled}
-                    onValueChange={() => toggleDay(day.key)}
-                    trackColor={{false: colors.border, true: colors.primary}}
-                    thumbColor="#FFF"
-                  />
-                  <View style={[s.dayTimes, !d.enabled && s.dimmed]}>
-                    <View style={[s.timeBox, {backgroundColor: colors.bg}]}>
-                      <Text style={[s.timeText, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
-                        {d.close}
-                      </Text>
-                    </View>
-                    <Text style={[s.timeSep, {color: colors.textSecondary}]}>—</Text>
-                    <View style={[s.timeBox, {backgroundColor: colors.bg}]}>
-                      <Text style={[s.timeText, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
-                        {d.open}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[s.dayLabel, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
-                    {day.label}
-                  </Text>
-                </View>
-                {i < DAYS.length - 1 && (
-                  <View style={[s.sep, {backgroundColor: colors.border}]} />
-                )}
+        {!isEdit && (
+          <>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIcon, {backgroundColor: colors.primary + '15'}]}>
+                <Clock size={16} color={colors.primary} />
               </View>
-            );
-          })}
-        </View>
+              <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>ساعات العمل</Text>
+            </View>
 
-        {/* Save */}
+            <View style={[s.daysCard, {backgroundColor: colors.card}]}>
+              {DAYS.map((day, i) => {
+                const d = days[day.key];
+                return (
+                  <View key={day.key}>
+                    <View style={s.dayRow}>
+                      <Switch
+                        value={d.enabled}
+                        onValueChange={() => toggleDay(day.key)}
+                        trackColor={{false: colors.border, true: colors.primary}}
+                        thumbColor="#FFF"
+                      />
+                      <View style={[s.dayTimes, !d.enabled && s.dimmed]}>
+                        <View style={[s.timeBox, {backgroundColor: colors.bg}]}>
+                          <Text style={[s.timeText, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
+                            {d.close}
+                          </Text>
+                        </View>
+                        <Text style={[s.timeSep, {color: colors.textSecondary}]}>—</Text>
+                        <View style={[s.timeBox, {backgroundColor: colors.bg}]}>
+                          <Text style={[s.timeText, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
+                            {d.open}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={[s.dayLabel, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
+                        {day.label}
+                      </Text>
+                    </View>
+                    {i < DAYS.length - 1 && (
+                      <View style={[s.sep, {backgroundColor: colors.border}]} />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {error.length > 0 && (
+          <Text style={[s.errorTxt, {color: '#EF4444'}]}>{error}</Text>
+        )}
+
         <TouchableOpacity
           style={[s.saveBtn, {backgroundColor: canSave && !saving ? colors.primary : colors.border}]}
           onPress={handleSave}
@@ -199,7 +243,7 @@ export default function AddBikerScreen({onBack, onSaved, initialData}) {
           activeOpacity={0.85}>
           {saving
             ? <ActivityIndicator color="#FFF" />
-            : <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : 'إضافة البايكر'}</Text>
+            : <Text style={s.saveTxt}>{isEdit ? 'حفظ التعديلات' : titleNew}</Text>
           }
         </TouchableOpacity>
 
@@ -222,6 +266,10 @@ const s = StyleSheet.create({
   card:          {borderRadius: 16, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
   cardSep:       {height: 1},
 
+  readonlyCard:  {borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, gap: 4},
+  readonlyLabel: {fontSize: 11, fontWeight: '600'},
+  readonlyValue: {fontSize: 15, fontWeight: '700', paddingBottom: 8},
+
   inputBox:      {flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14},
   input:         {flex: 1, fontSize: 14, padding: 0},
 
@@ -235,6 +283,7 @@ const s = StyleSheet.create({
   timeSep:       {fontSize: 13},
   sep:           {height: 1, marginHorizontal: 12},
 
+  errorTxt:      {fontSize: 13, textAlign: 'center', fontWeight: '600'},
   saveBtn:       {paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 8},
   saveTxt:       {color: '#FFF', fontSize: 16, fontWeight: '800'},
 });
