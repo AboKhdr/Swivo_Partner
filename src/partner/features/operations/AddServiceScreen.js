@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,7 +13,7 @@ import {ArrowRight} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import ImagePickerField from '../../../shared/components/ImagePickerField';
 import SelectField from '../../../shared/components/SelectField';
-import {getCategories, createService, updateService} from '../../../services/partner';
+import {createService, updateService} from '../../../services/partner';
 
 const SERVICE_TYPES = [
   {key: 'IN_SHOP', label: 'في المغسل'},
@@ -26,7 +27,7 @@ const SIZE_CONFIG = [
   {key: 'large',  label: 'كبيرة'},
 ];
 
-export default function AddServiceScreen({onBack, onSaved, initialData}) {
+export default function AddServiceScreen({onBack, onSaved, initialData, categories = []}) {
   const {colors} = useTheme();
   const isEdit = !!initialData?._id;
 
@@ -41,22 +42,15 @@ export default function AddServiceScreen({onBack, onSaved, initialData}) {
   const [estimationTime, setEstimationTime] = useState(
     initialData?.estimationTime ? String(initialData.estimationTime) : '',
   );
-  const [categories,     setCategories]     = useState([]);
-  const [saving,         setSaving]         = useState(false);
+  const [descAr,         setDescAr]         = useState(initialData?.description?.ar ?? '');
+  const [descEn,         setDescEn]         = useState(initialData?.description?.en ?? '');
+  const [isActive,       setIsActive]       = useState(initialData?.isActive ?? true);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    getCategories().then(res => {
-      if (res.success) {
-        const list = res.data?.data ?? res.data ?? [];
-        setCategories(
-          (Array.isArray(list) ? list : []).map(c => ({
-            value: c._id,
-            label: c.name?.ar ?? c.name?.en ?? c._id,
-          })),
-        );
-      }
-    });
-  }, []);
+  const categoryOptions = categories.map(c => ({
+    value: c._id ?? c.id,
+    label: c.name?.ar ?? c.name?.en ?? '',
+  }));
 
   const setPrice = (key, val) =>
     setPrices(prev => ({...prev, [key]: val.replace(/[^0-9]/g, '')}));
@@ -71,7 +65,11 @@ export default function AddServiceScreen({onBack, onSaved, initialData}) {
       price:          {small: Number(prices.small), medium: Number(prices.medium), large: Number(prices.large)},
       availableFor:   type,
       estimationTime: Number(estimationTime),
+      isActive,
       ...(categoryId ? {categoryId} : {}),
+      ...(descAr.trim() || descEn.trim()
+        ? {description: {ar: descAr.trim(), en: descEn.trim() || descAr.trim()}}
+        : {}),
       ...(image && !image.startsWith('http') ? {imageUri: image} : image ? {image} : {}),
     };
     if (isEdit) {
@@ -122,6 +120,30 @@ export default function AddServiceScreen({onBack, onSaved, initialData}) {
           />
         </View>
 
+        <Text style={[s.label, {color: colors.textPrimary}]}>الوصف (عربي)</Text>
+        <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <TextInput
+            style={[s.input, s.multiline, {color: colors.textPrimary}]}
+            placeholder="وصف الخدمة بالعربي (اختياري)"
+            placeholderTextColor={colors.textSecondary}
+            value={descAr}
+            onChangeText={setDescAr}
+            multiline
+          />
+        </View>
+
+        <Text style={[s.label, {color: colors.textPrimary}]}>الوصف (إنجليزي)</Text>
+        <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <TextInput
+            style={[s.input, s.multiline, {color: colors.textPrimary}]}
+            placeholder="Service description in English (optional)"
+            placeholderTextColor={colors.textSecondary}
+            value={descEn}
+            onChangeText={setDescEn}
+            multiline
+          />
+        </View>
+
         <Text style={[s.label, {color: colors.textPrimary}]}>مدة الخدمة (بالدقائق)</Text>
         <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <TextInput
@@ -137,7 +159,7 @@ export default function AddServiceScreen({onBack, onSaved, initialData}) {
         <SelectField
           label="فئة الخدمة"
           placeholder="اختر فئة الخدمة"
-          options={categories}
+          options={categoryOptions}
           value={categoryId}
           onChange={setCategoryId}
         />
@@ -191,6 +213,21 @@ export default function AddServiceScreen({onBack, onSaved, initialData}) {
           ))}
         </View>
 
+        <View style={[s.activeRow, {backgroundColor: colors.card}]}>
+          <Text style={[s.activeLabel, {color: colors.textPrimary}]}>حالة الخدمة</Text>
+          <View style={s.activeRight}>
+            <Text style={[s.activeStatus, {color: isActive ? '#22C55E' : colors.textSecondary}]}>
+              {isActive ? 'مفعّلة' : 'معطّلة'}
+            </Text>
+            <Switch
+              value={isActive}
+              onValueChange={setIsActive}
+              trackColor={{false: colors.border, true: colors.primary + 'AA'}}
+              thumbColor={isActive ? colors.primary : '#ccc'}
+            />
+          </View>
+        </View>
+
         <TouchableOpacity
           style={[s.saveBtn, {backgroundColor: canSave && !saving ? colors.primary : colors.border}]}
           onPress={handleSave}
@@ -232,6 +269,13 @@ const s = StyleSheet.create({
   currency:     {fontSize: 14},
   priceInputTxt:{flex: 1, fontSize: 15, fontWeight: '700', padding: 0},
   priceSep:     {height: 1, marginHorizontal: 14},
+
+  multiline:    {minHeight: 60, textAlignVertical: 'top'},
+
+  activeRow:    {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginTop: 4},
+  activeLabel:  {fontSize: 14, fontWeight: '700'},
+  activeRight:  {flexDirection: 'row', alignItems: 'center', gap: 10},
+  activeStatus: {fontSize: 13, fontWeight: '600'},
 
   saveBtn:      {paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 8},
   saveTxt:      {color: '#FFF', fontSize: 16, fontWeight: '800'},

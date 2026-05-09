@@ -1,9 +1,9 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {Search} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {getOrders} from '../../../services/partner';
+import {getOrders, getPartnerProfile} from '../../../services/partner';
 
 const STATUS_COLORS = {
   PENDING_PARTNER: '#F59E0B',
@@ -20,8 +20,8 @@ function OrderCard({item, colors, t, onPress}) {
   const color        = STATUS_COLORS[item.status] ?? '#64748B';
   const statusLabel  = t(`partner.orders.status.${item.status}`);
   const orderNumber  = item.orderNumber ?? item._id ?? '';
-  const isOnshop     = (item.orderType ?? item.type ?? '').toUpperCase() === 'IN_SHOP'
-    || (item.orderType ?? item.type ?? '') === 'onshop';
+  const rawType      = (item.orderType ?? item.type ?? '').toUpperCase();
+  const isOnshop     = rawType === 'IN_SHOP' || rawType === 'ONSHOP';
   const serviceName  =
     item.itemsSnapshot?.[0]?.nameSnapshot?.ar
     ?? item.itemsSnapshot?.[0]?.nameSnapshot?.en
@@ -34,14 +34,10 @@ function OrderCard({item, colors, t, onPress}) {
     ?? (typeof item.service?.name === 'string' ? item.service.name : '')
     ?? '';
   const branchName   = item.branch?.name?.ar ?? item.branch?.name?.en ?? (typeof item.branch?.name === 'string' ? item.branch.name : '') ?? '';
-  const location     = item.addressSnapshot?.addressText
-    ?? item.addressSnapshot?.district
-    ?? branchName;
+  const location     = item.addressSnapshot?.addressText ?? item.addressSnapshot?.district ?? branchName;
   const price        = item.tenantNetSnapshot ?? item.totalAmount ?? '';
   const scheduledAt  = item.scheduledAt
-    ? new Date(item.scheduledAt).toLocaleString('ar-SA', {
-        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-      })
+    ? new Date(item.scheduledAt).toLocaleString('ar-SA', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})
     : '';
 
   return (
@@ -88,16 +84,32 @@ function OrderCard({item, colors, t, onPress}) {
 export default function OrdersScreen({onSelectOrder}) {
   const {colors} = useTheme();
   const {t, isRTL} = useI18n();
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [search, setSearch]             = useState('');
-  const [orders, setOrders]             = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [page, setPage]                 = useState(1);
-  const [hasNext, setHasNext]           = useState(false);
-  const [loadingMore, setLoadingMore]   = useState(false);
 
-  const FILTERS = [
+  const [activeStatusFilter, setActiveStatusFilter] = useState('all');
+  const [activeTypeFilter,   setActiveTypeFilter]   = useState('all');
+  const [search,             setSearch]             = useState('');
+  const [orders,             setOrders]             = useState([]);
+  const [loading,            setLoading]            = useState(true);
+  const [refreshing,         setRefreshing]         = useState(false);
+  const [page,               setPage]               = useState(1);
+  const [hasNext,            setHasNext]            = useState(false);
+  const [loadingMore,        setLoadingMore]        = useState(false);
+  const [tenantType,         setTenantType]         = useState(null); // null = loading, 'MOBILE'|'IN_SHOP'|'BOTH'
+
+  // Load tenant type once
+  useEffect(() => {
+    getPartnerProfile().then(res => {
+      if (res.success) {
+        const d = res.data?.data ?? res.data ?? {};
+        const type = d.availableFor ?? d.serviceType ?? d.orderType ?? null;
+        setTenantType(type ? type.toUpperCase() : 'BOTH');
+      } else {
+        setTenantType('BOTH');
+      }
+    });
+  }, []);
+
+  const STATUS_FILTERS = [
     {key: 'all',             label: t('partner.orders.all')},
     {key: 'PENDING_PARTNER', label: t('partner.orders.status.PENDING_PARTNER')},
     {key: 'ACCEPTED',        label: t('partner.orders.status.ACCEPTED')},
@@ -107,10 +119,20 @@ export default function OrdersScreen({onSelectOrder}) {
     {key: 'COMPLETED',       label: t('partner.orders.status.COMPLETED')},
   ];
 
-  const fetchOrders = useCallback(async (filter, pageNum, append = false) => {
+  const TYPE_FILTERS = [
+    {key: 'all',     label: 'الكل'},
+    {key: 'MOBILE',  label: 'موبايل'},
+    {key: 'IN_SHOP', label: 'في الموقع'},
+  ];
+
+  const showTypeFilter = tenantType === 'BOTH';
+  const filtersDisabled = loading || tenantType === null;
+
+  const fetchOrders = useCallback(async (statusFilter, typeFilter, pageNum, append = false) => {
     if (!append) setLoading(true);
     const params = {page: pageNum, limit: 20};
-    if (filter !== 'all') params.status = filter;
+    if (statusFilter !== 'all') params.status = statusFilter;
+    if (typeFilter   !== 'all') params.orderType = typeFilter;
     const res = await getOrders(params);
     if (res.success) {
       const list = res.data?.data ?? res.data ?? [];
@@ -122,20 +144,21 @@ export default function OrdersScreen({onSelectOrder}) {
   }, []);
 
   useEffect(() => {
-    fetchOrders(activeFilter, 1);
-  }, [activeFilter, fetchOrders]);
+    if (tenantType === null) return;
+    fetchOrders(activeStatusFilter, activeTypeFilter, 1);
+  }, [activeStatusFilter, activeTypeFilter, tenantType, fetchOrders]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchOrders(activeFilter, 1);
+    await fetchOrders(activeStatusFilter, activeTypeFilter, 1);
     setRefreshing(false);
-  }, [activeFilter, fetchOrders]);
+  }, [activeStatusFilter, activeTypeFilter, fetchOrders]);
 
   const onEndReached = useCallback(() => {
     if (!hasNext || loadingMore) return;
     setLoadingMore(true);
-    fetchOrders(activeFilter, page + 1, true).finally(() => setLoadingMore(false));
-  }, [hasNext, loadingMore, activeFilter, page, fetchOrders]);
+    fetchOrders(activeStatusFilter, activeTypeFilter, page + 1, true).finally(() => setLoadingMore(false));
+  }, [hasNext, loadingMore, activeStatusFilter, activeTypeFilter, page, fetchOrders]);
 
   const q = search.trim().toLowerCase();
   const filtered = q
@@ -157,6 +180,7 @@ export default function OrdersScreen({onSelectOrder}) {
       <View style={[s.header, {backgroundColor: colors.bg}]}>
         <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('partner.orders.title')}</Text>
 
+        {/* Search */}
         <View style={[s.searchBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <Search size={16} color={colors.textSecondary} />
           <TextInput
@@ -169,30 +193,62 @@ export default function OrdersScreen({onSelectOrder}) {
           />
         </View>
 
-        <FlatList
-          data={FILTERS}
+        {/* Type filter — only when tenant is BOTH */}
+        {showTypeFilter && (
+          <View style={s.typeFilterRow}>
+            {TYPE_FILTERS.map(f => {
+              const isActive = activeTypeFilter === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[
+                    s.typeChip,
+                    {
+                      backgroundColor: isActive ? colors.primary : colors.card,
+                      borderColor:     isActive ? colors.primary : colors.border,
+                      opacity: filtersDisabled ? 0.4 : 1,
+                    },
+                  ]}
+                  onPress={() => !filtersDisabled && setActiveTypeFilter(f.key)}
+                  activeOpacity={0.75}
+                  disabled={filtersDisabled}>
+                  <Text style={[s.typeChipText, {color: isActive ? '#fff' : colors.textSecondary}]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Status filter */}
+        <ScrollView
           horizontal
-          inverted
           showsHorizontalScrollIndicator={false}
-          keyExtractor={f => f.key}
-          contentContainerStyle={s.filters}
-          renderItem={({item: f}) => {
-            const isActive = activeFilter === f.key;
+          contentContainerStyle={s.filters}>
+          {[...STATUS_FILTERS].reverse().map(f => {
+            const isActive = activeStatusFilter === f.key;
             return (
               <TouchableOpacity
-                style={[s.filterChip, {
-                  backgroundColor: isActive ? colors.primary : colors.card,
-                  borderColor:     isActive ? colors.primary : colors.border,
-                }]}
-                onPress={() => setActiveFilter(f.key)}
+                key={f.key}
+                style={[
+                  s.filterChip,
+                  {
+                    backgroundColor: isActive ? colors.primary : colors.card,
+                    borderColor:     isActive ? colors.primary : colors.border,
+                    opacity: filtersDisabled ? 0.4 : 1,
+                  },
+                ]}
+                onPress={() => !filtersDisabled && setActiveStatusFilter(f.key)}
+                disabled={filtersDisabled}
                 activeOpacity={0.75}>
                 <Text style={[s.filterText, {color: isActive ? '#fff' : colors.textSecondary}]}>
                   {f.label}
                 </Text>
               </TouchableOpacity>
             );
-          }}
-        />
+          })}
+        </ScrollView>
       </View>
 
       {loading ? (
@@ -230,11 +286,20 @@ const s = StyleSheet.create({
   center:       {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:       {paddingHorizontal: 16, paddingTop: 56, paddingBottom: 4},
   headerTitle:  {fontSize: 26, fontWeight: '800', marginBottom: 14},
+
   searchBox:    {flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 50, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 12},
   searchInput:  {flex: 1, fontSize: 14, padding: 0},
-  filters:      {gap: 8, paddingBottom: 10, flexDirection: 'row'},
-  filterChip:   {paddingHorizontal: 18, paddingVertical: 9, borderRadius: 50, borderWidth: 1},
-  filterText:   {fontSize: 13, fontWeight: '600'},
+
+  // Type filter (mobile / onshop)
+  typeFilterRow:{flexDirection: 'row', gap: 8, marginBottom: 10},
+  typeChip:     {flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12, borderWidth: 1},
+  typeChipText: {fontSize: 12, fontWeight: '700'},
+
+  // Status filter
+  filters:      {gap: 6, paddingBottom: 10, paddingHorizontal: 2, flexDirection: 'row-reverse', alignItems: 'center'},
+  filterChip:   {paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, borderWidth: 1},
+  filterText:   {fontSize: 12, fontWeight: '600'},
+
   list:         {paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8},
   card:         {borderRadius: 16, borderWidth: 1, marginBottom: 12, padding: 16, gap: 10},
   cardTop:      {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
@@ -250,6 +315,7 @@ const s = StyleSheet.create({
   cardDivider:  {height: 1},
   cardBottom:   {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
   detailsBtn:   {paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20},
+  detailsBtnText:{fontSize: 13, fontWeight: '700'},
   footer:       {paddingVertical: 16},
   priceCol:     {gap: 2},
   priceLabel:   {fontSize: 11},

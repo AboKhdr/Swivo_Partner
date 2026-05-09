@@ -1,25 +1,26 @@
 import React, {useState, useCallback, useEffect} from 'react';
-import {ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
-import {ArrowRight, Pencil, Car, Plus, ChevronDown, ChevronUp} from 'lucide-react-native';
+import {ActivityIndicator, FlatList, Image, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
+import {ArrowRight, Pencil, Plus, ChevronDown, ChevronUp} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {getServices, getCategories, toggleService} from '../../../services/partner';
+import {getCategoryServices, toggleService} from '../../../services/partner';
 import AddServiceScreen from './AddServiceScreen';
 
 function ServiceCard({item, colors, t, onEdit, onToggle}) {
-  const nameAr = item.name?.ar ?? item.name?.en ?? item.nameAr ?? '';
-  const prices = item.price ?? item.prices ?? {};
+  const nameAr = item.name?.ar ?? item.name?.en ?? '';
+  const prices  = item.price ?? {};
 
   return (
     <View style={[s.card, {backgroundColor: colors.bg, borderColor: colors.border}]}>
       <View style={s.cardHeader}>
-        <View style={[s.carIcon, {backgroundColor: colors.primary + '15'}]}>
-          <Car size={18} color={colors.primary} />
-        </View>
+        {item.image
+          ? <Image source={{uri: item.image}} style={s.svcImg} resizeMode="cover" />
+          : <View style={[s.svcImgPlaceholder, {backgroundColor: colors.primary + '15'}]} />
+        }
         <Text style={[s.cardName, {color: colors.textPrimary}]}>{nameAr}</Text>
         <Switch
           value={item.isActive ?? true}
-          onValueChange={val => onToggle(item._id ?? item.id, val)}
+          onValueChange={val => onToggle(item._id, val)}
           trackColor={{false: colors.border, true: colors.primary + 'AA'}}
           thumbColor={item.isActive ? colors.primary : '#ccc'}
         />
@@ -32,7 +33,7 @@ function ServiceCard({item, colors, t, onEdit, onToggle}) {
         {['large', 'medium', 'small'].map(size => (
           <View key={size} style={[s.priceBox, {backgroundColor: colors.card}]}>
             <Text style={[s.priceVal, {color: colors.primary}]}>
-              ﷼ {prices[size] ?? prices[size === 'large' ? 'L' : size === 'medium' ? 'M' : 'S'] ?? '—'}
+              ﷼ {prices[size] ?? '—'}
             </Text>
             <Text style={[s.priceLbl, {color: colors.textSecondary}]}>
               {t(`partner.services.${size}`)}
@@ -44,10 +45,11 @@ function ServiceCard({item, colors, t, onEdit, onToggle}) {
   );
 }
 
-function CategoryAccordion({category, services, colors, t, onEdit, onToggle}) {
-  const [open, setOpen] = useState(true);
-  const name = category.name?.ar ?? category.name?.en ?? category.name ?? '';
-  const count = services.length;
+function CategoryAccordion({category, colors, t, onEdit, onToggle}) {
+  const [open, setOpen]   = useState(true);
+  const name              = category.name?.ar ?? category.name?.en ?? '';
+  const services          = category.services ?? [];
+  const categoryId        = category._id ?? category.id;
 
   return (
     <View style={[s.accordion, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -55,9 +57,12 @@ function CategoryAccordion({category, services, colors, t, onEdit, onToggle}) {
         style={s.accordionHeader}
         onPress={() => setOpen(v => !v)}
         activeOpacity={0.75}>
-        <View style={[s.catDot, {backgroundColor: colors.primary}]} />
+        {category.icon
+          ? <Image source={{uri: category.icon}} style={s.catIcon} resizeMode="cover" />
+          : <View style={[s.catDot, {backgroundColor: colors.primary}]} />
+        }
         <Text style={[s.catName, {color: colors.textPrimary}]}>{name}</Text>
-        <Text style={[s.catCount, {color: colors.textSecondary}]}>{count}</Text>
+        <Text style={[s.catCount, {color: colors.textSecondary}]}>{services.length}</Text>
         {open
           ? <ChevronUp size={18} color={colors.textSecondary} />
           : <ChevronDown size={18} color={colors.textSecondary} />
@@ -71,11 +76,11 @@ function CategoryAccordion({category, services, colors, t, onEdit, onToggle}) {
           ) : (
             services.map(item => (
               <ServiceCard
-                key={item._id ?? item.id}
+                key={item._id}
                 item={item}
                 colors={colors}
                 t={t}
-                onEdit={onEdit}
+                onEdit={item => onEdit(item, categoryId)}
                 onToggle={onToggle}
               />
             ))
@@ -89,22 +94,19 @@ function CategoryAccordion({category, services, colors, t, onEdit, onToggle}) {
 export default function ServicesScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [services,       setServices]       = useState([]);
-  const [categories,     setCategories]     = useState([]);
+  const [grouped,        setGrouped]        = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [editingService, setEditingService] = useState(null);
   const [showAdd,        setShowAdd]        = useState(false);
 
+  const totalServices = grouped.reduce((acc, cat) => acc + (cat.services?.length ?? 0), 0);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [srvRes, catRes] = await Promise.all([getServices(), getCategories()]);
-    if (srvRes.success) {
-      const list = srvRes.data?.data ?? srvRes.data ?? [];
-      setServices(Array.isArray(list) ? list : []);
-    }
-    if (catRes.success) {
-      const list = catRes.data?.data ?? catRes.data ?? [];
-      setCategories(Array.isArray(list) ? list : []);
+    const res = await getCategoryServices();
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setGrouped(Array.isArray(list) ? list : []);
     }
     setLoading(false);
   }, []);
@@ -112,35 +114,25 @@ export default function ServicesScreen({onBack}) {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleToggle = useCallback(async (id, val) => {
-    setServices(prev => prev.map(s => (s._id ?? s.id) === id ? {...s, isActive: val} : s));
+    setGrouped(prev => prev.map(cat => ({
+      ...cat,
+      services: (cat.services ?? []).map(sv => sv._id === id ? {...sv, isActive: val} : sv),
+    })));
     await toggleService(id, val);
   }, []);
 
-  const handleEdit = useCallback(item => setEditingService(item), []);
+  const handleEdit = useCallback((item, categoryId) => setEditingService({...item, categoryId}), []);
   const onSaved    = useCallback(() => { fetchData(); }, [fetchData]);
 
-  // Group services by category
-  const uncategorized = {_id: '__none', name: {ar: 'بدون تصنيف'}};
-  const allCategories = categories.length > 0 ? categories : [uncategorized];
-
-  const grouped = allCategories.map(cat => {
-    const catId = cat._id ?? cat.id;
-    const catServices = services.filter(srv => {
-      const srvCatId = srv.categoryId ?? srv.category?._id ?? srv.category;
-      return catId === '__none' ? !srvCatId : srvCatId === catId;
-    });
-    return {category: cat, services: catServices};
-  }).filter(g => g.services.length > 0);
-
-  // Services with no matching category
-  const matchedIds = new Set(services.filter(srv => {
-    const srvCatId = srv.categoryId ?? srv.category?._id ?? srv.category;
-    return srvCatId && allCategories.some(c => (c._id ?? c.id) === srvCatId);
-  }).map(s => s._id ?? s.id));
-  const orphaned = services.filter(s => !matchedIds.has(s._id ?? s.id));
-  if (orphaned.length > 0) {
-    grouped.push({category: uncategorized, services: orphaned});
-  }
+  const renderCategory = useCallback(({item}) => (
+    <CategoryAccordion
+      category={item}
+      colors={colors}
+      t={t}
+      onEdit={handleEdit}
+      onToggle={handleToggle}
+    />
+  ), [colors, t, handleEdit, handleToggle]);
 
   const showList = !showAdd && !editingService;
 
@@ -155,7 +147,7 @@ export default function ServicesScreen({onBack}) {
             <View style={s.headerText}>
               <Text style={[s.headerTitle, {color: colors.textPrimary}]}>{t('partner.services.title')}</Text>
               <Text style={[s.headerSub, {color: colors.textSecondary}]}>
-                {services.length} {t('partner.operations.menu.servicesSub')}
+                {totalServices} {t('partner.operations.menu.servicesSub')}
               </Text>
             </View>
             <TouchableOpacity
@@ -169,38 +161,30 @@ export default function ServicesScreen({onBack}) {
           {loading ? (
             <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
           ) : (
-            <ScrollView
+            <FlatList
+              data={grouped}
+              renderItem={renderCategory}
+              keyExtractor={item => item._id ?? item.id}
               contentContainerStyle={s.list}
-              showsVerticalScrollIndicator={false}>
-              {grouped.map(({category, services: catServices}) => (
-                <CategoryAccordion
-                  key={category._id ?? category.id}
-                  category={category}
-                  services={catServices}
-                  colors={colors}
-                  t={t}
-                  onEdit={handleEdit}
-                  onToggle={handleToggle}
-                />
-              ))}
-              {grouped.length === 0 && (
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
                 <View style={s.center}>
                   <Text style={{color: colors.textSecondary, fontSize: 14}}>لا توجد خدمات</Text>
                 </View>
-              )}
-            </ScrollView>
+              }
+            />
           )}
         </View>
       </View>
 
       {showAdd && (
         <View style={s.flex}>
-          <AddServiceScreen onBack={() => setShowAdd(false)} onSaved={onSaved} />
+          <AddServiceScreen categories={grouped} onBack={() => setShowAdd(false)} onSaved={onSaved} />
         </View>
       )}
       {editingService && (
         <View style={s.flex}>
-          <AddServiceScreen initialData={editingService} onBack={() => setEditingService(null)} onSaved={onSaved} />
+          <AddServiceScreen categories={grouped} initialData={editingService} onBack={() => setEditingService(null)} onSaved={onSaved} />
         </View>
       )}
     </View>
@@ -222,6 +206,7 @@ const s = StyleSheet.create({
 
   accordion:       {borderRadius: 18, borderWidth: 1, overflow: 'hidden'},
   accordionHeader: {flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14},
+  catIcon:         {width: 24, height: 24, borderRadius: 6},
   catDot:          {width: 8, height: 8, borderRadius: 4},
   catName:         {flex: 1, fontSize: 15, fontWeight: '800'},
   catCount:        {fontSize: 13, fontWeight: '600'},
@@ -230,7 +215,8 @@ const s = StyleSheet.create({
 
   card:            {borderRadius: 14, borderWidth: 1, padding: 14, gap: 12},
   cardHeader:      {flexDirection: 'row', alignItems: 'center', gap: 10},
-  carIcon:         {width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center'},
+  svcImg:          {width: 38, height: 38, borderRadius: 10},
+  svcImgPlaceholder:{width: 38, height: 38, borderRadius: 10},
   cardName:        {flex: 1, fontSize: 14, fontWeight: '700'},
   editBtn:         {width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
 

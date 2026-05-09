@@ -1,10 +1,10 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, Alert, FlatList, Image, Modal, PermissionsAndroid, Platform, StyleSheet, Switch, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
+import {ActivityIndicator, Alert, FlatList, Image, Modal, PermissionsAndroid, Platform, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View} from 'react-native';
 import {ArrowRight, Pencil, MapPin, Clock, Bike, ShoppingBag, Camera, ImagePlus, X, Wrench} from 'lucide-react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {getBranches, getBranchServices, toggleBranchService} from '../../../services/partner';
+import {getBranches, getBranchServices, updateBranchBanner} from '../../../services/partner';
 import EditBranchScreen from './EditBranchScreen';
 
 async function requestCamera() {
@@ -69,7 +69,7 @@ function ImagePickerModal({visible, onCamera, onGallery, onRemove, hasImage, onC
 }
 
 
-function BannerArea({image, colors, onChangeImage, onEdit}) {
+function BannerArea({image, colors, onChangeImage, onEdit, uploading}) {
   return (
     <View style={s.bannerBox}>
       {image
@@ -90,9 +90,14 @@ function BannerArea({image, colors, onChangeImage, onEdit}) {
           </View>
         )
       }
+      {uploading && (
+        <View style={s.bannerOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      )}
       {/* Camera button — change banner */}
       <TouchableOpacity
-        style={[s.cameraBtn, {backgroundColor: colors.card}]}
+        style={[s.cameraBtn, {backgroundColor: colors.card, opacity: uploading ? 0.4 : 1}]}
         onPress={onChangeImage}
         activeOpacity={0.8}>
         <Camera size={14} color={colors.primary} />
@@ -109,8 +114,9 @@ function BannerArea({image, colors, onChangeImage, onEdit}) {
 }
 
 function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
-  const [banner,        setBanner]        = useState(item.banner ?? null);
+  const [banner,        setBanner]        = useState(item.banner ?? item.image ?? null);
   const [showImgPick,   setShowImgPick]   = useState(false);
+  const [uploading,     setUploading]     = useState(false);
   const [branchSvcs,    setBranchSvcs]    = useState([]);
   const [svcsLoading,   setSvcsLoading]   = useState(true);
   const branchId = item._id ?? item.id;
@@ -125,11 +131,6 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
     });
   }, [branchId]);
 
-  const handleToggleSvc = useCallback(async (serviceId, val) => {
-    setBranchSvcs(prev => prev.map(sv => sv.serviceId === serviceId ? {...sv, isEnabled: val} : sv));
-    await toggleBranchService(branchId, serviceId, val);
-  }, [branchId]);
-
   const nameAr  = item.name?.ar ?? item.name?.en ?? item.nameAr ?? '';
   const address = item.address ?? '';
   const orders  = item.activeOrdersCount  ?? item.orders  ?? 0;
@@ -138,13 +139,24 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
   const openHour  = item.workingHours?.find(h => !h.isClosed);
   const hoursStr  = openHour ? `${openHour.open} – ${openHour.close}` : (item.hours ?? '');
 
+  const uploadBanner = async uri => {
+    setBanner(uri);
+    setUploading(true);
+    const res = await updateBranchBanner(branchId, uri);
+    setUploading(false);
+    if (!res.success) {
+      Alert.alert('خطأ', `تعذّر رفع الصورة\n${res.error ?? ''}`);
+      setBanner(item.banner ?? item.image ?? null);
+    }
+  };
+
   const handleCamera = async () => {
     setShowImgPick(false);
     const allowed = await requestCamera();
     if (!allowed) { Alert.alert('تنبيه', 'يرجى منح إذن الكاميرا من الإعدادات'); return; }
     launchCamera({mediaType: 'photo', quality: 0.8, saveToPhotos: false}, res => {
       const uri = res.assets?.[0]?.uri;
-      if (uri) setBanner(uri);
+      if (uri) uploadBanner(uri);
     });
   };
 
@@ -152,19 +164,30 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
     setShowImgPick(false);
     launchImageLibrary({mediaType: 'photo', quality: 0.8, selectionLimit: 1}, res => {
       const uri = res.assets?.[0]?.uri;
-      if (uri) setBanner(uri);
+      if (uri) uploadBanner(uri);
     });
   };
 
-  const handleRemove = () => { setBanner(null); setShowImgPick(false); };
+  const handleRemove = async () => {
+    setShowImgPick(false);
+    setBanner(null);
+    setUploading(true);
+    const res = await updateBranchBanner(branchId, null);
+    setUploading(false);
+    if (!res.success) {
+      Alert.alert('خطأ', 'تعذّر حذف الصورة، يرجى المحاولة مجدداً');
+      setBanner(item.banner ?? item.image ?? null);
+    }
+  };
 
   return (
     <View style={[s.card, {backgroundColor: colors.card}]}>
       <BannerArea
         image={banner}
         colors={colors}
-        onChangeImage={() => setShowImgPick(true)}
+        onChangeImage={() => !uploading && setShowImgPick(true)}
         onEdit={() => onEdit(item)}
+        uploading={uploading}
       />
       <ImagePickerModal
         visible={showImgPick}
@@ -185,6 +208,11 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
             <Text style={[s.addrName, {color: colors.textPrimary}]}>{nameAr}</Text>
             {!!address && <Text style={[s.addrSub, {color: colors.textSecondary}]}>{address}</Text>}
           </View>
+          {item.isMain && (
+            <View style={[s.mainBadge, {backgroundColor: colors.primary}]}>
+              <Text style={s.mainBadgeText}>{mainLabel}</Text>
+            </View>
+          )}
         </View>
 
         <View style={[s.divider, {backgroundColor: colors.border}]} />
@@ -219,36 +247,25 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
           {svcsLoading
             ? <ActivityIndicator size="small" color={colors.primary} style={{marginVertical: 8}} />
             : branchSvcs.map(sv => {
-              const svcName = sv.service?.name?.ar ?? sv.service?.name?.en ?? sv.serviceId ?? '';
+              const svcId   = sv.serviceId ?? sv._id ?? sv.service?._id ?? '';
+              const svcName = sv.service?.name?.ar ?? sv.service?.name?.en ?? svcId ?? '';
               const cat     = sv.service?.category?.name?.ar ?? '';
+              const isOn    = sv.isEnabled ?? false;
               return (
-                <View key={sv.serviceId} style={[s.serviceRow, {borderBottomColor: colors.border}]}>
-                  <View style={s.serviceInfo}>
-                    <Text style={[s.serviceName, {color: colors.textPrimary}]}>{svcName}</Text>
-                    {!!cat && (
-                      <View style={[s.categoryChip, {backgroundColor: colors.primary + '12'}]}>
-                        <Text style={[s.categoryText, {color: colors.primary}]}>{cat}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Switch
-                    value={sv.isEnabled ?? false}
-                    onValueChange={val => handleToggleSvc(sv.serviceId, val)}
-                    trackColor={{false: colors.border, true: colors.primary + 'AA'}}
-                    thumbColor={sv.isEnabled ? colors.primary : '#ccc'}
-                  />
+                <View key={svcId} style={[s.serviceRow, {borderBottomColor: colors.border}]}>
+                  <Text style={[s.serviceName, {color: colors.textPrimary, flex: 1}]}>{svcName}</Text>
+                  {!!cat && (
+                    <View style={[s.categoryChip, {backgroundColor: colors.primary + '12'}]}>
+                      <Text style={[s.categoryText, {color: colors.primary}]}>{cat}</Text>
+                    </View>
+                  )}
+                  <View style={[s.statusDot, {backgroundColor: isOn ? '#22C55E' : colors.border}]} />
                 </View>
               );
             })
           }
         </View>
       </View>
-
-      {item.isMain && (
-        <View style={[s.mainBadge, {backgroundColor: colors.primary}]}>
-          <Text style={s.mainBadgeText}>{mainLabel}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -345,11 +362,12 @@ const s = StyleSheet.create({
   mapLineV:      {position: 'absolute', top: 0, bottom: 0, width: 1},
   mapPin:        {width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center'},
   mapPinInner:   {width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFF'},
+  bannerOverlay: {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center'},
   cameraBtn:     {position: 'absolute', bottom: 10, left: 10, width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: {width: 0, height: 1}},
   editBtn:       {position: 'absolute', top: 10, left: 10, width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: {width: 0, height: 1}},
 
   cardBody:      {padding: 14, gap: 10},
-  addrRow:       {flexDirection: 'row', gap: 6},
+  addrRow:       {flexDirection: 'row', alignItems : "center", gap: 6},
   addrText:      {flex: 1, gap: 3},
   addrName:      {fontSize: 15, fontWeight: '800'},
   addrSub:       {fontSize: 12},
@@ -359,18 +377,18 @@ const s = StyleSheet.create({
   statItem:      {flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 50, alignItems: 'center', gap: 5},
   statValue:     {fontSize: 13, fontWeight: '600'},
 
-  mainBadge:     {position: 'absolute', bottom: 82, left: 14, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20},
+  mainBadge:     {paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20},
   mainBadgeText: {color: '#FFF', fontSize: 12, fontWeight: '700'},
 
   servicesSection:       {gap: 0},
   servicesSectionHeader: {flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10},
   svcIconBox:            {width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
   servicesSectionTitle:  {fontSize: 13, fontWeight: '800'},
-  serviceRow:            {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1},
-  serviceInfo:           {flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1},
+  serviceRow:            {flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderBottomWidth: 1},
   serviceName:           {fontSize: 13, fontWeight: '600'},
   categoryChip:          {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20},
   categoryText:          {fontSize: 10, fontWeight: '700'},
+  statusDot:             {width: 8, height: 8, borderRadius: 4},
 });
 
 const ip = StyleSheet.create({

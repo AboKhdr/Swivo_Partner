@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {ArrowRight, ChevronDown, Check, Minus, Plus} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-import {getServices, createPackage, updatePackage} from '../../../services/partner';
+import {getCategoryServices, createPackage, updatePackage} from '../../../services/partner';
 
 function ServicesModal({visible, allServices, selected, onToggle, onClose, colors}) {
   return (
@@ -118,10 +118,11 @@ export default function AddPackageScreen({onBack, onSaved, initialData}) {
   const [saving,           setSaving]           = useState(false);
 
   useEffect(() => {
-    getServices().then(res => {
+    getCategoryServices().then(res => {
       if (res.success) {
-        const list = res.data?.data ?? res.data ?? [];
-        setAllServices(Array.isArray(list) ? list : []);
+        const cats = res.data?.data ?? res.data ?? [];
+        const flat = (Array.isArray(cats) ? cats : []).flatMap(c => c.services ?? []);
+        setAllServices(flat);
       }
       setLoadingSvcs(false);
     });

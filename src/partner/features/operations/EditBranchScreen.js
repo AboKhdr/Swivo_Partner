@@ -1,6 +1,7 @@
-import React, {useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,49 +12,38 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import {ArrowRight, MapPin, Navigation, Plus, Trash2, Clock, ChevronUp, ChevronDown} from 'lucide-react-native';
+import {ArrowRight, MapPin, Navigation, Plus, Trash2, Clock, ChevronUp, ChevronDown, Wrench} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import DeleteConfirmModal from '../../../shared/components/DeleteConfirmModal';
-import {updateBranch} from '../../../services/partner';
+import {updateBranch, getBranchServices} from '../../../services/partner';
 
 // ─── Time stepper (hour + minute with +/- buttons) ───────────────────────────
 function TimeStepper({value, onChange, colors}) {
-  // value: "HH:MM"
   const parts  = (value || '09:00').split(':');
   const hour   = parseInt(parts[0], 10) || 0;
   const minute = parseInt(parts[1], 10) || 0;
-
-  const fmt = (h, m) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
-  const changeHour = delta => {
-    const next = (hour + delta + 24) % 24;
-    onChange(fmt(next, minute));
-  };
-  const changeMinute = delta => {
-    const next = (minute + delta + 60) % 60;
-    onChange(fmt(hour, next));
-  };
+  const fmt    = (h, m) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
   return (
     <View style={[tp.wrap, {backgroundColor: colors.bg, borderColor: colors.border}]}>
       {/* Minutes */}
       <View style={tp.col}>
-        <TouchableOpacity onPress={() => changeMinute(5)} hitSlop={8} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => onChange(fmt(hour, (minute + 5) % 60))} hitSlop={8} activeOpacity={0.7}>
           <ChevronUp size={16} color={colors.primary} />
         </TouchableOpacity>
         <Text style={[tp.num, {color: colors.textPrimary}]}>{String(minute).padStart(2, '0')}</Text>
-        <TouchableOpacity onPress={() => changeMinute(-5)} hitSlop={8} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => onChange(fmt(hour, (minute - 5 + 60) % 60))} hitSlop={8} activeOpacity={0.7}>
           <ChevronDown size={16} color={colors.primary} />
         </TouchableOpacity>
       </View>
       <Text style={[tp.colon, {color: colors.textSecondary}]}>:</Text>
       {/* Hours */}
       <View style={tp.col}>
-        <TouchableOpacity onPress={() => changeHour(1)} hitSlop={8} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => onChange(fmt((hour + 1) % 24, minute))} hitSlop={8} activeOpacity={0.7}>
           <ChevronUp size={16} color={colors.primary} />
         </TouchableOpacity>
         <Text style={[tp.num, {color: colors.textPrimary}]}>{String(hour).padStart(2, '0')}</Text>
-        <TouchableOpacity onPress={() => changeHour(-1)} hitSlop={8} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => onChange(fmt((hour - 1 + 24) % 24, minute))} hitSlop={8} activeOpacity={0.7}>
           <ChevronDown size={16} color={colors.primary} />
         </TouchableOpacity>
       </View>
@@ -62,36 +52,57 @@ function TimeStepper({value, onChange, colors}) {
 }
 
 const DAYS = [
-  {key: 'sat', label: 'السبت'},
-  {key: 'sun', label: 'الاحد'},
-  {key: 'mon', label: 'الاثنين'},
-  {key: 'tue', label: 'الثلاثاء'},
-  {key: 'wed', label: 'الاربعاء'},
-  {key: 'thu', label: 'الخميس'},
-  {key: 'fri', label: 'الجمعة'},
+  {key: 'saturday',  label: 'السبت'},
+  {key: 'sunday',    label: 'الاحد'},
+  {key: 'monday',    label: 'الاثنين'},
+  {key: 'tuesday',   label: 'الثلاثاء'},
+  {key: 'wednesday', label: 'الاربعاء'},
+  {key: 'thursday',  label: 'الخميس'},
+  {key: 'friday',    label: 'الجمعة'},
 ];
 
-// ─── Slot row (from → to steppers + delete) ──────────────────────────────────
+function fromWorkHours(workHours) {
+  return DAYS.reduce((acc, d) => {
+    const intervals = workHours?.[d.key];
+    const isOpen = Array.isArray(intervals) && intervals.length > 0;
+    acc[d.key] = {
+      enabled: isOpen,
+      slots: isOpen
+        ? intervals.map((iv, i) => ({id: String(i), from: iv.start ?? '09:00', to: iv.end ?? '22:00'}))
+        : [],
+    };
+    return acc;
+  }, {});
+}
+
+function toWorkHours(days) {
+  return Object.fromEntries(
+    DAYS.map(d => [
+      d.key,
+      days[d.key].enabled
+        ? days[d.key].slots.map(s => ({start: s.from, end: s.to}))
+        : [],
+    ]),
+  );
+}
+
+// ─── Slot row ─────────────────────────────────────────────────────────────────
 function SlotRow({slot, onChangeFrom, onChangeTo, onDelete, colors}) {
   return (
-    <View style={[m.slotRow, {backgroundColor: colors.bg, borderColor: colors.border}]}>
-      <View style={m.slotBody}>
-        <View style={m.slotTimes}>
-          {/* "إلى" on the right side (RTL: displayed first) */}
-          <View style={m.slotTimeCol}>
-            <Text style={[m.slotLabel, {color: colors.textSecondary}]}>إلى</Text>
-            <TimeStepper value={slot.to} onChange={onChangeTo} colors={colors} />
-          </View>
-          <Text style={[m.slotDash, {color: colors.textSecondary}]}>–</Text>
-          {/* "من" */}
-          <View style={m.slotTimeCol}>
-            <Text style={[m.slotLabel, {color: colors.textSecondary}]}>من</Text>
-            <TimeStepper value={slot.from} onChange={onChangeFrom} colors={colors} />
-          </View>
+    <View style={[r.row, {backgroundColor: colors.bg, borderColor: colors.border}]}>
+      <View style={r.times}>
+        <View style={r.timeCol}>
+          <Text style={[r.lbl, {color: colors.textSecondary}]}>إلى</Text>
+          <TimeStepper value={slot.to}   onChange={onChangeTo}   colors={colors} />
+        </View>
+        <Text style={[r.dash, {color: colors.textSecondary}]}>—</Text>
+        <View style={r.timeCol}>
+          <Text style={[r.lbl, {color: colors.textSecondary}]}>من</Text>
+          <TimeStepper value={slot.from} onChange={onChangeFrom} colors={colors} />
         </View>
       </View>
-      <TouchableOpacity onPress={onDelete} hitSlop={8} activeOpacity={0.7} style={m.slotDelete}>
-        <Trash2 size={16} color={colors.danger} />
+      <TouchableOpacity onPress={onDelete} hitSlop={10} activeOpacity={0.7} style={r.del}>
+        <Trash2 size={15} color={colors.danger} />
       </TouchableOpacity>
     </View>
   );
@@ -107,31 +118,25 @@ function DaySlotsModal({visible, day, slots, onAddSlot, onUpdateSlot, onDeleteSl
       <View style={m.sheet}>
         <View style={[m.card, {backgroundColor: colors.card}]}>
           <View style={[m.handle, {backgroundColor: colors.border}]} />
-
           <View style={m.modalHeader}>
             <Text style={[m.title, {color: colors.textPrimary}]}>{day?.label}</Text>
             <TouchableOpacity
-              style={[m.addSlotBtn, {backgroundColor: colors.primary}]}
+              style={[m.addBtn, {backgroundColor: colors.primary}]}
               onPress={onAddSlot}
               activeOpacity={0.85}>
-              <Plus size={16} color="#FFF" />
-              <Text style={m.addSlotTxt}>إضافة فترة</Text>
+              <Plus size={15} color="#FFF" />
+              <Text style={m.addTxt}>إضافة فترة</Text>
             </TouchableOpacity>
           </View>
 
           {slots.length === 0 ? (
-            <View style={m.emptyWrap}>
-              <Clock size={28} color={colors.textSecondary} />
-              <Text style={[m.emptyTxt, {color: colors.textSecondary}]}>
-                لا توجد فترات عمل — اضغط إضافة فترة
-              </Text>
+            <View style={m.empty}>
+              <Clock size={26} color={colors.textSecondary} />
+              <Text style={[m.emptyTxt, {color: colors.textSecondary}]}>لا توجد فترات — اضغط إضافة فترة</Text>
             </View>
           ) : (
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={m.slotsList}
-              keyboardShouldPersistTaps="handled">
-              {slots.map((slot, i) => (
+            <ScrollView showsVerticalScrollIndicator={false} style={m.list} keyboardShouldPersistTaps="handled">
+              {slots.map(slot => (
                 <SlotRow
                   key={slot.id}
                   slot={slot}
@@ -144,11 +149,8 @@ function DaySlotsModal({visible, day, slots, onAddSlot, onUpdateSlot, onDeleteSl
             </ScrollView>
           )}
 
-          <TouchableOpacity
-            style={[m.doneBtn, {backgroundColor: colors.primary}]}
-            onPress={onClose}
-            activeOpacity={0.85}>
-            <Text style={m.doneTxt}>حفظ</Text>
+          <TouchableOpacity style={[m.doneBtn, {backgroundColor: colors.primary}]} onPress={onClose} activeOpacity={0.85}>
+            <Text style={m.doneTxt}>تم</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -160,34 +162,46 @@ function DaySlotsModal({visible, day, slots, onAddSlot, onUpdateSlot, onDeleteSl
 export default function EditBranchScreen({branch, onBack, onSaved}) {
   const {colors} = useTheme();
 
-  const branchId = branch?._id ?? branch?.id;
+  const branchId  = branch?._id ?? branch?.id;
   const [branchName, setBranchName] = useState(branch?.name?.ar ?? branch?.nameAr ?? '');
   const [isMain,     setIsMain]     = useState(branch?.isMain ?? false);
   const [showDelete, setShowDelete] = useState(false);
   const [editingDay, setEditingDay] = useState(null);
   const [saving,     setSaving]     = useState(false);
 
-  const [days, setDays] = useState(() =>
-    DAYS.reduce((acc, d) => {
-      acc[d.key] = {
-        enabled: d.key !== 'fri',
-        slots: d.key !== 'fri'
-          ? [{id: '1', from: '09:00', to: '22:00'}]
-          : [],
-      };
-      return acc;
-    }, {}),
-  );
+  const [days,      setDays]      = useState(() => fromWorkHours(branch?.workHours));
+  const [services,  setServices]  = useState([]);
+  const [svcsLoading, setSvcsLoading] = useState(true);
+
+
+  useEffect(() => {
+    getBranchServices(branchId).then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        const arr  = Array.isArray(list) ? list : [];
+        setServices(arr);
+      }
+      setSvcsLoading(false);
+    });
+  }, [branchId]);
+
+  const handleToggleSvc = useCallback((serviceId, val) => {
+    setServices(prev => prev.map(sv => sv.serviceId === serviceId ? {...sv, isEnabled: val} : sv));
+  }, []);
 
   const toggleDay = key =>
     setDays(prev => ({...prev, [key]: {...prev[key], enabled: !prev[key].enabled}}));
 
   const addSlot = key => {
     const id = String(Date.now());
-    setDays(prev => ({
-      ...prev,
-      [key]: {...prev[key], slots: [...prev[key].slots, {id, from: '', to: ''}]},
-    }));
+    setDays(prev => {
+      const existing = prev[key].slots;
+      const lastTo   = existing.length > 0 ? existing[existing.length - 1].to : '09:00';
+      return {
+        ...prev,
+        [key]: {...prev[key], slots: [...existing, {id, from: lastTo, to: lastTo}]},
+      };
+    });
   };
 
   const updateSlot = (key, slotId, field, val) => {
@@ -206,9 +220,6 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
       [key]: {...prev[key], slots: prev[key].slots.filter(s => s.id !== slotId)},
     }));
   };
-
-  const editingDayObj = editingDay ? DAYS.find(d => d.key === editingDay) : null;
-  const editingSlots  = editingDay ? days[editingDay].slots : [];
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -257,7 +268,8 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
         <View style={[s.daysCard, {backgroundColor: colors.card}]}>
           {DAYS.map((day, i) => {
             const d = days[day.key];
-            const slotsCount = d.slots.length;
+            const firstSlot = d.slots[0];
+            const summary = firstSlot ? `${firstSlot.from} – ${firstSlot.to}` : null;
             return (
               <View key={day.key}>
                 <TouchableOpacity
@@ -270,14 +282,19 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
                     trackColor={{false: colors.border, true: colors.primary}}
                     thumbColor="#FFF"
                   />
-                  <Text style={[s.dayLabel, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
-                    {day.label}
-                  </Text>
+                  <View style={s.dayInfo}>
+                    <Text style={[s.dayLabel, {color: d.enabled ? colors.textPrimary : colors.textSecondary}]}>
+                      {day.label}
+                    </Text>
+                    {d.enabled && summary && (
+                      <Text style={[s.daySummary, {color: colors.textSecondary}]}>{summary}</Text>
+                    )}
+                  </View>
                   {d.enabled ? (
                     <View style={[s.slotsBadge, {backgroundColor: colors.primary + '12'}]}>
-                      <Clock size={12} color={colors.primary} />
+                      <Clock size={11} color={colors.primary} />
                       <Text style={[s.slotsBadgeTxt, {color: colors.primary}]}>
-                        {slotsCount > 0 ? `${slotsCount} فترة` : 'لا فترات'}
+                        {d.slots.length > 0 ? `${d.slots.length} فترة` : 'لا فترات'}
                       </Text>
                     </View>
                   ) : (
@@ -290,6 +307,46 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
               </View>
             );
           })}
+        </View>
+
+        {/* Services */}
+        <Text style={[s.label, {color: colors.textPrimary}]}>الخدمات</Text>
+        <View style={[s.daysCard, {backgroundColor: colors.card}]}>
+          {svcsLoading ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{margin: 16}} />
+          ) : services.length === 0 ? (
+            <View style={s.svcsEmpty}>
+              <Wrench size={20} color={colors.textSecondary} />
+              <Text style={[s.svcsEmptyTxt, {color: colors.textSecondary}]}>لا توجد خدمات</Text>
+            </View>
+          ) : (
+            services.map((sv, i) => {
+              const name     = sv.service?.name?.ar ?? sv.service?.name?.en ?? sv.serviceId ?? '';
+              const duration = sv?.service?.estimationTime ?? sv.estimationTime ;
+              return (
+                <View key={sv.serviceId}>
+                  <View style={s.svcRow}>
+                    <Switch
+                      value={sv.isEnabled ?? false}
+                      onValueChange={v => handleToggleSvc(sv.serviceId, v)}
+                      trackColor={{false: colors.border, true: colors.primary}}
+                      thumbColor="#FFF"
+                    />
+                    <Text style={[s.svcName, {color: sv.isEnabled ? colors.textPrimary : colors.textSecondary}]}>
+                      {name}
+                    </Text>
+                    {duration != null && (
+                      <View style={[s.slotsBadge, {backgroundColor: colors.primary + '12'}]}>
+                        <Clock size={11} color={colors.primary} />
+                        <Text style={[s.slotsBadgeTxt, {color: colors.primary}]}>{duration} د</Text>
+                      </View>
+                    )}
+                  </View>
+                  {i < services.length - 1 && <View style={[s.sep, {backgroundColor: colors.border}]} />}
+                </View>
+              );
+            })
+          )}
         </View>
 
         {/* Main branch toggle */}
@@ -317,17 +374,16 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
             onPress={async () => {
               if (saving || !branchId) return;
               setSaving(true);
-              const workingHours = DAYS.map(d => ({
-                day: d.key,
-                isClosed: !days[d.key].enabled,
-                open:  days[d.key].slots[0]?.from ?? '09:00',
-                close: days[d.key].slots[0]?.to   ?? '22:00',
-              }));
-              await updateBranch(branchId, {
+              const res = await updateBranch(branchId, {
                 name: {ar: branchName.trim(), en: branchName.trim()},
-                workingHours,
+                workHours: toWorkHours(days),
+                services: services.map(sv => ({serviceId: sv.serviceId, isEnabled: sv.isEnabled ?? false})),
               });
               setSaving(false);
+              if (!res.success) {
+                Alert.alert('خطأ', 'تعذّر حفظ التعديلات، يرجى المحاولة مجدداً');
+                return;
+              }
               onSaved?.();
               onBack();
             }}>
@@ -348,8 +404,8 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
 
       <DaySlotsModal
         visible={!!editingDay}
-        day={editingDayObj}
-        slots={editingSlots}
+        day={editingDay ? DAYS.find(d => d.key === editingDay) : null}
+        slots={editingDay ? days[editingDay].slots : []}
         onAddSlot={() => addSlot(editingDay)}
         onUpdateSlot={(slotId, field, val) => updateSlot(editingDay, slotId, field, val)}
         onDeleteSlot={slotId => deleteSlot(editingDay, slotId)}
@@ -388,10 +444,17 @@ const s = StyleSheet.create({
 
   daysCard:     {borderRadius: 16, overflow: 'hidden', elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
   dayRow:       {flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 14},
-  dayLabel:     {flex: 1, fontSize: 14, fontWeight: '600'},
-  slotsBadge:   {flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20},
-  slotsBadgeTxt:{fontSize: 12, fontWeight: '700'},
+  dayInfo:      {flex: 1, gap: 2},
+  dayLabel:     {fontSize: 14, fontWeight: '600'},
+  daySummary:   {fontSize: 11},
+  slotsBadge:   {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20},
+  slotsBadgeTxt:{fontSize: 11, fontWeight: '700'},
   sep:          {height: 1},
+
+  svcRow:       {flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 14},
+  svcName:      {flex: 1, fontSize: 14, fontWeight: '600'},
+  svcsEmpty:    {flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16},
+  svcsEmptyTxt: {fontSize: 13},
 
   mainCard:     {flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
   mainText:     {flex: 1, gap: 4},
@@ -405,36 +468,37 @@ const s = StyleSheet.create({
   deleteTxt:    {fontSize: 16, fontWeight: '800'},
 });
 
+// ─── Modal styles ─────────────────────────────────────────────────────────────
 const m = StyleSheet.create({
-  overlay:      {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)'},
-  sheet:        {flex: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 32},
-  card:         {borderRadius: 24, padding: 20, gap: 16, maxHeight: '85%'},
-  handle:       {width: 40, height: 4, borderRadius: 2, alignSelf: 'center'},
-
-  modalHeader:  {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
-  title:        {fontSize: 18, fontWeight: '800'},
-  addSlotBtn:   {flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20},
-  addSlotTxt:   {color: '#FFF', fontSize: 13, fontWeight: '700'},
-
-  slotsList:    {maxHeight: 360},
-  slotRow:      {flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 16, borderWidth: 1, marginBottom: 10},
-  slotBody:     {flex: 1},
-  slotTimes:    {flexDirection: 'row', alignItems: 'center', gap: 8},
-  slotTimeCol:  {flex: 1, alignItems: 'center', gap: 4},
-  slotLabel:    {fontSize: 11, fontWeight: '600'},
-  slotDash:     {fontSize: 18, fontWeight: '300', marginTop: 18},
-  slotDelete:   {width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
-
-  emptyWrap:    {alignItems: 'center', gap: 10, paddingVertical: 24},
-  emptyTxt:     {fontSize: 13, textAlign: 'center'},
-
-  doneBtn:      {paddingVertical: 16, borderRadius: 14, alignItems: 'center'},
-  doneTxt:      {color: '#FFF', fontSize: 16, fontWeight: '800'},
+  overlay:     {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)'},
+  sheet:       {flex: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 32},
+  card:        {borderRadius: 24, padding: 20, gap: 16, maxHeight: '80%'},
+  handle:      {width: 40, height: 4, borderRadius: 2, alignSelf: 'center'},
+  modalHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+  title:       {fontSize: 18, fontWeight: '800'},
+  addBtn:      {flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20},
+  addTxt:      {color: '#FFF', fontSize: 13, fontWeight: '700'},
+  list:        {maxHeight: 340},
+  empty:       {alignItems: 'center', gap: 10, paddingVertical: 28},
+  emptyTxt:    {fontSize: 13},
+  doneBtn:     {paddingVertical: 15, borderRadius: 14, alignItems: 'center'},
+  doneTxt:     {color: '#FFF', fontSize: 16, fontWeight: '800'},
 });
 
+// ─── Slot row styles ──────────────────────────────────────────────────────────
+const r = StyleSheet.create({
+  row:     {flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, marginBottom: 10},
+  times:   {flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8},
+  timeCol: {flex: 1, alignItems: 'center', gap: 4},
+  lbl:     {fontSize: 11, fontWeight: '600'},
+  dash:    {fontSize: 16, fontWeight: '300'},
+  del:     {width: 32, height: 32, alignItems: 'center', justifyContent: 'center'},
+});
+
+// ─── Time stepper styles ──────────────────────────────────────────────────────
 const tp = StyleSheet.create({
-  wrap:   {flexDirection: 'row', alignItems: 'center', gap: 2, borderRadius: 12, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 6},
-  col:    {alignItems: 'center', gap: 2, minWidth: 32},
-  num:    {fontSize: 18, fontWeight: '800', lineHeight: 22},
-  colon:  {fontSize: 18, fontWeight: '300', marginBottom: 2},
+  wrap:  {flexDirection: 'row', alignItems: 'center', gap: 2, borderRadius: 12, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 6},
+  col:   {alignItems: 'center', gap: 2, minWidth: 32},
+  num:   {fontSize: 18, fontWeight: '800', lineHeight: 22},
+  colon: {fontSize: 18, fontWeight: '300', marginBottom: 2},
 });

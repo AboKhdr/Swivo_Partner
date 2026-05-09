@@ -11,11 +11,9 @@ import {
 import {
   ArrowLeft,
   GitBranch,
-  Clock,
   Car,
   Package,
   Bike,
-  CheckSquare,
   Users,
   DollarSign,
   Tag,
@@ -24,7 +22,8 @@ import {
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAppStore from '../../../store/appStore';
-import {showIncomingOrderNotification} from '../../../services/notificationChannel';
+import {getSettings, updateSettings} from '../../../services/partner';
+
 import ServicesScreen from './ServicesScreen';
 import PackagesScreen from './PackagesScreen';
 import StaffScreen from './StaffScreen';
@@ -65,7 +64,7 @@ function buildSections(t) {
 
 
 function MenuRow({item, colors, onPress}) {
-  const {Icon, label, sub, dot} = item;
+  const {Icon, label, dot} = item;
   return (
     <TouchableOpacity
       style={[s.row, {backgroundColor: colors.card}]}
@@ -82,7 +81,7 @@ function MenuRow({item, colors, onPress}) {
       {/* Text */}
       <View style={s.rowText}>
         <Text style={[s.rowLabel, {color: colors.textPrimary}]}>{label}</Text>
-        <Text style={[s.rowSub, {color: colors.textSecondary}]}>{sub}</Text>
+        {/* <Text style={[s.rowSub, {color: colors.textSecondary}]}>{sub}</Text> */}
       </View>
 
     {/* Left arrow */}
@@ -91,23 +90,30 @@ function MenuRow({item, colors, onPress}) {
   );
 }
 
-const MOCK_INCOMING = {
-  _id: 'TEST-001',
-  customerName: 'خالد العتيبي',
-  location: 'حي الملقا، الرياض',
-  price: '180',
-  service: 'غسيل خارجي + داخلي',
-  carModel: 'Toyota Camry',
-  plate: 'RTL 8756',
-  status: 'PENDING_PARTNER',
-};
-
 function OperationsMenu({colors, onNavigate}) {
   const {t} = useI18n();
-  const autoAccept      = useAppStore(s => s.autoAccept);
-  const setAutoAccept   = useAppStore(s => s.setAutoAccept);
-  const setIncomingOrder = useAppStore(s => s.setIncomingOrder);
-  const sections = buildSections(t);
+  const autoAccept    = useAppStore(s => s.autoAccept);
+  const setAutoAccept = useAppStore(s => s.setAutoAccept);
+  const sections      = buildSections(t);
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    getSettings().then(res => {
+      if (res.success) {
+        const val = res.data?.data?.autoAcceptOrders ?? res.data?.autoAcceptOrders ?? false;
+        setAutoAccept(val);
+      }
+    });
+  }, [setAutoAccept]);
+
+  const handleAutoAccept = useCallback(async val => {
+    if (toggling) return;
+    setAutoAccept(val);
+    setToggling(true);
+    const res = await updateSettings({autoAcceptOrders: val});
+    if (!res.success) setAutoAccept(!val);
+    setToggling(false);
+  }, [toggling, setAutoAccept]);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -120,21 +126,11 @@ function OperationsMenu({colors, onNavigate}) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
-        {/* DEV: simulate incoming order notification */}
-        <TouchableOpacity
-          style={[s.devBtn, {backgroundColor: '#F59E0B18', borderColor: '#F59E0B'}]}
-          onPress={() => {
-            setIncomingOrder(MOCK_INCOMING);
-            showIncomingOrderNotification(MOCK_INCOMING).catch(e => console.log('TEST BTN ERROR:', e));
-          }}
-          activeOpacity={0.8}>
-          <Text style={s.devBtnText}>🧪 اختبار: طلب جديد وارد</Text>
-        </TouchableOpacity>
-
-        <View style={[s.toggleCard, {backgroundColor: colors.primary + '12', borderColor: colors.primary + '30'}]}>
+<View style={[s.toggleCard, {backgroundColor: colors.primary + '12', borderColor: colors.primary + '30'}]}>
           <Switch
             value={autoAccept}
-            onValueChange={setAutoAccept}
+            onValueChange={handleAutoAccept}
+            disabled={toggling}
             trackColor={{false: colors.border, true: colors.primary}}
             thumbColor="#FFF"
           />

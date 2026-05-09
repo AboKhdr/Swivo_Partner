@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import api from './api';
 import {uploadToCloudinary} from './cloudinary';
 
@@ -102,8 +103,19 @@ export async function setDutyStatus(staffId, isOnDuty) {
   // Response: { success, message, data: { _id, isOnDuty } }
 }
 
+export async function getStaffById(staffId) {
+  return api.get(`/tenant/staff/${staffId}`);
+  // Response: { _id, userId:{firstName,lastName,phoneNumber,image}, role, branchId,
+  //             isOnDuty, status, activeOrdersCount, completedOrdersCount, rating, ratingCount }
+}
+
+export async function updateStaff(staffId, data) {
+  // data: { branchId? }
+  return api.patch(`/tenant/staff/${staffId}`, data);
+}
+
 export async function setStaffStatus(staffId, status) {
-  // status: 'suspended' | 'deactivated'
+  // status: 'suspended' | 'deactivated' | 'active'
   return api.patch(`/tenant/staff/${staffId}/status`, {status});
 }
 
@@ -117,6 +129,10 @@ export async function getServices(filters = {}) {
   // filters: { includeInactive?, categoryId?, availableFor? }
   const params = new URLSearchParams(filters).toString();
   return api.get(`/tenant/services${params ? `?${params}` : ''}`);
+}
+
+export async function getCategoryServices() {
+  return api.get('/tenant/category/services');
 }
 
 export async function createService(data) {
@@ -176,7 +192,7 @@ export async function updatePackage(id, data) {
     if (up.success) data = {...data, banner: up.url};
     delete data.bannerUri;
   }
-  return api.put(`/tenant/packages/${id}`, data);
+  return api.patch(`/tenant/packages/${id}`, data);
 }
 
 export async function deletePackage(id) {
@@ -194,21 +210,26 @@ export async function getBranches() {
 }
 
 export async function updateBranch(id, data) {
-  // data: { name?, address?, workingHours?, slotDuration?, bufferTime?, bannerUri? }
-  if (data.bannerUri) {
-    const up = await uploadToCloudinary(data.bannerUri);
-    if (up.success) data = {...data, banner: up.url};
-    delete data.bannerUri;
-  }
+  // data: { name?, address?, workingHours?, slotDuration?, bufferTime? }
   return api.put(`/tenant/branches/${id}`, data);
+}
+
+export async function updateBranchBanner(id, uri) {
+  // uri: local file URI or null to remove
+  if (uri === null) {
+    return api.patch(`/tenant/branches/${id}/banner`, {banner: null});
+  }
+  const up = await uploadToCloudinary(uri);
+  if (!up.success) return {success: false, error: up.error, data: null};
+  return api.patch(`/tenant/branches/${id}/banner`, {banner: up.url});
 }
 
 export async function getBranchServices(branchId) {
   return api.get(`/tenant/branches/${branchId}/services`);
 }
 
-export async function toggleBranchService(branchId, serviceId, isEnabled) {
-  return api.patch(`/tenant/branches/${branchId}/services/${serviceId}`, {isEnabled});
+export async function toggleBranchService(branchId) {
+  return api.patch(`/tenant/branches/${branchId}/services/123123`);
 }
 
 // ── Skip Requests ─────────────────────────────────────────────────────────────
@@ -316,4 +337,14 @@ export async function deleteOffer(id) {
 
 export async function toggleOffer(id, isActive) {
   return api.patch(`/tenant/offers/${id}/toggle`, {isActive});
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export async function getSettings() {
+  return api.get('/tenant/settings');
+}
+
+export async function updateSettings(data) {
+  return api.patch('/tenant/settings', data);
 }

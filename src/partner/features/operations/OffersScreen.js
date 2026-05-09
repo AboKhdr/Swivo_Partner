@@ -14,7 +14,7 @@ import {
 import {ArrowRight, Plus, Pencil, Tag, ChevronDown, Trash2, CalendarDays} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {getOffers, getServices, createOffer, updateOffer, deleteOffer, toggleOffer} from '../../../services/partner';
+import {getOffers, getCategoryServices, createOffer, updateOffer, deleteOffer, toggleOffer} from '../../../services/partner';
 
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 
@@ -199,13 +199,19 @@ function AddOfferScreen({onBack, onSave, initialData, allServices}) {
   const {colors} = useTheme();
   const isEdit = !!initialData;
 
-  const initServiceId = initialData?.serviceIds?.[0] ?? null;
+  const rawFirst      = initialData?.serviceIds?.[0] ?? null;
+  const initServiceId = rawFirst ? (typeof rawFirst === 'object' ? (rawFirst._id ?? rawFirst.id) : rawFirst) : null;
   const initPrices    = initServiceId ? (initialData?.prices?.[initServiceId] ?? {small: '', medium: '', large: ''}) : {small: '', medium: '', large: ''};
 
-  const [name,          setName]          = useState(initialData?.name?.ar ?? initialData?.name ?? '');
+  const [name,          setName]          = useState(initialData?.name?.ar ?? initialData?.name?.en ?? (typeof initialData?.name === 'string' ? initialData.name : ''));
   const [serviceId,     setServiceId]     = useState(initServiceId);
   const [prices,        setPrices]        = useState(initPrices);
-  const [endDate,       setEndDate]       = useState(initialData?.endDate ?? null);
+  const [endDate,       setEndDate]       = useState(() => {
+    if (!initialData?.endDate) return null;
+    const d = new Date(initialData.endDate);
+    if (isNaN(d.getTime())) return null;
+    return {day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear()};
+  });
   const [showPicker,    setShowPicker]    = useState(false);
   const [showDatePicker,setShowDatePicker]= useState(false);
   const [saving,        setSaving]        = useState(false);
@@ -344,14 +350,15 @@ const SIZE_LABELS = {small: 'صغير', medium: 'وسط', large: 'كبير'};
 function OfferCard({item, colors, onEdit, onToggleActive, onDelete, allServices}) {
   const id       = item._id ?? item.id;
   const isActive = item.isActive ?? item.active ?? false;
-  const label    = item.name?.ar ?? item.name ?? '';
+  const label    = item.name?.ar ?? item.name?.en ?? (typeof item.name === 'string' ? item.name : '');
   const serviceIds = item.serviceIds ?? [];
 
-  const activeSizes = serviceIds.map(sid => {
-    const srv = allServices.find(s => (s._id ?? s.id) === sid);
-    const srvName = srv ? (srv.name?.ar ?? srv.nameAr ?? sid) : sid;
-    const filled = ['small', 'medium', 'large'].filter(sz => item.prices?.[sid]?.[sz]?.toString().trim());
-    return {name: srvName, sizes: filled};
+  const activeSizes = serviceIds.map(svcEntry => {
+    const id      = typeof svcEntry === 'object' ? (svcEntry._id ?? svcEntry.id) : svcEntry;
+    const nameAr  = typeof svcEntry === 'object' ? (svcEntry.name?.ar ?? svcEntry.name?.en ?? '') : '';
+    const srvName = nameAr || String(id ?? '');
+    const filled  = ['small', 'medium', 'large'].filter(sz => item.prices?.[id]?.[sz]?.toString().trim());
+    return {id: String(id ?? ''), name: srvName, sizes: filled};
   });
 
   const endDateLabel = item.endDate
@@ -388,8 +395,8 @@ function OfferCard({item, colors, onEdit, onToggleActive, onDelete, allServices}
       <View style={[oc.divider, {backgroundColor: colors.border}]} />
 
       <View style={oc.servicesList}>
-        {activeSizes.map(({name: srvName, sizes}) => (
-          <View key={srvName} style={oc.serviceRow}>
+        {activeSizes.map(({id: srvId, name: srvName, sizes}) => (
+          <View key={srvId} style={oc.serviceRow}>
             <View style={oc.sizeChips}>
               {sizes.map(sz => (
                 <View key={sz} style={[oc.chip, {backgroundColor: colors.primary + '12'}]}>
@@ -415,39 +422,48 @@ function OfferCard({item, colors, onEdit, onToggleActive, onDelete, allServices}
 export default function OffersScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const [offers,      setOffers]    = useState([]);
-  const [allServices, setAllServices] = useState([]);
-  const [loading,     setLoading]   = useState(true);
-  const [showAdd,     setShowAdd]   = useState(false);
-  const [editing,     setEditing]   = useState(null);
+  const [offers,          setOffers]          = useState([]);
+  const [allServices,     setAllServices]     = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [showAdd,         setShowAdd]         = useState(false);
+  const [editing,         setEditing]         = useState(null);
+  const [includeInactive, setIncludeInactive] = useState(false);
 
-  const fetchOffers = useCallback(() => {
-    getOffers({limit: 100}).then(res => {
-      if (res.success) {
-        const list = res.data?.data ?? res.data ?? [];
-        setOffers(Array.isArray(list) ? list : []);
-      }
-      setLoading(false);
-    });
+  const fetchOffers = useCallback(async (withInactive) => {
+    setLoading(true);
+    const params = {limit: 100};
+    if (withInactive) params.includeInactive = true;
+    const res = await getOffers(params);
+    if (res.success) {
+      const list = res.data?.data ?? res.data ?? [];
+      setOffers(Array.isArray(list) ? list : []);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
       getOffers({limit: 100}),
-      getServices({limit: 200}),
+      getCategoryServices(),
     ]).then(([offRes, srvRes]) => {
       if (offRes.success) {
         const list = offRes.data?.data ?? offRes.data ?? [];
         setOffers(Array.isArray(list) ? list : []);
       }
       if (srvRes.success) {
-        const list = srvRes.data?.data ?? srvRes.data ?? [];
-        setAllServices(Array.isArray(list) ? list : []);
+        const cats = srvRes.data?.data ?? srvRes.data ?? [];
+        const flat = (Array.isArray(cats) ? cats : []).flatMap(c => c.services ?? []);
+        setAllServices(flat);
       }
       setLoading(false);
     });
   }, []);
+
+  const handleToggleFilter = useCallback((val) => {
+    setIncludeInactive(val);
+    fetchOffers(val);
+  }, [fetchOffers]);
 
   const handleToggleActive = useCallback(async (id, currentActive) => {
     setOffers(prev => prev.map(o => (o._id ?? o.id) === id ? {...o, isActive: !currentActive} : o));
@@ -463,8 +479,8 @@ export default function OffersScreen({onBack}) {
     }
     setEditing(null);
     setShowAdd(false);
-    fetchOffers();
-  }, [editing, fetchOffers]);
+    fetchOffers(includeInactive);
+  }, [editing, fetchOffers, includeInactive]);
 
   const handleEdit   = useCallback(item => setEditing(item), []);
 
@@ -509,6 +525,26 @@ export default function OffersScreen({onBack}) {
               activeOpacity={0.85}>
               <Plus size={20} color="#FFF" />
             </TouchableOpacity>
+          </View>
+
+          <View style={s.filterRow}>
+            {[
+              {key: false, label: 'الفعالة فقط'},
+              {key: true,  label: 'الكل'},
+            ].map(f => {
+              const active = includeInactive === f.key;
+              return (
+                <TouchableOpacity
+                  key={String(f.key)}
+                  style={[s.filterChip, {backgroundColor: active ? colors.primary : colors.card, borderColor: active ? colors.primary : colors.border}]}
+                  onPress={() => handleToggleFilter(f.key)}
+                  activeOpacity={0.75}>
+                  <Text style={[s.filterChipTxt, {color: active ? '#FFF' : colors.textSecondary}]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {loading
@@ -557,6 +593,9 @@ const s = StyleSheet.create({
   headerTitle: {fontSize: 26, fontWeight: '900'},
   headerSub:   {fontSize: 13},
   list:        {paddingHorizontal: 16, paddingBottom: 32, gap: 14},
+  filterRow:      {flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 12},
+  filterChip:     {paddingHorizontal: 16, paddingVertical: 7, borderRadius: 50, borderWidth: 1},
+  filterChipTxt:  {fontSize: 13, fontWeight: '600'},
 });
 
 const a = StyleSheet.create({

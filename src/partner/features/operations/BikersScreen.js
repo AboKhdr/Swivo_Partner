@@ -9,16 +9,28 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import {ArrowRight, Plus, Bike, Star, Phone, UserX, PauseCircle, Trash2, X} from 'lucide-react-native';
+import {ArrowRight, Plus, Bike, Star, Phone, UserX, PauseCircle, Trash2, X, RefreshCw} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import AddBikerScreen from './AddBikerScreen';
-import {getStaff, setStaffStatus, removeStaff} from '../../../services/partner';
+import BikerDetailsScreen from './BikerDetailsScreen';
+import {getStaff, setStaffStatus, removeStaff, setDutyStatus} from '../../../services/partner';
 
-const STOP_OPTIONS = [
-  {key: 'suspend',  label: 'إيقاف مؤقت',   sub: 'إيقاف البايكر مؤقتاً عن استقبال الطلبات', Icon: PauseCircle, color: '#F59E0B'},
-  {key: 'deactive', label: 'تعطيل الحساب', sub: 'تعطيل الحساب ولن يتمكن من الدخول',         Icon: UserX,       color: '#EF4444'},
-  {key: 'delete',   label: 'حذف البايكر',  sub: 'حذف نهائي ولا يمكن التراجع',               Icon: Trash2,      color: '#EF4444'},
-];
+function buildOptions(biker) {
+  const isDeactivated = biker.status === 'deactivated';
+  const isOnDuty      = biker.isOnDuty ?? false;
+  return [
+    ...(isDeactivated
+      ? [{key: 'reactivate', label: 'تفعيل الحساب',    sub: 'إعادة تفعيل البايكر وتمكينه من الدخول',      Icon: RefreshCw,   color: '#22C55E'}]
+      : [
+          isOnDuty
+            ? {key: 'suspend',  label: 'إيقاف مؤقت',    sub: 'إخراج البايكر من الخدمة مؤقتاً',              Icon: PauseCircle, color: '#F59E0B'}
+            : {key: 'resume',   label: 'إعادة للخدمة',   sub: 'إعادة البايكر لاستقبال الطلبات',              Icon: RefreshCw,   color: '#22C55E'},
+          {key: 'deactive',   label: 'تعطيل الحساب',  sub: 'تعطيل الحساب ولن يتمكن من الدخول',            Icon: UserX,       color: '#EF4444'},
+        ]
+    ),
+    {key: 'delete', label: 'حذف البايكر', sub: 'حذف نهائي ولا يمكن التراجع', Icon: Trash2, color: '#EF4444'},
+  ];
+}
 
 function AvatarPlaceholder({size, colors}) {
   return (
@@ -37,6 +49,12 @@ const ap = StyleSheet.create({
 
 function StopSheet({visible, biker, onClose, onAction, colors}) {
   if (!biker) return null;
+  const name  = biker.userId
+    ? `${biker.userId.firstName ?? ''} ${biker.userId.lastName ?? ''}`.trim()
+    : biker.name ?? '';
+  const trips   = biker.activeOrdersCount ?? biker.trips ?? 0;
+  const options = buildOptions(biker);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -49,8 +67,8 @@ function StopSheet({visible, biker, onClose, onAction, colors}) {
           <View style={ss.bikerRow}>
             <AvatarPlaceholder size={40} colors={colors} />
             <View style={ss.bikerInfo}>
-              <Text style={[ss.bikerName, {color: colors.textPrimary}]}>{biker.name}</Text>
-              <Text style={[ss.bikerSub,  {color: colors.textSecondary}]}>{biker.trips} رحلة</Text>
+              <Text style={[ss.bikerName, {color: colors.textPrimary}]}>{name}</Text>
+              <Text style={[ss.bikerSub,  {color: colors.textSecondary}]}>{trips} رحلة</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={ss.closeBtn}>
               <X size={18} color={colors.textSecondary} />
@@ -59,7 +77,7 @@ function StopSheet({visible, biker, onClose, onAction, colors}) {
 
           <View style={[ss.divider, {backgroundColor: colors.border}]} />
 
-          {STOP_OPTIONS.map((opt, i) => (
+          {options.map((opt, i) => (
             <View key={opt.key}>
               <TouchableOpacity
                 style={ss.optRow}
@@ -73,7 +91,7 @@ function StopSheet({visible, biker, onClose, onAction, colors}) {
                   <Text style={[ss.optSub,   {color: colors.textSecondary}]}>{opt.sub}</Text>
                 </View>
               </TouchableOpacity>
-              {i < STOP_OPTIONS.length - 1 && (
+              {i < options.length - 1 && (
                 <View style={[ss.divider, {backgroundColor: colors.border}]} />
               )}
             </View>
@@ -102,6 +120,13 @@ const ss = StyleSheet.create({
   optSub:    {fontSize: 12},
 });
 
+function statusBadge(item) {
+  if (item.status === 'deactivated') return {label: 'معطّل الحساب',  color: '#EF4444'};
+  if (item.status === 'suspended')   return {label: 'موقوف مؤقتاً', color: '#F59E0B'};
+  if (item.isOnDuty)                 return {label: 'فعّال',         color: '#22C55E'};
+  return                                    {label: 'غير فعّال',     color: '#94A3B8'};
+}
+
 function BikerCard({item, colors, onOptions}) {
   const name   = item.userId
     ? `${item.userId.firstName ?? ''} ${item.userId.lastName ?? ''}`.trim()
@@ -109,6 +134,7 @@ function BikerCard({item, colors, onOptions}) {
   const phone  = item.userId?.phoneNumber ?? item.phone ?? '';
   const trips  = item.activeOrdersCount ?? item.trips ?? 0;
   const rating = item.rating ?? 0;
+  const badge  = statusBadge(item);
 
   return (
     <TouchableOpacity
@@ -138,6 +164,10 @@ function BikerCard({item, colors, onOptions}) {
             </>
           )}
         </View>
+        <View style={[s.badge, {backgroundColor: badge.color + '18'}]}>
+          <View style={[s.badgeDot, {backgroundColor: badge.color}]} />
+          <Text style={[s.badgeTxt, {color: badge.color}]}>{badge.label}</Text>
+        </View>
       </View>
       <AvatarPlaceholder size={56} colors={colors} />
     </TouchableOpacity>
@@ -151,6 +181,7 @@ export default function BikersScreen({onBack}) {
   const [sheetBiker,   setSheetBiker]   = useState(null);
   const [showAdd,      setShowAdd]      = useState(false);
   const [editingBiker, setEditingBiker] = useState(null);
+  const [detailBiker,  setDetailBiker]  = useState(null);
 
   const fetchBikers = useCallback(async () => {
     setLoading(true);
@@ -164,19 +195,25 @@ export default function BikersScreen({onBack}) {
 
   useEffect(() => { fetchBikers(); }, [fetchBikers]);
 
-  const handleOptions = useCallback(item => setSheetBiker(item), []);
+  const handleOptions = useCallback(item => setDetailBiker(item), []);
 
   const handleAction = useCallback(async (action, biker) => {
     const id = biker._id ?? biker.id;
     if (action === 'delete') {
-      await removeStaff(id);
-      setBikers(prev => prev.filter(b => (b._id ?? b.id) !== id));
+      const res = await removeStaff(id);
+      if (res.success) setBikers(prev => prev.filter(b => (b._id ?? b.id) !== id));
     } else if (action === 'suspend') {
-      await setStaffStatus(id, 'suspended');
-      setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'suspended'} : b));
+      const res = await setDutyStatus(id, false);
+      if (res.success) setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: false} : b));
+    } else if (action === 'resume') {
+      const res = await setDutyStatus(id, true);
+      if (res.success) setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: true} : b));
     } else if (action === 'deactive') {
-      await setStaffStatus(id, 'deactivated');
-      setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'deactivated'} : b));
+      const res = await setStaffStatus(id, 'deactivated');
+      if (res.success) setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, isOnDuty: false, status: 'deactivated'} : b));
+    } else if (action === 'reactivate') {
+      const res = await setStaffStatus(id, 'active');
+      if (res.success) setBikers(prev => prev.map(b => (b._id ?? b.id) === id ? {...b, status: 'active'} : b));
     }
   }, []);
 
@@ -187,7 +224,7 @@ export default function BikersScreen({onBack}) {
   const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   const activeCount = bikers.filter(b => b.isOnDuty).length;
-  const showList    = !showAdd && !editingBiker;
+  const showList    = !showAdd && !editingBiker && !detailBiker;
 
   return (
     <View style={s.flex}>
@@ -224,16 +261,25 @@ export default function BikersScreen({onBack}) {
             )
           }
 
+        </View>
+      </View>
+
+      {detailBiker && (
+        <View style={s.flex}>
+          <BikerDetailsScreen
+            biker={detailBiker}
+            onBack={() => setDetailBiker(null)}
+            onOpenActions={() => setSheetBiker(detailBiker)}
+          />
           <StopSheet
             visible={!!sheetBiker}
             biker={sheetBiker}
             onClose={() => setSheetBiker(null)}
-            onAction={handleAction}
+            onAction={(action, b) => { handleAction(action, b); setDetailBiker(null); }}
             colors={colors}
           />
         </View>
-      </View>
-
+      )}
       {showAdd && (
         <View style={s.flex}>
           <AddBikerScreen onBack={() => setShowAdd(false)} onSaved={fetchBikers} />
@@ -282,4 +328,7 @@ const s = StyleSheet.create({
   name:        {fontSize: 16, fontWeight: '800'},
   statsRow:    {flexDirection: 'row', alignItems: 'center', gap: 4},
   statTxt:     {fontSize: 12, fontWeight: '500'},
+  badge:       {flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10},
+  badgeDot:    {width: 6, height: 6, borderRadius: 3},
+  badgeTxt:    {fontSize: 11, fontWeight: '700'},
 });
