@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import {Locate, RefreshCw} from 'lucide-react-native';
 import {useTheme} from '../context/ThemeContext';
+import config from '../../config';
 
 // react-native-webview — requires native build after: npm install react-native-webview
 let WebView = null;
@@ -16,7 +17,12 @@ try {
   WebView = require('react-native-webview').WebView;
 } catch (_) {}
 
-const GOOGLE_MAPS_API_KEY = 'AIzaSyDKpfDr07ynPbVVkdeWg-3Cs9yH-rMQApE'; // ضع الـ API key هنا
+const GOOGLE_MAPS_API_KEY = config.GOOGLE_MAPS_API_KEY;
+const MAPS_ORIGIN_WHITELIST = [
+  'https://*.googleapis.com',
+  'https://*.gstatic.com',
+  'https://maps.google.com',
+];
 
 function buildHtml(apiKey, options) {
   const {
@@ -356,8 +362,8 @@ export default function MapContainer({
       <View style={[s.mapWrap, mapHeight, {borderColor: colors.border}]}>
         <WebView
           ref={webViewRef}
-          source={{html}}
-          originWhitelist={['*']}
+          source={{html, baseUrl: 'https://maps.google.com'}}
+          originWhitelist={MAPS_ORIGIN_WHITELIST}
           onMessage={handleMessage}
           onLoadStart={() => { setLoading(true);  setError(false); }}
           onLoadEnd={()   => setLoading(false)}
@@ -366,7 +372,7 @@ export default function MapContainer({
           domStorageEnabled
           geolocationEnabled
           allowsInlineMediaPlayback
-          mixedContentMode="always"
+          mixedContentMode="never"
           style={s.webview}
           scrollEnabled={false}
           androidLayerType={Platform.OS === 'android' ? 'hardware' : undefined}

@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {ActivityIndicator, Alert, Clipboard, FlatList, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, ToastAndroid, TouchableOpacity, View} from 'react-native';
 import {Search} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
@@ -15,6 +15,16 @@ const STATUS_COLORS = {
   REJECTED:        '#EF4444',
   CANCELLED:       '#EF4444',
 };
+
+function copyOrderNumber(value, t) {
+  if (!value) return;
+  Clipboard.setString(String(value));
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(t('common.copiedOrderNumber'), ToastAndroid.SHORT);
+  } else {
+    Alert.alert(t('common.copied'), t('common.copiedOrderNumber'));
+  }
+}
 
 function OrderCard({item, colors, t, onPress}) {
   const color        = STATUS_COLORS[item.status] ?? '#64748B';
@@ -44,7 +54,9 @@ function OrderCard({item, colors, t, onPress}) {
     <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
       <View style={s.cardTop}>
         <View style={s.cardIdRow}>
-          <Text style={[s.cardId, {color: colors.primary}]}>#{orderNumber}</Text>
+          <TouchableOpacity onPress={() => copyOrderNumber(orderNumber, t)} activeOpacity={0.6}>
+            <Text style={[s.cardId, {color: colors.primary}]}>#{orderNumber}</Text>
+          </TouchableOpacity>
           {isOnshop && (
             <View style={[s.typePill, {backgroundColor: colors.primary + '18'}]}>
               <Text style={[s.typePillText, {color: colors.primary}]}>{t('partner.orders.onshop') || 'في الموقع'}</Text>
@@ -81,7 +93,7 @@ function OrderCard({item, colors, t, onPress}) {
   );
 }
 
-export default function OrdersScreen({onSelectOrder}) {
+export default function OrdersScreen({onSelectOrder, refreshKey}) {
   const {colors} = useTheme();
   const {t, isRTL} = useI18n();
 
@@ -146,7 +158,7 @@ export default function OrdersScreen({onSelectOrder}) {
   useEffect(() => {
     if (tenantType === null) return;
     fetchOrders(activeStatusFilter, activeTypeFilter, 1);
-  }, [activeStatusFilter, activeTypeFilter, tenantType, fetchOrders]);
+  }, [activeStatusFilter, activeTypeFilter, tenantType, fetchOrders, refreshKey]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

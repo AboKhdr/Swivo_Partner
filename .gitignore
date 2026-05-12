@@ -72,3 +72,19 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Secrets & credentials
+*.jks
+*.p12
+*.p8
+*.mobileprovision
+.env
+.env.local
+.env.*.local
+gradle.properties.local
+google-services.json.bak
+GoogleService-Info.plist.bak
+
+# IDE
+.vscode/
+.history/

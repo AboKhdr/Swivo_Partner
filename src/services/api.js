@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from '../config';
 
 const BASE_URL = config.BASE_URL1;
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 30000;
 
 async function getToken() {
   try {
@@ -42,8 +42,6 @@ async function request(method, path, body, options = {}) {
       ...options,
     });
 
-    clearTimeout(timer);
-
     if (res.status === 401) {
       const refreshed = await attemptRefresh();
       if (refreshed) {
@@ -66,11 +64,12 @@ async function request(method, path, body, options = {}) {
 
     return {success: true, data, error: null};
   } catch (err) {
-    clearTimeout(timer);
     if (err.name === 'AbortError') {
       return {success: false, error: 'TIMEOUT', data: null};
     }
     return {success: false, error: 'NETWORK_ERROR', data: null};
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -138,7 +137,7 @@ const api = {
   post:   (path, body, opts)  => request('POST',   path, body, opts),
   patch:  (path, body, opts)  => request('PATCH',  path, body, opts),
   put:    (path, body, opts)  => request('PUT',    path, body, opts),
-  delete: (path, opts)        => request('DELETE', path, null, opts),
+  delete: (path, body, opts)  => request('DELETE', path, body, opts),
   saveToken,
   clearToken,
   getToken,

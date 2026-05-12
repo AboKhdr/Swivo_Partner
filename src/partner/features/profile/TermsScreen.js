@@ -6,7 +6,7 @@ import {
 import {ArrowRight, ChevronDown, ChevronUp, RefreshCw} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {getTerms} from '../../../services/biker';
+import {getTerms} from '../../../services/shared';
 
 function TermSection({item, colors}) {
   const [open, setOpen] = useState(false);

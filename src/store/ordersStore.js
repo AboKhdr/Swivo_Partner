@@ -1,7 +1,7 @@
 import {create} from 'zustand';
 import api from '../services/api';
 
-const useOrdersStore = create((set, get) => ({
+const useOrdersStore = create((set, _get) => ({
   // ── State ──────────────────────────────────────────────────────────────
   orders:       [],
   activeOrder:  null,   // currently open order detail

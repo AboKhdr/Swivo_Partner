@@ -1,7 +1,8 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
   Image,
   Modal,
   PermissionsAndroid,
@@ -9,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -30,22 +32,22 @@ import {
 } from 'lucide-react-native';
 import {launchCamera} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
-import {getOrderById, acceptOrder, rejectOrder, assignBiker, startOnshopOrder, completeOnshopOrder} from '../../../services/partner';
-import {uploadToCloudinary} from '../../../services/cloudinary';
+import {useI18n} from '../../../shared/i18n/I18nContext';
+import {getOrderById, acceptOrder, rejectOrder, startOnshopOrder, completeOnshopOrder} from '../../../services/partner';
 import AssignBikerScreen from './AssignBikerScreen';
 import RejectOrderModal from './RejectOrderModal';
 
 const TIMELINE_STEPS_MOBILE = [
-  {key: 'received', label: 'وصول الطلب',   Icon: CarFront},
-  {key: 'arrived',  label: 'وصول البايكر', Icon: MapPin},
-  {key: 'started',  label: 'بدء الغسيل',   Icon: Droplets},
-  {key: 'done',     label: 'انهاء الغسيل', Icon: Sparkles},
+  {key: 'received', labelKey: 'partnerOrders.timeline.received',     Icon: CarFront},
+  {key: 'arrived',  labelKey: 'partnerOrders.timeline.arrivedBiker', Icon: MapPin},
+  {key: 'started',  labelKey: 'partnerOrders.timeline.started',      Icon: Droplets},
+  {key: 'done',     labelKey: 'partnerOrders.timeline.done',         Icon: Sparkles},
 ];
 
 const TIMELINE_STEPS_ONSHOP = [
-  {key: 'received', label: 'وصول الطلب',   Icon: CarFront},
-  {key: 'started',  label: 'بدء الغسيل',   Icon: Droplets},
-  {key: 'done',     label: 'انهاء الغسيل', Icon: Sparkles},
+  {key: 'received', labelKey: 'partnerOrders.timeline.received', Icon: CarFront},
+  {key: 'started',  labelKey: 'partnerOrders.timeline.started',  Icon: Droplets},
+  {key: 'done',     labelKey: 'partnerOrders.timeline.done',     Icon: Sparkles},
 ];
 
 const STATUS_ACTIVE_STEPS_MOBILE = {
@@ -64,12 +66,12 @@ const STATUS_ACTIVE_STEPS_ONSHOP = {
   COMPLETED:       3,
 };
 
-async function requestCameraPermission() {
+async function requestCameraPermission(title, message) {
   if (Platform.OS !== 'android') return true;
   try {
     const granted = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.CAMERA,
-      {title: 'إذن الكاميرا', message: 'يحتاج التطبيق إلى الكاميرا لالتقاط الصور'},
+      {title, message},
     );
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch {
@@ -77,12 +79,18 @@ async function requestCameraPermission() {
   }
 }
 
-function PhotoConfirmModal({visible, photo, onConfirm, onRetake, onClose, colors, title}) {
+function PhotoConfirmModal({visible, photo, onConfirm, onRetake, onClose, colors, title, retakeText, confirmText}) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={pm.overlay}>
         <View style={[pm.card, {backgroundColor: colors.card}]}>
-          <TouchableOpacity style={pm.closeBtn} onPress={onClose} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={pm.closeBtn}
+            onPress={onClose}
+            activeOpacity={0.75}
+            hitSlop={{top: 14, bottom: 14, left: 14, right: 14}}
+            accessibilityRole="button"
+            accessibilityLabel="Close">
             <X size={20} color={colors.textSecondary} />
           </TouchableOpacity>
           <Text style={[pm.title, {color: colors.textPrimary}]}>{title}</Text>
@@ -99,14 +107,14 @@ function PhotoConfirmModal({visible, photo, onConfirm, onRetake, onClose, colors
               onPress={onRetake}
               activeOpacity={0.75}>
               <Camera size={16} color={colors.textPrimary} />
-              <Text style={[pm.retakeTxt, {color: colors.textPrimary}]}>إعادة</Text>
+              <Text style={[pm.retakeTxt, {color: colors.textPrimary}]}>{retakeText}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[pm.confirmBtn, {backgroundColor: colors.primary}]}
               onPress={onConfirm}
               activeOpacity={0.8}>
               <CheckCircle size={16} color="#FFF" />
-              <Text style={pm.confirmTxt}>تأكيد</Text>
+              <Text style={pm.confirmTxt}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -117,6 +125,7 @@ function PhotoConfirmModal({visible, photo, onConfirm, onRetake, onClose, colors
 
 export default function OrderDetailsScreen({order, onBack}) {
   const {colors} = useTheme();
+  const {t} = useI18n();
 
   const orderId   = order?._id ?? order?.id;
   const orderType = order?.orderType ?? order?.type ?? 'mobile';
@@ -145,19 +154,19 @@ export default function OrderDetailsScreen({order, onBack}) {
 
   // Load full order details from API if only a summary was passed
   useEffect(() => {
-    if (!orderId || orderData?._id) return;
+    if (!orderId) return;
     setLoading(true);
     getOrderById(orderId).then(res => {
       if (res.success) {
-        const d = res.data?.data ?? res.data;
-        setOrderData(d);
-        setStatus(d?.status ?? status);
+        const fresh = res.data?.data ?? res.data;
+        setOrderData(fresh);
+        setStatus(prev => fresh?.status ?? prev);
       }
       setLoading(false);
     });
   }, [orderId]);
 
-  const d = orderData ?? order ?? {};
+  const d = useMemo(() => orderData ?? order ?? {}, [orderData, order]);
 
   // ── Accept ──────────────────────────────────────────────────────────────
   const handleAccept = useCallback(async () => {
@@ -174,21 +183,49 @@ export default function OrderDetailsScreen({order, onBack}) {
   const handleAssigned = useCallback((bikerId) => {
     setShowAssign(false);
     setStatus('ASSIGNED');
-  }, []);
+    setOrderData(prev => ({...(prev ?? {}), status: 'ASSIGNED', biker: bikerId}));
+    getOrderById(orderId).then(res => {
+      if (res.success) {
+        const fresh = res.data?.data ?? res.data;
+        if (fresh?._id) {
+          setOrderData(fresh);
+          setStatus(fresh.status ?? 'ASSIGNED');
+        }
+      }
+    });
+  }, [orderId]);
 
-  const handleRejectConfirm = useCallback(async (reason) => {
+  const copyOrderNumber = useCallback(() => {
+    const value = String(d?.orderNumber ?? d?._id ?? orderId ?? '');
+    if (!value) return;
+    Clipboard.setString(value);
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(t('common.copiedOrderNumber'), ToastAndroid.SHORT);
+    } else {
+      Alert.alert(t('common.copied'), t('common.copiedOrderNumber'));
+    }
+  }, [d, orderId, t]);
+
+  const handleRejectConfirm = useCallback(async (payload) => {
+    // RejectOrderModal now passes { reason: <code>, note?: string }
+    const {reason, note} = typeof payload === 'string'
+      ? {reason: payload, note: undefined}
+      : (payload || {});
     setShowReject(false);
     setActionLoading(true);
-    await rejectOrder(orderId, reason);
+    await rejectOrder(orderId, reason, note);
     setActionLoading(false);
     onBack();
   }, [orderId, onBack]);
 
   // ── Camera ───────────────────────────────────────────────────────────────
   const openCamera = useCallback(async (stage) => {
-    const allowed = await requestCameraPermission();
+    const allowed = await requestCameraPermission(
+      t('partnerOrders.details.cameraPermissionTitle'),
+      t('partnerOrders.details.cameraPermissionMessage'),
+    );
     if (!allowed) {
-      Alert.alert('تنبيه', 'يرجى منح إذن الكاميرا من الإعدادات');
+      Alert.alert(t('common.alert'), t('permissions.cameraRequired'));
       return;
     }
     launchCamera({mediaType: 'photo', quality: 0.8, saveToPhotos: false}, res => {
@@ -199,7 +236,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         setPhotoStage(stage);
       }
     });
-  }, []);
+  }, [t]);
 
   const handlePhotoConfirm = useCallback(async () => {
     const uri = pendingPhoto;
@@ -213,7 +250,11 @@ export default function OrderDetailsScreen({order, onBack}) {
       if (res.success) setStatus('STARTED');
       setActionLoading(false);
     } else if (stage === 'finish') {
-      setFinishPhotos(prev => [...prev, uri]);
+      setFinishPhotos([uri]);
+      setActionLoading(true);
+      const res = await completeOnshopOrder(orderId, [uri]);
+      if (res.success) setStatus('COMPLETED');
+      setActionLoading(false);
     }
   }, [photoStage, pendingPhoto, orderId]);
 
@@ -228,19 +269,10 @@ export default function OrderDetailsScreen({order, onBack}) {
     setPhotoStage(null);
   }, []);
 
-  const handleFinishOrder = useCallback(async () => {
-    if (finishPhotos.length === 0) {
-      Alert.alert('تنبيه', 'يرجى التقاط صورة لإنهاء الطلب');
-      return;
-    }
-    setActionLoading(true);
-    const res = await completeOnshopOrder(orderId, finishPhotos);
-    if (res.success) setStatus('COMPLETED');
-    setActionLoading(false);
-  }, [finishPhotos, orderId]);
-
   // ── Photo modal title ────────────────────────────────────────────────────
-  const photoModalTitle = photoStage === 'start' ? 'صورة بدء الغسيل' : 'صورة إنهاء الطلب';
+  const photoModalTitle = photoStage === 'start'
+    ? t('partnerOrders.details.photoStart')
+    : t('partnerOrders.details.photoFinish');
 
   // ── Footer content ────────────────────────────────────────────────────────
   let footerContent = null;
@@ -253,7 +285,7 @@ export default function OrderDetailsScreen({order, onBack}) {
             style={[s.rejectBtn, {backgroundColor: '#FEE2E2', borderColor: '#FCA5A5'}]}
             onPress={() => setShowReject(true)}
             activeOpacity={0.75}>
-            <Text style={[s.rejectText, {color: '#EF4444'}]}>رفض</Text>
+            <Text style={[s.rejectText, {color: '#EF4444'}]}>{t('partnerOrders.details.reject')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.acceptBtn, {backgroundColor: actionLoading ? colors.border : colors.primary}]}
@@ -267,12 +299,27 @@ export default function OrderDetailsScreen({order, onBack}) {
                     ? <Bike size={20} color="#FFF" />
                     : <CheckCircle size={20} color="#FFF" />}
                   <Text style={s.acceptBtnText}>
-                    {orderType === 'mobile' ? 'قبول وتعيين بايكر' : 'قبول الطلب'}
+                    {orderType === 'mobile'
+                      ? t('partnerOrders.details.acceptAndAssign')
+                      : t('partnerOrders.details.acceptOrder')}
                   </Text>
                 </>
             }
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  } else if (!isOnshop && isAccepted) {
+    footerContent = (
+      <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
+        <TouchableOpacity
+          style={[s.fullBtn, {backgroundColor: actionLoading ? colors.border : colors.primary}]}
+          onPress={() => setShowAssign(true)}
+          disabled={actionLoading}
+          activeOpacity={0.8}>
+          <Bike size={20} color="#FFF" />
+          <Text style={s.fullBtnText}>{t('partnerOrders.details.assignBiker')}</Text>
+        </TouchableOpacity>
       </View>
     );
   } else if (isOnshop && isAccepted) {
@@ -285,7 +332,7 @@ export default function OrderDetailsScreen({order, onBack}) {
           activeOpacity={0.8}>
           {actionLoading
             ? <ActivityIndicator color="#FFF" />
-            : <><Camera size={20} color="#FFF" /><Text style={s.fullBtnText}>بدء الغسيل والتقاط صورة</Text></>
+            : <><Camera size={20} color="#FFF" /><Text style={s.fullBtnText}>{t('partnerOrders.details.startWashCapture')}</Text></>
           }
         </TouchableOpacity>
       </View>
@@ -293,33 +340,16 @@ export default function OrderDetailsScreen({order, onBack}) {
   } else if (isOnshop && isStarted) {
     footerContent = (
       <View style={[s.footer, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
-        <View style={s.footerCol}>
-          <View style={s.finishPhotosRow}>
-            {finishPhotos.map((uri, i) => (
-              <Image key={i} source={{uri}} style={s.thumbImg} />
-            ))}
-            {finishPhotos.length < 3 && (
-              <TouchableOpacity
-                style={[s.thumbAdd, {backgroundColor: colors.primary + '15', borderColor: colors.primary}]}
-                onPress={() => openCamera('finish')}
-                activeOpacity={0.75}>
-                <Camera size={18} color={colors.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity
-            style={[s.fullBtn, {
-              backgroundColor: finishPhotos.length > 0 && !actionLoading ? colors.primary : colors.border,
-            }]}
-            onPress={handleFinishOrder}
-            disabled={finishPhotos.length === 0 || actionLoading}
-            activeOpacity={0.8}>
-            {actionLoading
-              ? <ActivityIndicator color="#FFF" />
-              : <><Sparkles size={20} color="#FFF" /><Text style={s.fullBtnText}>إنهاء الطلب</Text></>
-            }
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[s.fullBtn, {backgroundColor: actionLoading ? colors.border : colors.primary}]}
+          onPress={() => openCamera('finish')}
+          disabled={actionLoading}
+          activeOpacity={0.8}>
+          {actionLoading
+            ? <ActivityIndicator color="#FFF" />
+            : <><Camera size={20} color="#FFF" /><Text style={s.fullBtnText}>{t('partnerOrders.details.finishWashCapture')}</Text></>
+          }
+        </TouchableOpacity>
       </View>
     );
   }
@@ -349,6 +379,8 @@ export default function OrderDetailsScreen({order, onBack}) {
   const plate        = d.userCar?.plate ?? d.plate ?? '';
   const price        = d.tenantNetSnapshot ?? d.totalAmount ?? '';
   const notes        = d.notes ?? '';
+  const beforePhotos = d.proof?.beforePhotos ?? [];
+  const afterPhotos  = d.proof?.afterPhotos  ?? [];
   const scheduledAt  = d.scheduledAt
     ? new Date(d.scheduledAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
     : '';
@@ -370,15 +402,27 @@ export default function OrderDetailsScreen({order, onBack}) {
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <View style={[s.header, {backgroundColor: colors.bg}]}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={s.backBtn}
+          activeOpacity={0.75}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.alert') /* Back */}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>
-          {orderNumber ? `#${orderNumber}` : 'تفاصيل الطلب'}
-        </Text>
+        <TouchableOpacity
+          style={s.headerTitleBtn}
+          onPress={copyOrderNumber}
+          disabled={!orderNumber}
+          activeOpacity={0.6}>
+          <Text style={[s.headerTitle, {color: colors.textPrimary}]}>
+            {orderNumber ? `#${orderNumber}` : t('partnerOrders.details.title')}
+          </Text>
+        </TouchableOpacity>
         {isOnshop && (
           <View style={[s.typeBadge, {backgroundColor: colors.primary + '18'}]}>
-            <Text style={[s.typeBadgeText, {color: colors.primary}]}>في الموقع</Text>
+            <Text style={[s.typeBadgeText, {color: colors.primary}]}>{t('partnerOrders.details.onSite')}</Text>
           </View>
         )}
       </View>
@@ -398,8 +442,8 @@ export default function OrderDetailsScreen({order, onBack}) {
             </View>
             <View style={s.cardInfo}>
               {!!scheduledAt && <Text style={[s.cardTime, {color: colors.textSecondary}]}>{scheduledAt}</Text>}
-              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{serviceName || 'خدمة'}</Text>
-              {!!branchName && <Text style={[s.cardSub, {color: colors.textSecondary}]}>فرع: {branchName}</Text>}
+              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{serviceName || t('partnerOrders.details.service')}</Text>
+              {!!branchName && <Text style={[s.cardSub, {color: colors.textSecondary}]}>{t('partnerOrders.details.branch')}: {branchName}</Text>}
             </View>
           </View>
         </View>
@@ -473,37 +517,59 @@ export default function OrderDetailsScreen({order, onBack}) {
           </View>
         )}
 
-        {/* Start photo preview — onshop started */}
-        {isOnshop && startPhoto && (
+        {/* Before photos — from API or local state */}
+        {(beforePhotos.length > 0 || startPhoto) && (
           <>
-            <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>صورة قبل الغسيل</Text>
-            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border, padding: 8}]}>
-              <Image source={{uri: startPhoto}} style={s.photoPreview} resizeMode="cover" />
+            <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>{t('partnerOrders.details.beforeWash')}</Text>
+            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <View style={s.finishPhotosPreviewRow}>
+                {beforePhotos.length > 0
+                  ? beforePhotos.map((item, i) => (
+                      <Image
+                        key={`b${i}`}
+                        source={{uri: typeof item === 'string' ? item : item.url ?? item.uri}}
+                        style={s.photoThumb}
+                        resizeMode="cover"
+                      />
+                    ))
+                  : <Image source={{uri: startPhoto}} style={s.photoThumb} resizeMode="cover" />
+                }
+              </View>
             </View>
           </>
         )}
 
-        {/* Finish photos preview — onshop completed */}
-        {isOnshop && finishPhotos.length > 0 && (
+        {/* After photos — from API or local state */}
+        {(afterPhotos.length > 0 || finishPhotos.length > 0) && (
           <>
-            <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>صور بعد الغسيل</Text>
+            <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>{t('partnerOrders.details.afterWash')}</Text>
             <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
               <View style={s.finishPhotosPreviewRow}>
-                {finishPhotos.map((uri, i) => (
-                  <Image key={i} source={{uri}} style={s.photoThumb} resizeMode="cover" />
-                ))}
+                {afterPhotos.length > 0
+                  ? afterPhotos.map((item, i) => (
+                      <Image
+                        key={`a${i}`}
+                        source={{uri: typeof item === 'string' ? item : item.url ?? item.uri}}
+                        style={s.photoThumb}
+                        resizeMode="cover"
+                      />
+                    ))
+                  : finishPhotos.map((uri, i) => (
+                      <Image key={i} source={{uri}} style={s.photoThumb} resizeMode="cover" />
+                    ))
+                }
               </View>
             </View>
           </>
         )}
 
         {/* Payment card */}
-        <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>عملية الدفع</Text>
+        <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>{t('partnerOrders.details.payment')}</Text>
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={s.payRow}>
             <View style={s.payTextCol}>
-              <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price ? `${price} ر.س` : '—'}</Text>
-              <Text style={[s.cardSub, {color: colors.textSecondary}]}>تمت عملية الدفع عن طريق: بطاقة الائتمان</Text>
+              <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price ? `${price} ${t('partnerOrders.details.currency')}` : '—'}</Text>
+              <Text style={[s.cardSub, {color: colors.textSecondary}]}>{t('partnerOrders.details.paidVia')}</Text>
             </View>
             <View style={[s.payIconBox, {backgroundColor: colors.primary + '15'}]}>
               <CreditCard size={22} color={colors.primary} />
@@ -512,7 +578,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         </View>
 
         {/* Customer notes */}
-        <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>ملاحظات الزبون</Text>
+        <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>{t('partnerOrders.details.customerNotes')}</Text>
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={s.notesRow}>
             <View style={[s.notesIconBox, {backgroundColor: colors.bg, borderColor: colors.border}]}>
@@ -525,7 +591,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         </View>
 
         {/* Timeline */}
-        <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>وقت العملية</Text>
+        <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>{t('partnerOrders.details.operationTime')}</Text>
         <View style={s.timelineRow}>
           {timelineSteps.map((step, i) => {
             const {Icon} = step;
@@ -544,7 +610,7 @@ export default function OrderDetailsScreen({order, onBack}) {
                   ]}>
                     <Icon size={22} color={highlighted ? colors.primary : colors.textSecondary} />
                   </View>
-                  <Text style={[s.timelineLabel, {color: colors.textPrimary}]}>{step.label}</Text>
+                  <Text style={[s.timelineLabel, {color: colors.textPrimary}]}>{t(step.labelKey)}</Text>
                   <Text style={[s.timelineTime, {color: colors.textSecondary}]}>{timelineTimestamps[i] || ''}</Text>
                 </View>
                 {i < timelineSteps.length - 1 && (
@@ -559,7 +625,7 @@ export default function OrderDetailsScreen({order, onBack}) {
         {isCompleted && (
           <View style={[s.completedBanner, {backgroundColor: '#22C55E18', borderColor: '#22C55E40'}]}>
             <CheckCircle size={20} color="#22C55E" />
-            <Text style={[s.completedText, {color: '#22C55E'}]}>تم إنهاء الطلب بنجاح</Text>
+            <Text style={[s.completedText, {color: '#22C55E'}]}>{t('partnerOrders.details.completed')}</Text>
           </View>
         )}
 
@@ -590,6 +656,8 @@ export default function OrderDetailsScreen({order, onBack}) {
         onClose={handlePhotoClose}
         colors={colors}
         title={photoModalTitle}
+        retakeText={t('partnerOrders.details.retake')}
+        confirmText={t('partnerOrders.details.confirm')}
       />
     </View>
   );
@@ -600,7 +668,8 @@ const s = StyleSheet.create({
   center:          {flex: 1, alignItems: 'center', justifyContent: 'center'},
   header:          {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, gap: 8},
   backBtn:         {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
-  headerTitle:     {flex: 1, fontSize: 17, fontWeight: '800'},
+  headerTitleBtn:  {flex: 1},
+  headerTitle:     {fontSize: 17, fontWeight: '800'},
   typeBadge:       {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20},
   typeBadgeText:   {fontSize: 11, fontWeight: '700'},
   scroll:          {flex: 1},
@@ -647,16 +716,12 @@ const s = StyleSheet.create({
   completedBanner: {flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 8},
   completedText:   {fontSize: 14, fontWeight: '700'},
   footer:          {padding: 16, paddingBottom: 28, borderTopWidth: 1},
-  footerCol:       {gap: 10},
   rejectBtn:       {paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center'},
   rejectText:      {fontSize: 15, fontWeight: '800'},
   acceptBtn:       {flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: 14},
   acceptBtnText:   {color: '#FFF', fontSize: 16, fontWeight: '800'},
   fullBtn:         {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 16},
   fullBtnText:     {color: '#FFF', fontSize: 16, fontWeight: '800'},
-  finishPhotosRow: {flexDirection: 'row', gap: 8},
-  thumbImg:        {width: 64, height: 64, borderRadius: 10},
-  thumbAdd:        {width: 64, height: 64, borderRadius: 10, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center'},
   bottomPad:       {height: 8},
   footerRow:       {flexDirection: 'row', gap: 12},
 });

@@ -1,6 +1,6 @@
 # تقرير المشروع التقني — تمام
 **React Native Developer Report**
-**التاريخ:** 2026-05-04 | **الإصدار:** 0.0.1
+**التاريخ:** 2026-05-10 | **الإصدار:** 0.0.1
 
 ---
 
@@ -8,12 +8,12 @@
 
 تطبيق **تمام** هو منصة لإدارة خدمات غسيل السيارات في السوق السعودي. يتضمن تطبيقين مستقلين في مشروع واحد:
 
-| التطبيق | الدور | نقطة الدخول |
+| التطبيق | الدور (`role`) | نقطة الدخول |
 |---|---|---|
-| **بايكر** | موظف التوصيل والتنفيذ | `src/biker/` |
-| **بارتنر** | صاحب المغسلة / المدير | `src/partner/` |
+| **بايكر** | `'biker'` | `src/biker/` |
+| **بارتنر** | `'admin'` (يُطبَّع من `'manager' / 'client' / ...`) | `src/partner/` |
 
-يتشارك الاثنان: Theme، i18n، Auth، وبعض المكونات من `src/shared/`.
+يتشارك الاثنان: Theme، i18n، Auth، Firebase/Notifications، وبعض المكونات من `src/shared/`.
 
 ---
 
@@ -22,132 +22,157 @@
 | الطبقة | التقنية | الإصدار |
 |---|---|---|
 | Framework | React Native CLI | 0.76.9 |
-| Language | JavaScript (JS) + TypeScript (App.tsx فقط) | TS 5.0.4 |
+| Language | JavaScript + TypeScript (App.tsx فقط) | TS 5.0.4 |
 | Engine | Hermes | مفعّل |
 | Architecture | New Architecture (Fabric + TurboModules) | مفعّل |
-| Navigation | @react-navigation/native-stack | 7.14.12 |
+| Navigation | @react-navigation/native + native-stack | 7.2.2 / 7.14.12 |
 | Icons | lucide-react-native | 1.11.0 |
 | Storage | @react-native-async-storage | 2.1.0 |
 | SVG | react-native-svg | 15.11.2 |
 | Safe Area | react-native-safe-area-context | 5.7.0 |
 | Screens | react-native-screens | 4.4.0 |
+| State | zustand | 5.0.12 |
+| HTTP | `fetch` + `AbortController` (custom — `src/services/api.js`) | — |
+| Camera/Images | react-native-image-picker | 8.2.1 |
+| WebView (Maps) | react-native-webview | 13.16.1 |
+| Notifications | @notifee/react-native + @react-native-firebase/messaging | 9.1.8 / 24.0.0 |
 
-**ما هو غير موجود (مخطط):** HTTP Client، State Management، Push Notifications، Maps
+**ما تمت إضافته منذ التقرير السابق:** API layer، Zustand store، Firebase/FCM + notifee، Cloudinary uploader، WebView، شاشة OTP، اختبارات Jest.
+
+**ما لا يزال غير موجود:** نظام نشر فعلي (CI/CD)، production keystore، Proguard مفعَّل.
 
 ---
 
 ## 3. بنية الملفات
 
 ```
-src/
-├── biker/                  ← تطبيق البايكر (17 ملف)
+src/                                ← 73 ملف JS
+├── biker/                          ← تطبيق البايكر
 │   ├── features/
-│   │   ├── home/           ← HomeScreen, NotificationsScreen, OrderCard
-│   │   ├── orders/         ← OrdersNavigator, OrdersScreen, OrderDetailsScreen, OrderMapScreen, OrderListCard
-│   │   ├── reviews/        ← ReviewsScreen
-│   │   └── profile/        ← ProfileNavigator + 5 شاشات فرعية
-│   └── navigation/
-│       └── AppNavigator.js ← Bottom tabs يدوي (96 سطر)
+│   │   ├── home/        ← HomeScreen, NotificationsScreen, components/OrderCard
+│   │   ├── orders/      ← OrdersNavigator, OrdersScreen, OrderDetailsScreen,
+│   │   │                  OrderMapScreen, components/OrderListCard
+│   │   ├── reviews/     ← ReviewsScreen
+│   │   └── profile/     ← ProfileNavigator + 5 شاشات فرعية
+│   └── navigation/AppNavigator.js  ← bottom tabs يدوي
 │
-├── partner/                ← تطبيق البارتنر (27 ملف)
+├── partner/                        ← تطبيق البارتنر
 │   ├── features/
-│   │   ├── dashboard/      ← DashboardScreen, NotificationsScreen
-│   │   ├── orders/         ← OrdersNavigator, OrdersScreen, OrderDetailsScreen,
-│   │   │                     IncomingOrderScreen, AssignBikerScreen, SkipReviewScreen
-│   │   ├── operations/     ← OperationsNavigator + 9 شاشات (Services, Packages, Bikers,
-│   │   │                     Staff, Branches, Payments, Reviews, Offers, SkipReview)
-│   │   └── profile/        ← PartnerProfileNavigator + 4 شاشات فرعية
-│   └── navigation/
-│       └── PartnerNavigator.js ← Bottom tabs يدوي (138 سطر)
+│   │   ├── dashboard/   ← DashboardScreen, NotificationsScreen
+│   │   ├── orders/      ← OrdersNavigator, OrdersScreen, OrderDetailsScreen,
+│   │   │                  IncomingOrderScreen, AssignBikerScreen, SkipReviewScreen,
+│   │   │                  RejectOrderModal
+│   │   ├── operations/  ← OperationsNavigator + Services, AddService, Packages,
+│   │   │                  AddPackage, Bikers, AddBiker, BikerDetails, Staff,
+│   │   │                  Branches, EditBranch, Offers, Payments, Reviews
+│   │   └── profile/     ← PartnerProfileNavigator, PartnerPersonalInfoScreen,
+│   │                      Support, Terms
+│   └── navigation/PartnerNavigator.js
 │
-├── features/
-│   └── auth/               ← LoginScreen.js + OtpScreen.js (مشترك)
+├── features/auth/                  ← LoginScreen, OtpScreen
 │
-└── shared/                 ← مشترك بين البايكر والبارتنر (13 ملف)
-    ├── components/         ← DeleteConfirmModal, ImagePickerField, MapContainer,
-    │                         SelectField, StatusTracker, SplashScreen, LanguageScreen
-    ├── constants/          ← colors.js, status.js
-    ├── context/            ← ThemeContext.js
-    ├── data/               ← mockData.js
-    ├── i18n/               ← I18nContext.js + ar.json, en.json, hi.json
-    └── types/              ← JSDoc typedefs
+├── services/                       ← ✅ جديد — API layer كامل
+│   ├── api.js                ← fetch + AbortController + 401 refresh
+│   ├── auth.js               ← login / verifyOTP / resendOTP / logout
+│   ├── biker.js              ← biker profile + duty
+│   ├── orders.js             ← biker order endpoints
+│   ├── partner.js            ← dashboard, tenant orders, staff, services...
+│   ├── notifications.js      ← FCM register + list/read
+│   ├── notificationChannel.js ← notifee channels + incoming-order loop
+│   └── cloudinary.js         ← unsigned upload (preset: tteamdashboard)
+│
+├── store/                          ← ✅ جديد — Zustand
+│   ├── authStore.js          ← user, token, role + hydrate + setSession
+│   ├── appStore.js           ← loading, toasts, incomingOrder, autoAccept,
+│   │                           unreadCount, pendingNav
+│   └── ordersStore.js        ← cached orders للبايكر
+│
+├── shared/
+│   ├── components/   ← MapContainer (WebView), StatusTracker, SplashScreen,
+│   │                   DeleteConfirmModal, ImagePickerField, SelectField, LanguageScreen
+│   ├── constants/    ← colors.js (Light/Dark), status.js
+│   ├── context/      ← ThemeContext.js, FirebaseContext.js
+│   ├── data/         ← mockData.js
+│   ├── i18n/         ← I18nContext.js + ar.json, en.json, hi.json
+│   └── types/        ← JSDoc typedefs
+│
+├── assets/steps/                   ← 1.png – 5.png (step guides)
+└── config.js                       ← BASE_URL1 + GOOGLE_MAPS_API_KEY
 ```
 
-**إجمالي:** 59 ملف JavaScript
+**`__tests__/`:** 12 ملف اختبار يغطي api، auth، orders، partner، network-integration، ordersStore/authStore/appStore، StatusTracker، I18nContext، status constants، navigation.
 
 ---
 
 ## 4. المعمارية
 
-### 4.1 نظام الـ Navigation
+### 4.1 Navigation
 
-Navigation يدوي بالكامل — bottom tabs مبنية بـ `useState` + `display:'none'` بدلاً من `@react-navigation/bottom-tabs`.
-
-**السبب:** تخفيف الحجم + تحكم كامل في behavior الـ tabs.
+Navigation يدوي بالكامل — bottom tabs مبنية بـ `useState` + `display:'none'` + lazy mount بدلاً من `@react-navigation/bottom-tabs`.
 
 ```
 App.tsx
-├── I18nProvider
-│   └── ThemeProvider
-│       ├── LoginScreen (role === null)
-│       ├── AppNavigator (role === 'biker')
-│       │   ├── [Tab] HomeScreen
-│       │   ├── [Tab] OrdersNavigator → OrdersScreen → OrderDetailsScreen → OrderMapScreen
-│       │   ├── [Tab] ReviewsScreen
-│       │   └── [Tab] ProfileNavigator → ProfileScreen → [5 sub-screens]
-│       └── PartnerNavigator (role === 'manager')
-│           ├── [Tab] DashboardScreen
-│           ├── [Tab] OrdersNavigator → OrdersScreen → OrderDetailsScreen
-│           ├── [Tab] OperationsNavigator → [9 screens]
-│           └── [Tab] PartnerProfileNavigator → [5 screens]
+└── ErrorBoundary → I18nProvider → AppRoot
+    └── ThemeProvider → FirebaseProvider
+        ├── LoginScreen           (role === null)
+        ├── BikerNavigator         (role === 'biker')
+        │   ├── HomeScreen
+        │   ├── OrdersNavigator → OrdersScreen → OrderDetailsScreen → OrderMapScreen
+        │   ├── ReviewsScreen
+        │   └── ProfileNavigator → ProfileScreen → [5 sub-screens]
+        └── PartnerNavigator       (role === 'admin')
+            ├── DashboardScreen
+            ├── OrdersNavigator → OrdersScreen → OrderDetailsScreen
+            ├── OperationsNavigator → [Services / Packages / Bikers / Staff / Branches /
+            │                           Offers / Payments / Reviews / SkipReview]
+            └── PartnerProfileNavigator → [PersonalInfo, Support, Terms, Language]
 ```
 
-**Lazy Loading:** كل tab يُحمَّل عند أول زيارة فقط (mounted map pattern). الـ operations tab يُتلف من الذاكرة عند المغادرة.
+**ErrorBoundary** على مستوى الجذر يلتقط أي خطأ غير معالج ويعرض شاشة fallback عربية مع زر "إعادة المحاولة".
 
-### 4.2 نظام الـ Theme
+### 4.2 API Layer (`src/services/`)
 
-`ThemeContext.js` يوفر `{isDark, colors, toggleTheme}` عبر `useTheme()`.
+- **`api.js`** — `fetch` wrapper بـ `AbortController` (timeout 30s). يضع `Authorization: Bearer <token>` تلقائياً، ويعالج 401 بمحاولة `/auth/refresh`؛ في حال الفشل يستدعي `setUnauthorizedHandler(fn)` المسجَّل في `App.tsx` (ينفّذ `logout`).
+- **شكل الاستجابة الموحَّد:** `{success, data, error}`.
+- **رفع الصور:** Profile photos تذهب لـ Cloudinary أولاً (unsigned preset `tteamdashboard`)، ثم URL يُحفظ في الـ backend.
 
-- يحفظ الاختيار في AsyncStorage
-- يدعم Light/Dark mode
-- جميع الشاشات تستخدم `colors.xxx` بدلاً من قيم ثابتة
+### 4.3 State Management (Zustand)
 
-### 4.3 نظام الـ i18n
+- **`authStore`** — `{user, token, role, isReady}`. `hydrate()` تُستدعى مرة عند الإقلاع. `setSession(token, user)` تحفظ في AsyncStorage وتسجّل FCM token تلقائياً. **الـ role يُطبَّع:** `'biker'` يبقى، أي شيء آخر → `'admin'`. لا يوثَق بـ `user.role` من الـ backend مباشرة.
+- **`appStore`** — UI state عام: loading keys، toasts، `incomingOrder`، `autoAccept`، `unreadCount`، `pendingNav` لتوجيه ضغطات الـ notifications.
+- **`ordersStore`** — قائمة طلبات البايكر مُخزَّنة محلياً.
 
-`I18nContext.js` يوفر `{lang, setLang, t, isRTL}` عبر `useI18n()`.
+### 4.4 Push Notifications (Firebase + Notifee)
 
-- 3 لغات: عربي (ar) ← افتراضي، إنجليزي (en)، هندي (hi)
-- يحفظ اللغة في AsyncStorage
-- RTL تلقائي: `App.tsx` يضع `direction: isRTL ? 'rtl' : 'ltr'` على الـ root View
-- **قاعدة:** لا يوجد نص مكتوب مباشرة في الشاشات — كل النصوص عبر `t('key')`
+- **FCM token flow:** `bootstrap(role)` في `FirebaseContext.js` يجلب التوكن ويستدعي `registerFCMToken(token, role)` → `POST /notifications/register`. يُستدعى أيضاً في `setSession` بعد تسجيل الدخول.
+- **Background handler** في `index.js` — رسائل `data-only` (لا تحتوي على `notification` block). إذا `data.type === 'NEW_ORDER'`:
+  - يُحفظ الـ payload في AsyncStorage تحت `pending_incoming_order`
+  - تظهر notification صوتية عبر channel `incoming_orders_v6` (في `notificationChannel.js`)
+  - Loop كل 8 ثوانٍ يُعيد عرض الـ notification (Android يحتاج cancel + redisplay لإعادة تشغيل الصوت)
+- **Channels:** قناة `incoming_orders_v6` (sound: `incoming_order`، bypass DnD، fullScreen intent للـ CALL category) وقناة عامة للباقي.
+- **iOS critical alerts:** `critical: true, criticalVolume: 1.0` على الـ incoming-order.
 
-### 4.4 نمط Inline Screens
+### 4.5 Theme & i18n
 
-بعض الشاشات لا تكون navigator screens بل تُعرض **داخل الشاشة الأم** عبر `useState`:
+- **ThemeContext** — `{isDark, colors, toggleTheme}`، يحفظ في AsyncStorage. كل الشاشات تستخدم `colors.xxx`.
+- **I18nContext** — `{lang, setLang, t, isRTL}`، 3 لغات (ar / en / hi). RTL تلقائي عبر `direction: isRTL ? 'rtl' : 'ltr'` على الـ root View. `TextInput` على Android يحتاج `textAlign={isRTL ? 'right' : 'left'}` كـ prop مباشر.
 
-```js
-// DashboardScreen — IncomingOrderScreen يظهر فوق الـ dashboard مباشرة
-{showIncoming && <IncomingOrderScreen onAccept={...} onReject={...} />}
+### 4.6 Inline Screens Pattern
 
-// OrderDetailsScreen — AssignBikerScreen يظهر inline
-{showAssign && <AssignBikerScreen onAssign={...} onBack={...} />}
-```
+`IncomingOrderScreen` و `AssignBikerScreen` ليست navigator screens — تُعرض داخل الشاشة الأم عبر `useState` flag محلي. هذا يبقيها مرتبطة بـ context الطلب دون تمرير params.
 
-**السبب:** ربط وثيق بـ state الطلب دون الحاجة لتمرير بيانات عبر navigator params.
-
-### 4.5 Order Status Flow
+### 4.7 Order Status Flow
 
 ```
 PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER
-                                                    ↓ reject/auto-timeout
+                                                   ↓ (accept / reject / 60s timeout)
                                               ACCEPTED
-                                                    ↓ assign biker
+                                                   ↓ assign biker
                                               ASSIGNED → ON_THE_WAY → ARRIVED → STARTED → COMPLETED
 ```
 
 **البايكر يرى:** ASSIGNED → ON_THE_WAY → ARRIVED → STARTED → COMPLETED
-
-**IncomingOrderScreen:** countdown 60 ثانية، عند انتهائه `onReject('AUTO_TIMEOUT')` تلقائياً.
+**`IncomingOrderScreen`:** countdown 60s، انتهاؤه يستدعي `onReject('AUTO_TIMEOUT')` تلقائياً.
 
 ---
 
@@ -155,29 +180,26 @@ PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER
 
 | الميزة | الحالة | الملاحظات |
 |---|---|---|
-| Auth (Login + OTP) | ✅ UI كامل | API مُحاكى بـ setTimeout |
-| Dashboard (بارتنر) | ✅ UI كامل | بيانات وهمية |
-| Incoming Order | ✅ كامل مع countdown | trigger يدوي (MOCK_INCOMING) |
-| Orders List + Filter | ✅ كامل | فلترة بالحالة |
-| Order Details | ✅ كامل | AssignBiker inline |
-| SwipeButton | ✅ PanResponder كامل | يغير الحالة locally |
-| StatusTracker | ✅ animated | 5 خطوات مع pulse |
-| Camera Upload | ✅ UI + permissions | API غير مربوط |
-| Operations Menu | ✅ كامل | 9 screens |
-| Services/Packages | ✅ CRUD local | بيانات وهمية |
-| Staff/Bikers | ✅ عرض | duty toggle local |
-| Branches | ✅ عرض + تعديل | ساعات العمل |
-| Offers | ✅ CRUD local | S/M/L pricing |
-| Payments | ✅ عرض | بيانات وهمية |
-| Profile (بايكر) | ✅ كامل | wallet, language, support |
-| Profile (بارتنر) | ✅ كامل | إعدادات كاملة |
-| Reviews | ✅ عرض | mock reviews |
+| Auth (Login + OTP) | ✅ متصل بالـ API | `verifyOTP` يعالج كلا شكلَي الاستجابة (`res.data` و `res.data.data`) |
+| Push Notifications (FCM) | ✅ كامل | data-only messages + background handler + channels |
+| Incoming Order (real-time) | ✅ متصل | عبر FCM `data.type === 'NEW_ORDER'` بدلاً من mock |
+| Dashboard (بارتنر) | ✅ متصل | يقرأ من `partner.js` |
+| Orders List + Filter | ✅ متصل | فلترة بالحالة |
+| Order Details | ✅ متصل | AssignBiker inline |
+| SwipeButton | ✅ كامل | `key={currentStatus}` يفرض remount |
+| StatusTracker | ✅ animated | 5 خطوات + pulse على الـ active |
+| Camera Upload | ✅ متصل | `launchCamera` + Cloudinary unsigned + حفظ URL backend |
+| Operations CRUD | ✅ متصل | services / packages / bikers / staff / branches / offers / payments / reviews |
+| Skip Review | ✅ كامل | approve / reject من `OperationsNavigator` |
+| Profile (بايكر / بارتنر) | ✅ متصل | wallet, language, support, terms, personal info |
+| Reviews (بايكر) | ✅ عرض | يقرأ من API |
 | Dark Mode | ✅ مفعّل | persist AsyncStorage |
 | RTL (عربي) | ✅ كامل | direction على root |
-| Map | ❌ Placeholder | react-native-webview غير مثبّت |
-| Push Notifications | ❌ لم يبدأ | MOCK_INCOMING يدوي |
-| API Layer | ❌ لم يبدأ | لا يوجد src/services/ |
-| State Management | ❌ لم يبدأ | لا Zustand/Redux |
+| Map | ✅ متصل | `react-native-webview` مثبَّت + Google Maps via embed |
+| ErrorBoundary | ✅ موجود | على مستوى الجذر في App.tsx |
+| Tests (Jest) | ✅ 12 test file | services + stores + i18n + navigation + StatusTracker |
+| API Layer | ✅ كامل | fetch + AbortController + 401 refresh + uploadImage |
+| State Management | ✅ Zustand | 3 stores |
 
 ---
 
@@ -193,19 +215,18 @@ PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER
 | Version Name | 1.0 |
 | Hermes | ✅ مفعّل |
 | New Architecture | ✅ مفعّل |
-| Proguard | ❌ معطّل |
-| ABI Splits | ❌ معطّل (universal APK) |
-| Signing (Release) | ❌ debug keystore |
+| Proguard | ❌ معطّل (`enableProguardInReleaseBuilds = false`) |
+| ABI Filters | ✅ `arm64-v8a` + `x86_64` فقط |
+| Signing (Release) | ❌ debug keystore فقط |
 | NDK | 26.1.10909125 |
-| ABIs | armeabi-v7a, arm64-v8a, x86, x86_64 |
+| Google Services Plugin | ✅ مفعَّل (`com.google.gms.google-services`) |
 
 **Permissions في AndroidManifest:**
-- `INTERNET`
-- `VIBRATE`
-- `CAMERA`
-- `READ_EXTERNAL_STORAGE`
-- `WRITE_EXTERNAL_STORAGE`
-- `READ_MEDIA_IMAGES`
+- `INTERNET`، `VIBRATE`، `CAMERA`
+- `READ_EXTERNAL_STORAGE`، `WRITE_EXTERNAL_STORAGE`، `READ_MEDIA_IMAGES`
+- `POST_NOTIFICATIONS` (Android 13+)
+- `USE_FULL_SCREEN_INTENT` (للـ incoming-order)
+- `FileProvider` مُعرَّف لمشاركة الصور من الكاميرا
 
 ---
 
@@ -219,8 +240,9 @@ PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER
 | steps/4.png | 223 KB | STARTED step guide |
 | steps/5.png | 357 KB | COMPLETED step guide |
 | **المجموع** | **~1.34 MB** | OrderDetailsScreen |
+| `ic_notification.png` | — | drawable للـ FCM data notifications |
 
-**ملاحظة:** كلها PNG غير محسّنة — تحويلها لـ WebP يوفر ~1 MB.
+**ملاحظة:** صور الخطوات لا تزال PNG — تحويلها لـ WebP يوفر ~1 MB.
 
 ---
 
@@ -228,11 +250,13 @@ PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER
 
 | السيناريو | الحجم المتوقع |
 |---|---|
-| Debug (حالي) | ~130 MB |
-| Release بدون تحسين | ~18–22 MB |
-| Release + Proguard + shrinkResources | ~12–14 MB |
-| Release + ABI Split (arm64 فقط) | ~8–10 MB |
-| Release + كل التحسينات + WebP | ~6–8 MB |
+| Debug (حالي) | ~135–145 MB |
+| Release بدون تحسين (universal arm64+x86_64) | ~22–26 MB |
+| Release + Proguard + shrinkResources | ~14–17 MB |
+| Release + ABI Split (arm64 فقط) | ~10–12 MB |
+| Release + كل التحسينات + WebP | ~8–10 MB |
+
+> الزيادة عن التقرير السابق سببها Firebase + Notifee + WebView + react-native-image-picker.
 
 ---
 
@@ -241,65 +265,72 @@ PENDING_PAYMENT → AUTHORIZING → AUTHORIZED → PENDING_PARTNER
 ### عالي الأولوية
 | المشكلة | التأثير | الحل |
 |---|---|---|
-| لا يوجد API layer | التطبيق غير قابل للإنتاج | إنشاء `src/services/` مع fetch + AbortController |
-| Release signing بـ debug keystore | خطر أمني | إنشاء production keystore |
-| Proguard معطّل | حجم كبير + no obfuscation | تفعيل `minifyEnabled true` |
-| `MOCK_INCOMING` ثابت في الكود | IncomingOrder لا يعمل real-time | ربط Push Notifications |
+| Release signing بـ debug keystore | لا يمكن النشر على Google Play | إنشاء production keystore + signingConfig في build.gradle |
+| Proguard معطّل | حجم APK كبير + لا obfuscation | `enableProguardInReleaseBuilds = true` + ضبط `proguard-rules.pro` لـ Firebase/Notifee |
+| `BASE_URL` ثابت في `src/config.js` | لا يوجد فصل بين dev / staging / prod | استخدام `.env` + `react-native-config` أو build flavors |
+| Cloudinary unsigned preset في الكود | يمكن لأي عميل رفع صور | الانتقال لـ signed uploads عبر backend |
+| FCM topic / token rotation | إذا تغيّر التوكن لا يُعاد التسجيل تلقائياً | الاشتراك في `onTokenRefresh` (موجود؟ يحتاج تأكيد) |
 
 ### متوسط الأولوية
 | المشكلة | التأثير | الحل |
 |---|---|---|
 | صور PNG غير محسّنة (~1.34MB) | حجم APK أكبر | تحويل لـ WebP |
-| ABI Splits معطّلة | APK universal ثقيل | تفعيل splits في build.gradle |
-| MapContainer placeholder | الخريطة لا تعمل | تثبيت react-native-webview |
-| Camera مكتوبة بدون API | الصور لا تُرفع | ربط upload endpoint |
-| `nativewind` مثبّت غير مستخدم | ~300KB زائد | `npm uninstall nativewind` |
+| ABI x86_64 مُضمَّن مع arm64 | حجم زائد للأجهزة الفعلية | إبقاء arm64-v8a فقط للـ release |
+| MapContainer عبر WebView (Google embed) | أداء أقل من native maps | تثبيت `react-native-maps` لاحقاً عند الحاجة |
+| لا يوجد crash reporting | الـ ErrorBoundary يلتقط محلياً فقط | إضافة Crashlytics (Firebase موجود) |
+| Mock data مبعثرة في بعض شاشات Operations | صعوبة الاستبدال بـ API | تنظيف ما تبقى من `src/shared/data/mockData.js` |
+| `nativewind` مثبَّت غير مستخدم (إن وُجد) | ~300KB زائد | التأكد من إزالته من package.json |
 
 ### منخفض الأولوية
 | المشكلة | التأثير | الحل |
 |---|---|---|
-| لا يوجد src/services/ أو src/store/ | scalability | تهيئة service layer |
-| Mock data مبعثرة في الشاشات | صعوبة الاستبدال بـ API | تمركز في src/shared/data/ |
 | TypeScript جزئي (App.tsx فقط) | type safety محدود | تحويل تدريجي لـ .tsx |
+| لا يوجد Storybook / component catalog | مراجعة UI أبطأ | اختياري — Storybook RN |
+| تغطية الاختبارات تركّز على services/stores فقط | الشاشات بدون snapshot tests | إضافة RTL component tests |
 
 ---
 
 ## 10. خطة ما تبقى قبل الإنتاج
 
 ```
-المرحلة 1 — API Layer (أسبوعان)
-├── إنشاء src/services/api.js (base fetch + auth headers)
-├── src/services/auth.js  — login, OTP verify, refresh token
-├── src/services/orders.js — list, details, status update
-├── src/services/biker.js  — profile, wallet, reviews
-└── src/services/partner.js — dashboard stats, operations CRUD
+✅ المرحلة 1 — API Layer                    (مكتملة)
+✅ المرحلة 2 — Real-time / Push (FCM)       (مكتملة)
+✅ المرحلة 3 — Maps (WebView)                (مكتملة)
 
-المرحلة 2 — Real-time (أسبوع)
-├── Push Notifications (Firebase FCM)
-└── IncomingOrder عبر notification بدلاً من MOCK
+⏳ المرحلة 4 — Build & Release  (متبقّية)
+   ├── Production keystore + signing config (Android + iOS)
+   ├── تفعيل Proguard + shrinkResources وضبط rules
+   ├── ABI Split: arm64-v8a فقط للـ Play Store، حذف x86_64
+   ├── تحويل صور steps/*.png → WebP
+   ├── فصل بيئات (dev / staging / prod) عبر .env أو flavors
+   ├── Firebase Crashlytics + Performance
+   ├── إعداد Fastlane / GitHub Actions للنشر
+   └── Privacy policy + App Store / Play Store listings
 
-المرحلة 3 — Maps (أسبوع)
-├── تثبيت react-native-webview
-└── تفعيل MapContainer بـ Google Maps embed
-
-المرحلة 4 — Build & Release (يومان)
-├── Production keystore
-├── تفعيل Proguard
-├── تفعيل ABI Splits
-├── تحويل صور PNG → WebP
-└── إعداد CI/CD pipeline
+⏳ المرحلة 5 — تحسينات بعد الإطلاق  (مرحلية)
+   ├── الانتقال من Cloudinary unsigned إلى signed-via-backend
+   ├── الانتقال من WebView Maps إلى react-native-maps
+   ├── توسيع تغطية اختبارات الشاشات (RTL + snapshots)
+   └── i18n: مراجعة hi.json وملء الفجوات
 ```
 
 ---
 
 ## 11. ملخص تنفيذي
 
-المشروع في حالة **UI مكتمل** — كل الشاشات والتدفقات مبنية ومصممة. الجزء الغائب هو الـ **backend integration** بالكامل.
+المشروع تجاوز مرحلة الـ **UI-only** وأصبح **متصلاً بالـ backend بالكامل** — الشاشات تقرأ وتكتب عبر `src/services/`، الحالة العامة تُدار بـ Zustand، Push Notifications real-time مفعَّلة عبر FCM + Notifee، رفع الصور يعمل عبر Cloudinary، والكاميرا متكاملة مع الأذونات.
 
 **النقاط الإيجابية:**
-- بنية معمارية نظيفة وفصل واضح بين تطبيقي البايكر والبارتنر
-- دعم كامل للغة العربية وRTL والوضع الليلي
-- Hermes مفعّل والـ New Architecture جاهزة
-- كود منظم ومتسق بدون تبعيات زائدة
+- بنية معمارية نظيفة وفصل تام بين تطبيقَي البايكر والبارتنر
+- API layer موحَّد مع 401 auto-refresh و AbortController
+- ErrorBoundary على مستوى الجذر + tests للـ services والـ stores
+- دعم كامل للعربية وRTL والوضع الليلي
+- Hermes + New Architecture + autolinking
 
-**الخلاصة:** جاهز للربط بالـ backend مباشرة. لا يحتاج إعادة هيكلة — يحتاج فقط إنشاء service layer وربط الـ API endpoints الموجودة كـ placeholders في الكود.
+**الفجوات المتبقية للإنتاج:**
+- Production signing + Proguard + ABI optimization
+- فصل بيئات dev/prod
+- Crashlytics + monitoring
+- Cloudinary signed uploads بدلاً من unsigned
+
+**الخلاصة:** المشروع جاهز وظيفياً. ما تبقى هو **عمل DevOps / Release engineering** (keystore، Proguard، CI/CD، environments) وليس تطوير ميزات.

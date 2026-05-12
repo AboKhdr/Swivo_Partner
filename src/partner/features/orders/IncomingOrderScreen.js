@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   ScrollView,
@@ -12,28 +13,35 @@ import {
 import {Zap, X, User, MapPin, DollarSign, Droplets, Car, Hash} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {cancelIncomingOrderNotification} from '../../../services/notificationChannel';
+import {cancelIncomingOrderNotification, RING_MAX_MS} from '../../../services/notificationChannel';
+import {REJECT_REASONS} from '../../../shared/constants/rejectReasons';
 
-const TIMEOUT_SECONDS = 15 * 60;
-
-const REJECT_REASON_KEYS = ['busy', 'outOfRange', 'noBiker', 'duplicate', 'other'];
+// Sync with the ring duration (60s) — same as a WhatsApp call timeout
+const TIMEOUT_SECONDS = Math.floor(RING_MAX_MS / 1000);
 
 export default function IncomingOrderScreen({visible, order, onAccept, onReject}) {
   const {colors} = useTheme();
   const {t} = useI18n();
-  const rejectReasons = REJECT_REASON_KEYS.map(k => ({key: k, label: t(`partner.incoming.rejectReasons.${k}`)}));
+  // Render localized labels but track selection by stable enum CODE
+  const rejectReasons = REJECT_REASONS.map(r => ({
+    key:   r.key,
+    code:  r.code,
+    label: t(`partner.incoming.rejectReasons.${r.key}`),
+  }));
   const [secondsLeft, setSecondsLeft]       = useState(TIMEOUT_SECONDS);
   const [showReject, setShowReject]         = useState(false);
-  const [selectedReason, setSelectedReason] = useState('');
+  const [selectedCode, setSelectedCode]     = useState('');
   const [otherNote, setOtherNote]           = useState('');
+  const [busy, setBusy]                     = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (visible) {
       setSecondsLeft(TIMEOUT_SECONDS);
       setShowReject(false);
-      setSelectedReason('');
+      setSelectedCode('');
       setOtherNote('');
+      setBusy(false);
     }
   }, [visible]);
 
@@ -56,32 +64,43 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     if (!visible) return;
     if (secondsLeft <= 0) {
       cancelIncomingOrderNotification().catch(() => {});
-      onReject('AUTO_TIMEOUT');
+      onReject({reason: 'AUTO_TIMEOUT'});
       return;
     }
     const t = setTimeout(() => setSecondsLeft(s => s - 1), 1000);
     return () => clearTimeout(t);
   }, [visible, secondsLeft, onReject]);
 
-  const handleAccept = useCallback(() => {
+  const handleAccept = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
     cancelIncomingOrderNotification().catch(() => {});
-    onAccept(order);
-  }, [order, onAccept]);
+    try {
+      await onAccept(order);
+    } finally {
+      // PartnerNavigator clears incomingOrder on success → modal closes.
+      // On failure we re-enable the buttons so the user can try again.
+      setBusy(false);
+    }
+  }, [order, onAccept, busy]);
 
-  const handleRejectConfirm = useCallback(() => {
-    if (!selectedReason) return;
-    const otherLabel = t('partner.incoming.rejectReasons.other');
-    const reason = selectedReason === otherLabel ? (otherNote.trim() || otherLabel) : selectedReason;
+  const handleRejectConfirm = useCallback(async () => {
+    if (busy || !selectedCode) return;
+    const note = selectedCode === 'OTHER' ? otherNote.trim() : '';
+    setBusy(true);
     cancelIncomingOrderNotification().catch(() => {});
-    onReject(reason);
-  }, [selectedReason, otherNote, onReject, t]);
+    try {
+      await onReject({reason: selectedCode, note: note || undefined});
+    } finally {
+      setBusy(false);
+    }
+  }, [selectedCode, otherNote, onReject, busy]);
 
   const minutes   = Math.floor(secondsLeft / 60);
   const secs      = secondsLeft % 60;
   const timeLabel = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')} ${t('partner.incoming.timer')}`;
 
-  const otherLabel = t('partner.incoming.rejectReasons.other');
-  const canConfirm = selectedReason && (selectedReason !== otherLabel || otherNote.trim().length > 0);
+  const canConfirm = selectedCode && (selectedCode !== 'OTHER' || otherNote.trim().length > 0);
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
@@ -181,14 +200,25 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
 
             {/* Accept button */}
             <TouchableOpacity
-              style={[s.acceptBtn, {backgroundColor: colors.primary}]}
+              style={[s.acceptBtn, {backgroundColor: colors.primary, opacity: busy ? 0.7 : 1}]}
               onPress={handleAccept}
+              disabled={busy}
               activeOpacity={0.85}>
-              <Zap size={20} color="#FFF" fill="#FFF" />
-              <Text style={s.acceptTxt}>{t('partner.incoming.accept')}</Text>
+              {busy ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Zap size={20} color="#FFF" fill="#FFF" />
+                  <Text style={s.acceptTxt}>{t('partner.incoming.accept')}</Text>
+                </>
+              )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.rejectLink} onPress={() => setShowReject(true)} activeOpacity={0.75}>
+            <TouchableOpacity
+              style={s.rejectLink}
+              onPress={() => !busy && setShowReject(true)}
+              disabled={busy}
+              activeOpacity={0.75}>
               <Text style={[s.rejectLinkTxt, {color: colors.textSecondary}]}>{t('partner.incoming.reject')}</Text>
             </TouchableOpacity>
 
@@ -207,8 +237,8 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
             </View>
 
             <View style={s.reasonsList}>
-              {rejectReasons.map(({key, label}) => {
-                const isSel = selectedReason === label;
+              {rejectReasons.map(({key, code, label}) => {
+                const isSel = selectedCode === code;
                 return (
                   <TouchableOpacity
                     key={key}
@@ -216,7 +246,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
                       borderColor:     isSel ? colors.primary : colors.border,
                       backgroundColor: isSel ? colors.primary + '10' : colors.bg,
                     }]}
-                    onPress={() => setSelectedReason(label)}
+                    onPress={() => setSelectedCode(code)}
                     activeOpacity={0.75}>
                     <View style={[s.radio, {borderColor: isSel ? colors.primary : colors.border}]}>
                       {isSel && <View style={[s.radioDot, {backgroundColor: colors.primary}]} />}
@@ -228,7 +258,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
                 );
               })}
 
-              {selectedReason === otherLabel && (
+              {selectedCode === 'OTHER' && (
                 <TextInput
                   style={[s.noteInput, {backgroundColor: colors.bg, borderColor: colors.border, color: colors.textPrimary}]}
                   placeholder={t('partner.incoming.rejectNotePlaceholder')}
@@ -242,11 +272,15 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
             </View>
 
             <TouchableOpacity
-              style={[s.confirmBtn, {backgroundColor: canConfirm ? colors.danger : colors.border}]}
+              style={[s.confirmBtn, {backgroundColor: canConfirm && !busy ? colors.danger : colors.border}]}
               onPress={handleRejectConfirm}
-              disabled={!canConfirm}
+              disabled={!canConfirm || busy}
               activeOpacity={0.8}>
-              <Text style={s.confirmTxt}>{t('partner.incoming.rejectConfirm')}</Text>
+              {busy ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={s.confirmTxt}>{t('partner.incoming.rejectConfirm')}</Text>
+              )}
             </TouchableOpacity>
           </View>
         )}

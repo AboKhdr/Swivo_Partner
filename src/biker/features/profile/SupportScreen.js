@@ -6,7 +6,7 @@ import {
 import {ChevronLeft, CheckCircle} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {sendSupportMessage} from '../../../services/biker';
+import {sendSupportMessage} from '../../../services/shared';
 
 export default function SupportScreen({onBack}) {
   const {colors, isDark} = useTheme();

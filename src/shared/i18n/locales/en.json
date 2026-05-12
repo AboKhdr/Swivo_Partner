@@ -1,7 +1,58 @@
 {
   "common": {
     "retry": "Retry",
-    "offlineContent": "Could not refresh content, showing cached version."
+    "offlineContent": "Could not refresh content, showing cached version.",
+    "copied": "Copied",
+    "copiedOrderNumber": "Order number copied",
+    "alert": "Notice",
+    "loadFailed": "Could not load data"
+  },
+  "permissions": {
+    "cameraRequired": "Please grant camera permission in Settings",
+    "fullScreenTitle": "Enable order alerts",
+    "fullScreenMessage": "To show incoming orders as a full-screen call over your phone, please enable \"Full-screen notifications\" in Settings.",
+    "fullScreenCta": "Open Settings",
+    "later": "Later",
+    "batteryTitle": "Improve notification delivery",
+    "batteryMessage": "To make sure alerts arrive while the app is closed, please exempt the app from battery optimization.",
+    "batteryCta": "Exempt from battery saver"
+  },
+  "partnerOrders": {
+    "timeline": {
+      "received": "Order received",
+      "arrivedBiker": "Biker arrived",
+      "started": "Wash started",
+      "done": "Wash finished"
+    },
+    "details": {
+      "title": "Order Details",
+      "onSite": "On-site",
+      "service": "Service",
+      "branch": "Branch",
+      "noNotes": "—",
+      "paidVia": "Paid via: Credit card",
+      "operationTime": "Operation time",
+      "customerNotes": "Customer notes",
+      "payment": "Payment",
+      "beforeWash": "Photos before wash",
+      "afterWash": "Photos after wash",
+      "completed": "Order completed successfully",
+      "assignBiker": "Assign biker",
+      "acceptAndAssign": "Accept & assign biker",
+      "acceptOrder": "Accept order",
+      "reject": "Reject",
+      "startWashCapture": "Start wash & capture photo",
+      "finishWashCapture": "Finish wash & capture photo",
+      "finishOrder": "Finish order",
+      "photoRequired": "Please capture a photo to finish the order",
+      "photoStart": "Wash start photo",
+      "photoFinish": "Order finish photo",
+      "cameraPermissionTitle": "Camera permission",
+      "cameraPermissionMessage": "The app needs the camera to capture photos",
+      "retake": "Retake",
+      "confirm": "Confirm",
+      "currency": "SAR"
+    }
   },
   "nav": {
     "home": "Home",
@@ -24,7 +75,12 @@
       "orders": "Orders",
       "activeBikers": "Active Bikers",
       "viewAll": "View All",
-      "pendingOrders": "Pending Orders"
+      "pendingOrders": "Pending Orders",
+      "quickActions": "Quick Actions",
+      "manageServices": "Manage Services",
+      "ordersAction": "Orders",
+      "payouts": "Payouts",
+      "services": "Services"
     },
     "orders": {
       "title": "Orders",
@@ -78,6 +134,7 @@
         "outOfRange": "Out of service area",
         "noBiker": "No biker available",
         "duplicate": "Duplicate order",
+        "customerRefused": "Customer cancelled",
         "other": "Other"
       },
       "rejectNotePlaceholder": "Write reason..."
@@ -341,7 +398,10 @@
       "next": "› Next",
       "resend": "Resend",
       "resendIn": "Resend in",
-      "invalidCode": "Invalid verification code"
+      "invalidCode": "Invalid verification code",
+      "attemptsRemaining": "Attempts remaining: {{count}}",
+      "lockedOut": "Too many attempts. Try again in {{seconds}}s",
+      "tooManyAttempts": "Too many failed attempts. Input temporarily locked"
     }
   },
   "home": {
@@ -436,7 +496,15 @@
       "skipTitle": "Skip Reason",
       "skipBody": "You must provide a reason for skipping photos to continue",
       "skipPlaceholder": "Write reason here...",
-      "skipConfirm": "Skip & Continue"
+      "skipConfirm": "Skip & Continue",
+      "skipReasons": {
+        "customerRefused": "Customer refused photo",
+        "noInternet": "No internet",
+        "cameraBroken": "Camera not working",
+        "appCrashed": "App crashed",
+        "carLeft": "Car left before photo",
+        "other": "Other"
+      }
     },
     "cancel": {
       "button": "Cancel Order",
@@ -465,7 +533,8 @@
     "mapUnavailable": "Map unavailable",
     "webviewNotInstalled": "Library not installed",
     "mapLoading": "Loading map...",
-    "mapError": "Failed to load map"
+    "mapError": "Failed to load map",
+    "startOrder": "Start Order"
   },
   "reviews": {
     "title": "Reviews",
@@ -491,7 +560,30 @@
     "terms": "Terms & Conditions",
     "termsSub": "Privacy Policy",
     "logout": "Log Out",
-    "logoutSub": "Account"
+    "logoutSub": "Account",
+    "deleteAccount": "Delete Account",
+    "deleteAccountSub": "Permanently delete your account and data"
+  },
+  "deleteAccount": {
+    "title": "Delete Account",
+    "warningTitle": "Warning: This action cannot be undone",
+    "warningBody": "Deleting your account will permanently remove all of your data from our servers. This cannot be reversed.",
+    "consequencesTitle": "What will be deleted?",
+    "bullet1": "Your personal info, phone number, and email",
+    "bullet2": "Your order history and past activity",
+    "bullet3": "Your wallet balance (if any) — please withdraw it first",
+    "bullet4": "Your reviews and feedback",
+    "reasonTitle": "Reason for deletion (optional)",
+    "reasonPlaceholder": "Help us improve — why are you deleting your account?",
+    "confirmCheckbox": "I understand this is permanent and cannot be undone",
+    "deleteBtn": "Delete My Account Permanently",
+    "confirmTitle": "Final Confirmation",
+    "confirmMessage": "Are you absolutely sure? Your account and all data will be deleted within 30 days.",
+    "confirmBtn": "Yes, delete",
+    "cancel": "Cancel",
+    "errorTitle": "Couldn't delete account",
+    "errorMessage": "Something went wrong. Please try again later or contact support.",
+    "footnote": "In compliance with Saudi Arabia's Personal Data Protection Law (PDPL), your data will be erased within 30 days of this request. For questions, contact support."
   },
   "personalInfo": {
     "title": "Personal Information",

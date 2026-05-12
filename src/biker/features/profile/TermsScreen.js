@@ -1,9 +1,9 @@
-import React, {useState, useEffect} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {ChevronLeft, RefreshCw} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import {getTerms} from '../../../services/biker';
+import {getTerms} from '../../../services/shared';
 
 export default function TermsScreen({onBack}) {
   const {colors, isDark} = useTheme();
@@ -14,11 +14,7 @@ export default function TermsScreen({onBack}) {
   const [sections, setSections] = useState([]);
   const [lastUpdated, setLastUpdated] = useState('');
 
-  useEffect(() => {
-    fetchTerms();
-  }, []);
-
-  async function fetchTerms() {
+  const fetchTerms = useCallback(async () => {
     setLoading(true);
     setError(false);
     const res = await getTerms();
@@ -33,7 +29,11 @@ export default function TermsScreen({onBack}) {
       if (!res.success) setError(true);
     }
     setLoading(false);
-  }
+  }, [t]);
+
+  useEffect(() => {
+    fetchTerms();
+  }, [fetchTerms]);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>

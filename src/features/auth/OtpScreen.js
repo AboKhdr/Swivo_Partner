@@ -18,8 +18,10 @@ import {verifyOTP, resendOTP} from '../../services/auth';
 
 const OTP_LENGTH = 6;
 const RESEND_DELAY = 30;
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 60;
 
-export default function OtpScreen({phone,prefix , onVerified, onBack}) {
+export default function OtpScreen({phone, prefix, onBack}) {
   const {colors, isDark} = useTheme();
   const {t, isRTL} = useI18n();
 
@@ -28,6 +30,8 @@ export default function OtpScreen({phone,prefix , onVerified, onBack}) {
   const [error, setError]         = useState(null);
   const [resendSec, setResendSec] = useState(RESEND_DELAY);
   const [isLoading, setIsLoading] = useState(false);
+  const [attempts, setAttempts]   = useState(0);
+  const [lockSec, setLockSec]     = useState(0);
 
   const inputRefs = useRef([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -47,6 +51,12 @@ export default function OtpScreen({phone,prefix , onVerified, onBack}) {
     const id = setTimeout(() => setResendSec(s => s - 1), 1000);
     return () => clearTimeout(id);
   }, [resendSec]);
+
+  useEffect(() => {
+    if (lockSec <= 0) return;
+    const id = setTimeout(() => setLockSec(s => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [lockSec]);
 
   const shake = useCallback(() => {
     Animated.sequence([
@@ -81,6 +91,11 @@ export default function OtpScreen({phone,prefix , onVerified, onBack}) {
   }, [digits]);
 
   const handleVerify = useCallback(async () => {
+    if (lockSec > 0) {
+      shake();
+      setError(t('auth.otp.lockedOut', {seconds: lockSec}));
+      return;
+    }
     const code = digits.join('');
     if (code.length < OTP_LENGTH) {
       setError(t('auth.otp.invalidCode'));
@@ -92,20 +107,33 @@ export default function OtpScreen({phone,prefix , onVerified, onBack}) {
     const res = await verifyOTP({phone, prefix : "966", code});
     setIsLoading(false);
     if (res.success) {
-      // response: { success, token, user: { _id, name, role, ... } }
-      onVerified(res.data?.user?.role ?? res.data?.role ?? 'biker');
+      setAttempts(0);
+      // verifyOTP already called setSession → role updates → App re-renders automatically
     } else {
       shake();
-      setError(
-        res.error === 'NETWORK_ERROR' ? t('auth.networkError') :
-        res.error === 'TIMEOUT'       ? t('auth.networkError') :
-        res.data?.message             ?? t('auth.otp.invalidCode'),
-      );
+      const nextAttempts = attempts + 1;
+      setAttempts(nextAttempts);
+
+      const networkErr = res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT';
+      const baseMsg = networkErr
+        ? t('auth.networkError')
+        : (res.data?.message ?? t('auth.otp.invalidCode'));
+
+      if (!networkErr && nextAttempts >= MAX_ATTEMPTS) {
+        setLockSec(LOCKOUT_SECONDS);
+        setError(t('auth.otp.tooManyAttempts'));
+      } else if (!networkErr) {
+        const remaining = MAX_ATTEMPTS - nextAttempts;
+        setError(`${baseMsg} · ${t('auth.otp.attemptsRemaining', {count: remaining})}`);
+      } else {
+        setError(baseMsg);
+      }
+
       setDigits(Array(OTP_LENGTH).fill(''));
       setActiveIdx(0);
       inputRefs.current[0]?.focus();
     }
-  }, [digits, phone, t, onVerified, shake]);
+  }, [digits, phone, t, shake, attempts, lockSec]);
 
   const handleResend = useCallback(async () => {
     if (resendSec > 0) return;
@@ -193,12 +221,16 @@ export default function OtpScreen({phone,prefix , onVerified, onBack}) {
 
         {/* Next button */}
         <TouchableOpacity
-          style={[s.btn, {backgroundColor: filled === OTP_LENGTH && !isLoading ? colors.primary : colors.border}]}
+          style={[s.btn, {backgroundColor: filled === OTP_LENGTH && !isLoading && lockSec === 0 ? colors.primary : colors.border}]}
           onPress={handleVerify}
-          disabled={filled < OTP_LENGTH || isLoading}
+          disabled={filled < OTP_LENGTH || isLoading || lockSec > 0}
           activeOpacity={0.85}>
           {isLoading ? (
             <ActivityIndicator color="#FFF" />
+          ) : lockSec > 0 ? (
+            <Text style={[s.btnTxt, {color: colors.textSecondary}]}>
+              {t('auth.otp.lockedOut', {seconds: lockSec})}
+            </Text>
           ) : (
             <Text style={[s.btnTxt, {color: filled === OTP_LENGTH ? '#FFF' : colors.textSecondary}]}>
               {t('auth.otp.next')}
@@ -247,7 +279,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   boxInput:   {
-    width: '30px', height: '30px',
+    width: 44, height: 44,
     fontSize: 28, fontWeight: '800',
     textAlign: 'center', padding: 0,
   },

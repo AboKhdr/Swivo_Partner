@@ -1,69 +1,17 @@
-import React, {useState, useRef, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
-  ActivityIndicator, Animated, FlatList, Image, Modal, PanResponder,
+  ActivityIndicator, FlatList, Image, Modal,
   PermissionsAndroid, Platform, ScrollView, StatusBar, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import {launchCamera} from 'react-native-image-picker';
-import {ChevronLeft, Camera, X} from 'lucide-react-native';
+import {Camera, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import StatusTracker from '../../../shared/components/StatusTracker';
 import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, cancelOrder, getOrderById} from '../../../services/orders';
+import {SKIP_REASONS} from '../../../shared/constants/skipReasons';
 
-const SWIPE_WIDTH = 300;
-const THUMB = 56;
-const MAX_X = SWIPE_WIDTH - THUMB - 4;
-
-function SwipeButton({label, color, onComplete, loading}) {
-  const x    = useRef(new Animated.Value(0)).current;
-  const [done, setDone] = useState(false);
-
-  // RTL: thumb starts at MAX_X and slides left (dx is negative)
-  // LTR: thumb starts at 0 and slides right (dx is positive)
-  // We normalise to absolute displacement so the same threshold works both ways.
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, g) => {
-        // Support both RTL (negative dx) and LTR (positive dx)
-        const raw = Math.abs(g.dx);
-        const nx  = Math.min(raw, MAX_X);
-        x.setValue(nx);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (Math.abs(g.dx) >= MAX_X * 0.85) {
-          Animated.spring(x, {toValue: MAX_X, useNativeDriver: false}).start(() => {
-            setDone(true);
-            onComplete();
-          });
-        } else {
-          Animated.spring(x, {toValue: 0, useNativeDriver: false}).start();
-        }
-      },
-    }),
-  ).current;
-
-  const trackBg = x.interpolate({
-    inputRange:  [0, MAX_X],
-    outputRange: [color + '22', color + '44'],
-    extrapolate: 'clamp',
-  });
-
-  return (
-    <Animated.View style={[sw.track, {backgroundColor: trackBg, borderColor: color + '55'}]}>
-      <Text style={[sw.label, {color}]}>{done ? '...' : label}</Text>
-      <Animated.View
-        style={[sw.thumb, {backgroundColor: color, transform: [{translateX: x}]}]}
-        {...pan.panHandlers}>
-        {loading
-          ? <ActivityIndicator size="small" color="#fff" />
-          : <ChevronLeft size={22} color="#fff" strokeWidth={2.5} />
-        }
-      </Animated.View>
-    </Animated.View>
-  );
-}
 
 const STEP_IMGS = {
   ASSIGNED:   require('../../../assets/steps/1.png'),
@@ -97,7 +45,8 @@ export default function OrderDetailsScreen({order, onBack}) {
   const [photos, setPhotos] = useState([]);
   const [cancelReason, setCancelReason] = useState('');
   const [showSkipModal, setShowSkipModal] = useState(false);
-  const [skipReason, setSkipReason] = useState('');
+  const [skipCode, setSkipCode]     = useState('');
+  const [skipNote, setSkipNote]     = useState('');
   const [completedOrder, setCompletedOrder] = useState(
     currentStatus === 'COMPLETED' ? order : null,
   );
@@ -223,16 +172,23 @@ export default function OrderDetailsScreen({order, onBack}) {
   };
 
   const handleSkipConfirm = async () => {
-    if (!skipReason.trim()) return;
+    if (!skipCode) return;
+    if (skipCode === 'OTHER' && !skipNote.trim()) return;
     setShowSkipModal(false);
     setShowImageUpload(false);
-    setSkipReason('');
     setActionLoading(true);
-    const nextStatus = uploadPhase === 'before' ? 'STARTED' : 'COMPLETED';
-    await skipOrderPhoto(orderId, uploadPhase, skipReason.trim());
-    await updateOrderStatus(orderId, nextStatus);
-    setCurrentStatus(nextStatus);
+    const note = skipCode === 'OTHER' ? skipNote.trim() : undefined;
+    const res = await skipOrderPhoto(orderId, uploadPhase, skipCode, note);
+    // Skip request is PENDING manager review — do NOT auto-advance status here.
+    // The biker can transition to COMPLETED only after approval (or by uploading photos).
+    setSkipCode('');
+    setSkipNote('');
     setActionLoading(false);
+    // Refresh order to reflect proof.afterSkipRequest.status === 'PENDING'
+    if (res?.success) {
+      const r = await getOrderById(orderId);
+      if (r?.success) setCurrentStatus(r.data?.data?.status || currentStatus);
+    }
   };
 
   const handleCancel = async () => {
@@ -318,15 +274,16 @@ export default function OrderDetailsScreen({order, onBack}) {
         </View>
 
         {action && (
-          <View style={s.swipeWrap}>
-            <SwipeButton
-              key={currentStatus}
-              label={action.label}
-              color={actionBgColor}
-              loading={actionLoading}
-              onComplete={handleAction}
-            />
-          </View>
+          <TouchableOpacity
+            style={[s.actionBtn, {backgroundColor: actionBgColor}, actionLoading && {opacity: 0.6}]}
+            onPress={handleAction}
+            disabled={actionLoading}
+            activeOpacity={0.85}>
+            {actionLoading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={s.actionBtnText}>{action.label}</Text>
+            }
+          </TouchableOpacity>
         )}
 
         {currentStatus === 'COMPLETED' && completedOrder && (() => {
@@ -507,7 +464,7 @@ export default function OrderDetailsScreen({order, onBack}) {
 
             <TouchableOpacity
               style={ms.skipBtn}
-              onPress={() => { setSkipReason(''); setShowSkipModal(true); }}
+              onPress={() => { setSkipCode(''); setSkipNote(''); setShowSkipModal(true); }}
               activeOpacity={0.7}>
               <Text style={[ms.skipBtnText, {color: colors.textSecondary}]}>{t('orderDetails.camera.skip')}</Text>
             </TouchableOpacity>
@@ -521,16 +478,52 @@ export default function OrderDetailsScreen({order, onBack}) {
             <Text style={ms.warningIcon}>📝</Text>
             <Text style={[ms.boxTitle, {color: colors.textPrimary}]}>{t('orderDetails.camera.skipTitle')}</Text>
             <Text style={[ms.boxBody, {color: colors.textSecondary}]}>{t('orderDetails.camera.skipBody')}</Text>
-            <TextInput
-              style={[ms.reasonInput, {borderColor: skipReason.trim() ? colors.primary : colors.border, color: colors.textPrimary}]}
-              placeholder={t('orderDetails.camera.skipPlaceholder')}
-              placeholderTextColor={colors.textSecondary}
-              value={skipReason}
-              onChangeText={setSkipReason}
-              textAlign="right"
-              multiline
-              numberOfLines={3}
-            />
+
+            <View style={{gap: 6, marginTop: 8}}>
+              {SKIP_REASONS.map(({key, code}) => {
+                const isSel = skipCode === code;
+                return (
+                  <TouchableOpacity
+                    key={code}
+                    onPress={() => setSkipCode(code)}
+                    activeOpacity={0.75}
+                    style={{
+                      flexDirection:    'row',
+                      alignItems:       'center',
+                      gap:              10,
+                      padding:          12,
+                      borderRadius:     10,
+                      borderWidth:      1.5,
+                      borderColor:      isSel ? colors.primary : colors.border,
+                      backgroundColor:  isSel ? colors.primary + '15' : colors.bg,
+                    }}>
+                    <View style={{
+                      width: 18, height: 18, borderRadius: 9, borderWidth: 2,
+                      borderColor: isSel ? colors.primary : colors.border,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {isSel && <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary}} />}
+                    </View>
+                    <Text style={{color: isSel ? colors.primary : colors.textPrimary, fontWeight: '600'}}>
+                      {t(`orderDetails.camera.skipReasons.${key}`)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {skipCode === 'OTHER' && (
+              <TextInput
+                style={[ms.reasonInput, {borderColor: skipNote.trim() ? colors.primary : colors.border, color: colors.textPrimary, marginTop: 10}]}
+                placeholder={t('orderDetails.camera.skipPlaceholder')}
+                placeholderTextColor={colors.textSecondary}
+                value={skipNote}
+                onChangeText={setSkipNote}
+                multiline
+                numberOfLines={3}
+              />
+            )}
+
             <View style={ms.btnRow}>
               <TouchableOpacity
                 style={[ms.secondaryBtn, {backgroundColor: colors.bg, borderColor: colors.border}]}
@@ -538,9 +531,9 @@ export default function OrderDetailsScreen({order, onBack}) {
                 <Text style={[ms.secondaryBtnText, {color: colors.textPrimary}]}>{t('orderDetails.cancel.back')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[ms.dangerBtn, !skipReason.trim() && {opacity: 0.4}]}
+                style={[ms.dangerBtn, (!skipCode || (skipCode === 'OTHER' && !skipNote.trim())) && {opacity: 0.4}]}
                 onPress={handleSkipConfirm}
-                disabled={!skipReason.trim()}>
+                disabled={!skipCode || (skipCode === 'OTHER' && !skipNote.trim())}>
                 <Text style={ms.dangerBtnText}>{t('orderDetails.camera.skipConfirm')}</Text>
               </TouchableOpacity>
             </View>
@@ -584,7 +577,8 @@ const s = StyleSheet.create({
   extraChip: {flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderColor: '#F59E0B', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7},
   extraChipStar: {fontSize: 10, color: '#F59E0B'},
   extraChipText: {fontSize: 12, fontWeight: '600'},
-  swipeWrap: {alignItems: 'center', marginBottom: 12},
+  actionBtn: {marginHorizontal: 16, marginBottom: 12, paddingVertical: 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center'},
+  actionBtnText: {color: '#fff', fontSize: 16, fontWeight: '800'},
   guideCard: {borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 14, borderWidth: 1, gap: 10},
   guideImg: {width: 180, height: 140},
   guideTitle: {fontSize: 17, fontWeight: '800', textAlign: 'center'},
@@ -636,33 +630,3 @@ const ms = StyleSheet.create({
   skipBtnText: {fontSize: 13, fontWeight: '600', textDecorationLine: 'underline'},
 });
 
-const sw = StyleSheet.create({
-  track: {
-    width: SWIPE_WIDTH,
-    height: THUMB + 8,
-    borderRadius: (THUMB + 8) / 2,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  thumb: {
-    position: 'absolute',
-    left: 4,
-    width: THUMB,
-    height: THUMB,
-    borderRadius: THUMB / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-});

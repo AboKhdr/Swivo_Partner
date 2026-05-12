@@ -20,7 +20,7 @@ import {login} from '../../services/auth';
 
 const MAX_PHONE_LEN = 10;
 
-export default function LoginScreen({onLogin, onGuest}) {
+export default function LoginScreen() {
   const {colors, isDark} = useTheme();
   const {t} = useI18n();
 
@@ -69,8 +69,7 @@ export default function LoginScreen({onLogin, onGuest}) {
     return (
       <OtpScreen
         phone={`${phone}`}
-        prefix={`966`}
-        onVerified={onLogin}
+        prefix="966"
         onBack={() => setShowOtp(false)}
       />
     );
@@ -141,7 +140,7 @@ export default function LoginScreen({onLogin, onGuest}) {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={s.guestBtn} onPress={onGuest} activeOpacity={0.7}>
+          <TouchableOpacity style={s.guestBtn} activeOpacity={0.7}>
             <Text style={[s.guestText, {color: colors.textSecondary}]}>{t('auth.browseGuest')}</Text>
           </TouchableOpacity>
         </Animated.View>

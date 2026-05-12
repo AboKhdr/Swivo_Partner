@@ -6,6 +6,7 @@ import OrderDetailsScreen from './OrderDetailsScreen';
 export default function OrdersNavigator() {
   const [screen, setScreen]         = useState('list');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const goToDetails = useCallback((order) => {
     setSelectedOrder(order);
@@ -15,6 +16,7 @@ export default function OrdersNavigator() {
   const goBack = useCallback(() => {
     setScreen('list');
     setSelectedOrder(null);
+    setRefreshKey(k => k + 1);
   }, []);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function OrdersNavigator() {
   return (
     <View style={s.root}>
       <View style={[s.screen, screen !== 'list' && s.hidden]}>
-        <OrdersScreen onSelectOrder={goToDetails} />
+        <OrdersScreen onSelectOrder={goToDetails} refreshKey={refreshKey} />
       </View>
       {screen === 'details' && selectedOrder && (
         <View style={s.screen}>

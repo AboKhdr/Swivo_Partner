@@ -159,9 +159,19 @@ function OperationsMenu({colors, onNavigate}) {
 export default function OperationsNavigator() {
   const {colors} = useTheme();
   const [screen, setScreen] = useState(null);
+  const pendingNav = useAppStore(s => s.pendingNav);
+  const clearNav   = useAppStore(s => s.clearNav);
 
   const goTo   = useCallback(key => setScreen(key), []);
   const goBack = useCallback(() => setScreen(null), []);
+
+  // Consume a deep-link request (e.g. dashboard → services) on mount/update
+  useEffect(() => {
+    if (pendingNav?.tab === 'operations' && pendingNav?.screen) {
+      setScreen(pendingNav.screen);
+      clearNav();
+    }
+  }, [pendingNav, clearNav]);
 
   useEffect(() => {
     if (!screen) return;

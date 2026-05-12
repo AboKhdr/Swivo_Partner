@@ -84,15 +84,4 @@ export async function getReasons(type) {
   // Response: { success, reasons: [{ _id, name, type }] }
 }
 
-// ── Terms & Privacy ──────────────────────────────────────────────────────────
-
-export async function getTerms() {
-  return api.get('/terms');
-  // Response: { success, data: { title, sections: [{ title, body }], lastUpdated } }
-}
-
-// ── Support ──────────────────────────────────────────────────────────────────
-
-export async function sendSupportMessage(message) {
-  return api.post('/support', {message});
-}
+// ── Terms / Support moved to services/shared.js (used by both biker and partner)

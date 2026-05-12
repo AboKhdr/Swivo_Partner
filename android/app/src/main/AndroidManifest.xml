@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required for notifee TriggerType.TIMESTAMP with AlarmManager on Android 12+ -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Required to wake the screen when a high-priority notification fires -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
       android:name=".MainApplication"
@@ -18,6 +23,7 @@
       android:icon="@mipmap/ic_launcher"
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
+      android:networkSecurityConfig="@xml/network_security_config"
       android:theme="@style/AppTheme"
       android:supportsRtl="true">
       <activity
@@ -34,5 +40,25 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!-- Incoming-order call screen — launched over the lock screen by the
+           ringing notification's fullScreenAction PendingIntent. -->
+      <activity
+        android:name=".IncomingOrderActivity"
+        android:exported="false"
+        android:launchMode="singleTask"
+        android:taskAffinity=""
+        android:excludeFromRecents="false"
+        android:showOnLockScreen="true"
+        android:showWhenLocked="true"
+        android:turnScreenOn="true"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+        android:theme="@style/AppTheme" />
+
+      <!-- notifee foreground service — required for heads-up + full-screen on Android 14+ -->
+      <service
+        android:name="io.invertase.notifee.NotifeeApiModule$NotifeeHeadlessTaskService"
+        android:exported="false"
+        android:foregroundServiceType="shortService" />
     </application>
 </manifest>

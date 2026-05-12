@@ -8,6 +8,7 @@ import {Bell, DollarSign, Droplets, Star, MapPin, Car, CircleUserRound, ChevronD
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAuthStore from '../../../store/authStore';
+import useAppStore from '../../../store/appStore';
 import {getBikerProfile, setDutyStatus, getHomeStats, getBranches, getNotifications} from '../../../services/biker';
 import {getOrders} from '../../../services/orders';
 import NotificationsScreen from './NotificationsScreen';
@@ -108,6 +109,17 @@ function BranchPicker({branches, selectedId, onSelect, colors, t}) {
   const [visible, setVisible] = useState(false);
   const selected = branches.find(b => b._id === selectedId);
 
+  const keyExtractor = useCallback(b => b._id, []);
+  const renderItem = useCallback(({item}) => (
+    <TouchableOpacity
+      style={[bp.row, {borderBottomColor: colors.border}]}
+      onPress={() => { onSelect(item._id); setVisible(false); }}
+      activeOpacity={0.7}>
+      <Text style={[bp.rowText, {color: colors.textPrimary}]}>{item.name}</Text>
+      {item._id === selectedId && <Check size={16} color={colors.primary} strokeWidth={2.5} />}
+    </TouchableOpacity>
+  ), [colors.border, colors.textPrimary, colors.primary, onSelect, selectedId]);
+
   return (
     <>
       <TouchableOpacity
@@ -128,16 +140,8 @@ function BranchPicker({branches, selectedId, onSelect, colors, t}) {
           <Text style={[bp.sheetTitle, {color: colors.textPrimary}]}>{t('home.selectBranch')}</Text>
           <FlatList
             data={branches}
-            keyExtractor={b => b._id}
-            renderItem={({item}) => (
-              <TouchableOpacity
-                style={[bp.row, {borderBottomColor: colors.border}]}
-                onPress={() => { onSelect(item._id); setVisible(false); }}
-                activeOpacity={0.7}>
-                <Text style={[bp.rowText, {color: colors.textPrimary}]}>{item.name}</Text>
-                {item._id === selectedId && <Check size={16} color={colors.primary} strokeWidth={2.5} />}
-              </TouchableOpacity>
-            )}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
             ListEmptyComponent={
               <Text style={[bp.empty, {color: colors.textSecondary}]}>{t('home.noBranches')}</Text>
             }
@@ -149,7 +153,7 @@ function BranchPicker({branches, selectedId, onSelect, colors, t}) {
 }
 
 // ─── New Order Card ───────────────────────────────────────────────────────────
-function NewOrderCard({order, colors, t}) {
+function NewOrderCard({order, colors, t, onPress, onLocationPress}) {
   const clientName = order.client
     ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
     : '';
@@ -172,10 +176,10 @@ function NewOrderCard({order, colors, t}) {
       <View style={nc.topRow}>
         <Text style={[nc.serviceName, {color: colors.textPrimary}]}>{serviceName}</Text>
       </View>
-      <View style={nc.addrRow}>
+      <TouchableOpacity style={nc.addrRow} onPress={onLocationPress} activeOpacity={0.7}>
         <Text style={[nc.addr, {color: colors.textSecondary}]} numberOfLines={1}>{address}</Text>
-        <MapPin size={13} color={colors.textSecondary} strokeWidth={2} />
-      </View>
+        <MapPin size={13} color={colors.primary} strokeWidth={2} />
+      </TouchableOpacity>
       <View style={[nc.divider, {backgroundColor: colors.border}]} />
       <View style={nc.metaRow}>
         <View style={nc.metaItem}>
@@ -197,7 +201,7 @@ function NewOrderCard({order, colors, t}) {
           </View>
         </View>
       </View>
-      <TouchableOpacity style={[nc.btn, {backgroundColor: colors.primary}]} activeOpacity={0.85}>
+      <TouchableOpacity style={[nc.btn, {backgroundColor: colors.primary}]} onPress={onPress} activeOpacity={0.85}>
         <Text style={nc.btnText}>{t('orderDetails.actions.ASSIGNED')}</Text>
       </TouchableOpacity>
     </View>
@@ -208,7 +212,9 @@ function NewOrderCard({order, colors, t}) {
 export default function HomeScreen() {
   const {colors, isDark} = useTheme();
   const {t} = useI18n();
-  const user = useAuthStore(s => s.user);
+  const user                = useAuthStore(s => s.user);
+  const showToast           = useAppStore(s => s.showToast);
+  const setPendingOrderNav  = useAppStore(s => s.setPendingOrderNav);
 
   const [loading, setLoading]             = useState(true);
   const [active, setActive]               = useState(false);
@@ -236,13 +242,17 @@ export default function HomeScreen() {
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const [profileRes, ordersRes, statsRes, branchesRes, notifRes] = await Promise.all([
+    const results = await Promise.allSettled([
       getBikerProfile(),
       getOrders({filter: 'active', limit: 10}),
       getHomeStats(),
       getBranches(),
       getNotifications({page: 1, limit: 1}),
     ]);
+
+    const [profileRes, ordersRes, statsRes, branchesRes, notifRes] = results.map(r =>
+      r.status === 'fulfilled' ? r.value : {success: false},
+    );
 
     if (profileRes.success) {
       const p = profileRes.data?.data ?? profileRes.data ?? {};
@@ -280,8 +290,12 @@ export default function HomeScreen() {
         notifRes.data?.pagination?.total ?? 0,
       );
     }
+
+    const anyFailed = results.some(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.success));
+    if (anyFailed && !silent) showToast(t('common.loadError') ?? 'تعذّر تحميل البيانات', 'error');
+
     setLoading(false);
-  }, []);
+  }, [showToast, t]);
 
   useEffect(() => {
     fetchData();
@@ -294,20 +308,33 @@ export default function HomeScreen() {
   }, [fetchData]);
 
   const handleToggleDuty = useCallback(async () => {
+    const prev = active;
+    setActive(!prev);
     setDutyLoading(true);
-    const res = await setDutyStatus(!active);
+    const res = await setDutyStatus(!prev);
     if (res.success) {
       const profileRes = await getBikerProfile();
       if (profileRes.success && profileRes.data?.data) {
         const p = profileRes.data.data;
         setProfile(p);
-        setActive(p.isActive ?? p.isOnDuty ?? active);
+        setActive(p.isActive ?? p.isOnDuty ?? !prev);
       }
+    } else {
+      setActive(prev);
+      showToast(t('common.actionError') ?? 'فشل تغيير حالة الخدمة', 'error');
     }
     setDutyLoading(false);
-  }, [active]);
+  }, [active, showToast, t]);
 
-  const renderOrder = useCallback(({item}) => <NewOrderCard order={item} colors={colors} t={t} />, [colors, t]);
+  const renderOrder = useCallback(({item}) => (
+    <NewOrderCard
+      order={item}
+      colors={colors}
+      t={t}
+      onPress={() => setPendingOrderNav({type: 'detail', order: item})}
+      onLocationPress={() => setPendingOrderNav({type: 'map', order: item})}
+    />
+  ), [colors, t, setPendingOrderNav]);
 
   const displayName = profile
     ? (profile.name ?? `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim())

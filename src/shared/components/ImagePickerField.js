@@ -1,15 +1,15 @@
 import React, {useState} from 'react';
 import {
   Image,
-  // PermissionsAndroid,
-  // Platform,
+  PermissionsAndroid,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {Camera, ImagePlus, X} from 'lucide-react-native';
-// import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {useTheme} from '../context/ThemeContext';
 
 export default function ImagePickerField({value, onChange, label = 'صورة الخدمة'}) {
@@ -18,20 +18,18 @@ export default function ImagePickerField({value, onChange, label = 'صورة ا�
 
   const pickFromCamera = async () => {
     setShowOptions(false);
-    // TODO: uncomment when react-native-image-picker is installed
-    // const granted = Platform.OS === 'android'
-    //   ? await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA)
-    //   : 'granted';
-    // if (granted !== PermissionsAndroid.RESULTS.GRANTED && granted !== 'granted') return;
-    // const result = await launchCamera({mediaType: 'photo', quality: 0.8});
-    // if (!result.didCancel && result.assets?.[0]) onChange(result.assets[0].uri);
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+    }
+    const result = await launchCamera({mediaType: 'photo', quality: 0.8});
+    if (!result.didCancel && result.assets?.[0]) onChange(result.assets[0].uri);
   };
 
   const pickFromGallery = async () => {
     setShowOptions(false);
-    // TODO: uncomment when react-native-image-picker is installed
-    // const result = await launchImageLibrary({mediaType: 'photo', quality: 0.8});
-    // if (!result.didCancel && result.assets?.[0]) onChange(result.assets[0].uri);
+    const result = await launchImageLibrary({mediaType: 'photo', quality: 0.8});
+    if (!result.didCancel && result.assets?.[0]) onChange(result.assets[0].uri);
   };
 
   return (

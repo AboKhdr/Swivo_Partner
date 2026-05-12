@@ -1,7 +1,58 @@
 {
   "common": {
     "retry": "إعادة المحاولة",
-    "offlineContent": "تعذّر تحديث المحتوى، يتم عرض النسخة المحفوظة."
+    "offlineContent": "تعذّر تحديث المحتوى، يتم عرض النسخة المحفوظة.",
+    "copied": "تم النسخ",
+    "copiedOrderNumber": "تم نسخ رقم الطلب",
+    "alert": "تنبيه",
+    "loadFailed": "تعذّر تحميل البيانات"
+  },
+  "permissions": {
+    "cameraRequired": "يرجى منح إذن الكاميرا من الإعدادات",
+    "fullScreenTitle": "تفعيل تنبيه الطلبات",
+    "fullScreenMessage": "حتى يظهر تنبيه الطلب الجديد كمكالمة واردة فوق الشاشة، يرجى تفعيل \"الإشعارات بملء الشاشة\" من الإعدادات.",
+    "fullScreenCta": "فتح الإعدادات",
+    "later": "لاحقاً",
+    "batteryTitle": "تحسين عمل الإشعارات",
+    "batteryMessage": "للتأكد من وصول التنبيهات أثناء إغلاق التطبيق، يرجى استثناء التطبيق من توفير البطارية.",
+    "batteryCta": "استثناء من توفير البطارية"
+  },
+  "partnerOrders": {
+    "timeline": {
+      "received": "وصول الطلب",
+      "arrivedBiker": "وصول البايكر",
+      "started": "بدء الغسيل",
+      "done": "إنهاء الغسيل"
+    },
+    "details": {
+      "title": "تفاصيل الطلب",
+      "onSite": "في الموقع",
+      "service": "خدمة",
+      "branch": "فرع",
+      "noNotes": "—",
+      "paidVia": "تمت عملية الدفع عن طريق: بطاقة الائتمان",
+      "operationTime": "وقت العملية",
+      "customerNotes": "ملاحظات الزبون",
+      "payment": "عملية الدفع",
+      "beforeWash": "صور قبل الغسيل",
+      "afterWash": "صور بعد الغسيل",
+      "completed": "تم إنهاء الطلب بنجاح",
+      "assignBiker": "تعيين بايكر",
+      "acceptAndAssign": "قبول وتعيين بايكر",
+      "acceptOrder": "قبول الطلب",
+      "reject": "رفض",
+      "startWashCapture": "بدء الغسيل والتقاط صورة",
+      "finishWashCapture": "إنهاء الغسيل والتقاط صورة",
+      "finishOrder": "إنهاء الطلب",
+      "photoRequired": "يرجى التقاط صورة لإنهاء الطلب",
+      "photoStart": "صورة بدء الغسيل",
+      "photoFinish": "صورة إنهاء الطلب",
+      "cameraPermissionTitle": "إذن الكاميرا",
+      "cameraPermissionMessage": "يحتاج التطبيق إلى الكاميرا لالتقاط الصور",
+      "retake": "إعادة",
+      "confirm": "تأكيد",
+      "currency": "ر.س"
+    }
   },
   "nav": {
     "home": "الرئيسية",
@@ -24,7 +75,12 @@
       "orders": "الطلبات",
       "activeBikers": "البايكرز النشطين",
       "viewAll": "عرض الكل",
-      "pendingOrders": "طلبات قيد الانتظار"
+      "pendingOrders": "طلبات قيد الانتظار",
+      "quickActions": "إجراءات سريعة",
+      "manageServices": "إدارة الخدمات",
+      "ordersAction": "الطلبات",
+      "payouts": "المدفوعات",
+      "services": "الخدمات"
     },
     "orders": {
       "title": "الطلبات",
@@ -78,6 +134,7 @@
         "outOfRange": "خارج نطاق الخدمة",
         "noBiker": "لا يوجد بايكر متاح",
         "duplicate": "طلب مكرر",
+        "customerRefused": "ألغى العميل الطلب",
         "other": "أخرى"
       },
       "rejectNotePlaceholder": "اكتب السبب..."
@@ -341,7 +398,10 @@
       "next": "› التالي",
       "resend": "إعادة الإرسال",
       "resendIn": "إعادة الإرسال",
-      "invalidCode": "رمز التحقق غير صحيح"
+      "invalidCode": "رمز التحقق غير صحيح",
+      "attemptsRemaining": "محاولات متبقية: {{count}}",
+      "lockedOut": "تم تجاوز الحد المسموح. حاول بعد {{seconds}} ثانية",
+      "tooManyAttempts": "محاولات كثيرة فاشلة. تم إقفال الإدخال مؤقتاً"
     }
   },
   "home": {
@@ -451,7 +511,15 @@
       "skipTitle": "سبب التخطي",
       "skipBody": "يجب تحديد سبب عدم التقاط الصور للمتابعة",
       "skipPlaceholder": "اكتب السبب هنا...",
-      "skipConfirm": "تخطي والمتابعة"
+      "skipConfirm": "تخطي والمتابعة",
+      "skipReasons": {
+        "customerRefused": "العميل رفض التصوير",
+        "noInternet": "لا يوجد إنترنت",
+        "cameraBroken": "الكاميرا معطلة",
+        "appCrashed": "تعطّل التطبيق",
+        "carLeft": "غادرت السيارة قبل التصوير",
+        "other": "أخرى"
+      }
     },
     "cancel": {
       "button": "إلغاء الطلب",
@@ -480,7 +548,8 @@
     "mapUnavailable": "الخريطة غير متاحة",
     "webviewNotInstalled": "المكتبة غير مثبتة",
     "mapLoading": "جارٍ تحميل الخريطة...",
-    "mapError": "تعذّر تحميل الخريطة"
+    "mapError": "تعذّر تحميل الخريطة",
+    "startOrder": "بدء الطلب"
   },
   "reviews": {
     "title": "التقييمات",
@@ -506,7 +575,30 @@
     "terms": "الشروط والأحكام",
     "termsSub": "سياسة الخصوصية",
     "logout": "تسجيل الخروج",
-    "logoutSub": "الحساب"
+    "logoutSub": "الحساب",
+    "deleteAccount": "حذف الحساب",
+    "deleteAccountSub": "حذف نهائي لحسابك وبياناتك"
+  },
+  "deleteAccount": {
+    "title": "حذف الحساب",
+    "warningTitle": "تحذير: إجراء لا يمكن التراجع عنه",
+    "warningBody": "حذف حسابك سيؤدي إلى إزالة جميع بياناتك بشكل دائم من خوادمنا، ولا يمكن استعادتها بعد ذلك.",
+    "consequencesTitle": "ماذا سيتم حذفه؟",
+    "bullet1": "معلوماتك الشخصية ورقم هاتفك وبريدك الإلكتروني",
+    "bullet2": "سجل طلباتك وعملياتك السابقة",
+    "bullet3": "محفظتك ورصيدك (إن وُجد) — يُرجى سحبه قبل الحذف",
+    "bullet4": "تقييماتك وملاحظاتك",
+    "reasonTitle": "سبب الحذف (اختياري)",
+    "reasonPlaceholder": "ساعدنا على التحسين — لماذا تريد حذف حسابك؟",
+    "confirmCheckbox": "أفهم أن هذا الإجراء نهائي ولا يمكن التراجع عنه",
+    "deleteBtn": "حذف حسابي نهائياً",
+    "confirmTitle": "تأكيد نهائي",
+    "confirmMessage": "هل أنت متأكد تماماً؟ سيتم حذف حسابك وجميع بياناتك خلال 30 يوماً.",
+    "confirmBtn": "نعم، احذف",
+    "cancel": "إلغاء",
+    "errorTitle": "تعذّر حذف الحساب",
+    "errorMessage": "حدث خطأ، يرجى المحاولة لاحقاً أو التواصل مع الدعم الفني.",
+    "footnote": "وفقاً لنظام حماية البيانات الشخصية في المملكة العربية السعودية، سيتم حذف بياناتك خلال 30 يوماً من تاريخ الطلب. للاستفسار، تواصل مع الدعم الفني."
   },
   "personalInfo": {
     "title": "المعلومات الشخصية",

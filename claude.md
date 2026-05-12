@@ -121,7 +121,9 @@ ASSIGNED → ON_THE_WAY → ARRIVED → STARTED → COMPLETED
 - `CAMERA`, `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` permissions in manifest
 
 ### API Layer
-`src/services/api.js` — central HTTP client using `fetch` + `AbortController` (15s timeout). Attaches `Authorization: Bearer <token>` from AsyncStorage. On 401 auto-attempts token refresh via `/auth/refresh`; on failure calls the `_onUnauthorized` handler registered by `setUnauthorizedHandler(fn)` (wired in `App.tsx`). Returns `{success, data, error}` uniformly.
+`src/services/api.js` — central HTTP client using `fetch` + `AbortController` (30s timeout). Attaches `Authorization: Bearer <token>` from AsyncStorage. On 401 auto-attempts token refresh via `/auth/refresh`; on failure calls the `_onUnauthorized` handler registered by `setUnauthorizedHandler(fn)` (wired in `App.tsx`). Returns `{success, data, error}` uniformly.
+
+**Response shape from backend:** `{ success, message, token, user, ... }` — the payload is directly in `res.data`, NOT nested under `res.data.data`. `verifyOTP` in `src/services/auth.js` handles both shapes for safety.
 
 Service modules:
 - `src/services/auth.js` — `login`, `verifyOTP`, `resendOTP`, `logout` (calls `useAuthStore.getState().setSession`)
@@ -152,12 +154,14 @@ NativeWind v4 is installed but **not configured** — `babel.config.js` does not
 
 ### State Management (Zustand Stores)
 Three stores in `src/store/`:
-- `authStore.js` — `{ user, token, role, isReady }`. `hydrate()` called once on app start. `setSession(token, user)` persists to AsyncStorage and auto-registers the FCM token. `role` is `'biker' | 'admin' | null` (backend sends `'admin'` for managers; `App.tsx` maps `'admin'` → `role === 'manager'` for routing).
-- `appStore.js` — global UI state: loading keys, toast queue, `incomingOrder` / `clearIncomingOrder`, `autoAccept` toggle, `unreadCount` badge.
+- `authStore.js` — `{ user, token, role, isReady }`. `hydrate()` called once on app start. `setSession(token, user)` persists to AsyncStorage and auto-registers the FCM token. `role` is `'biker' | 'admin' | null`. **Critical:** the backend may return `role: 'client'` or other values for partners — `setSession` normalises: `'biker'` stays `'biker'`, anything else becomes `'admin'`. Never trust `user.role` from the backend directly for routing.
+- `appStore.js` — global UI state: loading keys, toast queue, `incomingOrder` / `clearIncomingOrder`, `autoAccept` toggle, `unreadCount` badge, `pendingNav` for notification-tap routing.
 - `ordersStore.js` — cached orders list for the biker app.
 
 ### Notifications (Push)
-`src/services/notificationChannel.js` — uses `@notifee/react-native`. `showIncomingOrderNotification(order)` creates channel `incoming_orders_v6` and re-displays a sound-bearing notification every 8s in a loop (Android requires cancel+redisplay with a new id to re-trigger the sound). Call `cancelIncomingOrderNotification()` after accept/reject/timeout. `@react-native-firebase/messaging` is used for FCM token retrieval and background message handling (configured in `App.tsx`).
+`src/services/notificationChannel.js` — uses `@notifee/react-native`. `showIncomingOrderNotification(order)` creates channel `incoming_orders_v6` and re-displays a sound-bearing notification every 8s in a loop (Android requires cancel+redisplay with a new id to re-trigger the sound). Call `cancelIncomingOrderNotification()` after accept/reject/timeout. `@react-native-firebase/messaging` is used for FCM token retrieval and background message handling (configured in `index.js`, not `App.tsx`).
+
+FCM token flow: `bootstrap(role)` in `FirebaseContext.js` fetches the token and calls `registerFCMToken(token, role)` → `POST /notifications/register`. Also called in `setSession` after login. If notifications don't arrive, check backend logs for `"no push tokens found"` — means token wasn't registered. The `role` passed to `registerFCMToken` must be the normalised app role (`'biker'` or `'admin'`), not the raw backend role.
 
 ---
 

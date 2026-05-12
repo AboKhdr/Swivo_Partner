@@ -3,6 +3,7 @@ import {BackHandler, View, StyleSheet} from 'react-native';
 import OrdersScreen from './OrdersScreen';
 import OrderDetailsScreen from './OrderDetailsScreen';
 import OrderMapScreen from './OrderMapScreen';
+import useAppStore from '../../../store/appStore';
 
 // stack: null | 'detail' | 'map'
 export default function OrdersNavigator() {
@@ -23,6 +24,16 @@ export default function OrdersNavigator() {
     setScreen(null);
     setSelectedOrder(null);
   }, []);
+
+  const pendingOrderNav      = useAppStore(s => s.pendingOrderNav);
+  const clearPendingOrderNav = useAppStore(s => s.clearPendingOrderNav);
+
+  useEffect(() => {
+    if (!pendingOrderNav) return;
+    clearPendingOrderNav();
+    if (pendingOrderNav.type === 'detail') goToDetail(pendingOrderNav.order);
+    else if (pendingOrderNav.type === 'map') goToMap(pendingOrderNav.order);
+  }, [pendingOrderNav, clearPendingOrderNav, goToDetail, goToMap]);
 
   useEffect(() => {
     if (!screen) return;
@@ -48,7 +59,7 @@ export default function OrdersNavigator() {
 
       {screen === 'map' && selectedOrder && (
         <View style={s.screen}>
-          <OrderMapScreen order={selectedOrder} onBack={goBack} />
+          <OrderMapScreen order={selectedOrder} onBack={goBack} onGoToDetail={goToDetail} />
         </View>
       )}
     </View>

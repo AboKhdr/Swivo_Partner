@@ -37,9 +37,14 @@ export async function uploadOrderPhoto(id, uri, phase) {
   });
 }
 
-// T002: طلب تخطي الصور — reason يأتي من GET /biker/reason (type=photo_skip)
-export async function skipOrderPhoto(id, phase, reason) {
-  return api.post(`/biker/order/${id}/proof/skip`, {phase, reason});
+// T002: طلب تخطي الصور — reason يجب أن يكون enum code من SKIP_REASONS
+// (src/shared/constants/skipReasons.js). note مطلوب فقط عند reason === 'OTHER'.
+export async function skipOrderPhoto(id, phase, reason, note) {
+  return api.post(`/biker/order/${id}/proof/skip`, {
+    phase,
+    reason,
+    ...(note ? {note} : {}),
+  });
 }
 
 // T007: إلغاء الطلب — path موحّد + reason في الـ body

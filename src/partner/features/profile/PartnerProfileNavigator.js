@@ -1,10 +1,10 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
-  BackHandler, Platform, ScrollView, StatusBar,
+  ActivityIndicator, BackHandler, Platform, ScrollView, StatusBar,
   StyleSheet, Switch, Text, TouchableOpacity, View,
 } from 'react-native';
 import {
-  User, Bell, Moon, Globe, HelpCircle, FileText, LogOut, ChevronLeft,
+  User, Bell, Moon, Globe, HelpCircle, FileText, LogOut, ChevronLeft, Trash2,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
@@ -14,10 +14,11 @@ import NotificationsScreen from '../dashboard/NotificationsScreen';
 import SupportScreen from './SupportScreen';
 import TermsScreen from './TermsScreen';
 import LanguageScreen from '../../../shared/components/LanguageScreen';
+import DeleteAccountScreen from '../../../shared/components/DeleteAccountScreen';
 
-function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, colors}) {
+function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, loading, colors}) {
   return (
-    <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7} disabled={loading}>
       <View style={[s.navIcon, {backgroundColor: iconBg}]}>
         <Icon size={18} color={iconColor} strokeWidth={2} />
       </View>
@@ -25,14 +26,16 @@ function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, co
         <Text style={[s.navLabel, {color: danger ? '#EF4444' : colors.textPrimary}]}>{label}</Text>
         {sub ? <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text> : null}
       </View>
-      {right !== undefined ? right : (
+      {loading ? (
+        <ActivityIndicator size="small" color={danger ? '#EF4444' : colors.primary} />
+      ) : right !== undefined ? right : (
         <ChevronLeft size={18} color={danger ? '#EF4444' : colors.textSecondary} strokeWidth={2} />
       )}
     </TouchableOpacity>
   );
 }
 
-function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, managerInitial, onLogout}) {
+function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, managerInitial, onLogout, onDeleteAccount, loggingOut}) {
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.card} />
@@ -110,28 +113,18 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, m
           <NavRow
             Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418"
             label={t('partner.profile.logout')} sub={t('partner.profile.logoutSub')}
-            onPress={onLogout} danger colors={colors} />
+            onPress={onLogout} danger loading={loggingOut} colors={colors} />
+        </View>
+
+        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <NavRow
+            Icon={Trash2} iconColor="#EF4444" iconBg="#EF444418"
+            label={t('profile.deleteAccount')} sub={t('profile.deleteAccountSub')}
+            onPress={onDeleteAccount} danger colors={colors} />
         </View>
 
         <View style={{height: 16}} />
       </ScrollView>
-    </View>
-  );
-}
-
-function PlaceholderScreen({title, colors, onBack}) {
-  return (
-    <View style={[s.phRoot, {backgroundColor: colors.bg}]}>
-      <View style={[s.phHeader, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
-        <TouchableOpacity onPress={onBack} style={[s.backBtn, {backgroundColor: colors.bg}]}>
-          <ChevronLeft size={22} color={colors.textPrimary} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <Text style={[s.phTitle, {color: colors.textPrimary}]}>{title}</Text>
-        <View style={{width: 36}} />
-      </View>
-      <View style={s.phBody}>
-        <Text style={[s.phNote, {color: colors.textSecondary}]}>...</Text>
-      </View>
     </View>
   );
 }
@@ -144,6 +137,17 @@ export default function PartnerProfileNavigator() {
   const managerName    = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || '—' : '—';
   const managerInitial = managerName.charAt(0) || 'م';
   const [screen, setScreen] = useState(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = useCallback(async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  }, [logout, loggingOut]);
 
   const goTo   = useCallback(key => setScreen(key), []);
   const goBack = useCallback(() => setScreen(null), []);
@@ -160,7 +164,7 @@ export default function PartnerProfileNavigator() {
   return (
     <View style={s.flex}>
       <View style={[s.flex, screen ? s.hidden : null]}>
-        <ProfileMenu colors={colors} isDark={isDark} toggleTheme={toggleTheme} onNavigate={goTo} t={t} managerName={managerName} managerInitial={managerInitial} onLogout={logout} />
+        <ProfileMenu colors={colors} isDark={isDark} toggleTheme={toggleTheme} onNavigate={goTo} t={t} managerName={managerName} managerInitial={managerInitial} onLogout={handleLogout} onDeleteAccount={() => goTo('deleteAccount')} loggingOut={loggingOut} />
       </View>
       {screen === 'info' && (
         <View style={s.flex}>
@@ -187,9 +191,9 @@ export default function PartnerProfileNavigator() {
           <LanguageScreen onBack={goBack} />
         </View>
       )}
-      {screen && screen !== 'info' && screen !== 'notif' && screen !== 'support' && screen !== 'terms' && screen !== 'language' && (
+      {screen === 'deleteAccount' && (
         <View style={s.flex}>
-          <PlaceholderScreen title={SCREEN_TITLES[screen] || screen} colors={colors} onBack={goBack} />
+          <DeleteAccountScreen onBack={goBack} />
         </View>
       )}
     </View>

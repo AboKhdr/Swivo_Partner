@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {Alert, BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {Home, ClipboardList, Settings, User} from 'lucide-react-native';
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
@@ -9,6 +9,14 @@ import OperationsNavigator from '../features/operations/OperationsNavigator';
 import PartnerProfileNavigator from '../features/profile/PartnerProfileNavigator';
 import IncomingOrderScreen from '../features/orders/IncomingOrderScreen';
 import useAppStore from '../../store/appStore';
+import {acceptOrder, rejectOrder} from '../../services/partner';
+import {cancelIncomingOrderNotification} from '../../services/notificationChannel';
+
+// Notification tab keys → partner tab keys
+const NAV_TAB_MAP = {
+  orders:        'orders',
+  notifications: 'dashboard',
+};
 
 // unmount: true → tab is destroyed when leaving (no state to preserve)
 const TAB_KEYS = [
@@ -25,9 +33,10 @@ export default function PartnerNavigator() {
   const [history, setHistory]     = useState(['dashboard']);
   const [mounted, setMounted]     = useState({dashboard: true});
 
-  const incomingOrder     = useAppStore(s => s.incomingOrder);
+  const incomingOrder      = useAppStore(s => s.incomingOrder);
   const clearIncomingOrder = useAppStore(s => s.clearIncomingOrder);
-  const unreadCount       = useAppStore(s => s.unreadCount);
+  const pendingNav         = useAppStore(s => s.pendingNav);
+  const clearNav           = useAppStore(s => s.clearNav);
 
   const handleTabPress = useCallback((key) => {
     if (key === activeTab) return;
@@ -39,6 +48,20 @@ export default function PartnerNavigator() {
     setHistory(prev => [...prev, key]);
     setActiveTab(key);
   }, [activeTab]);
+
+  // Respond to notification-tap / quick-action navigation
+  useEffect(() => {
+    if (!pendingNav) return;
+    const tab = NAV_TAB_MAP[pendingNav.tab] ?? pendingNav.tab;
+    if (TAB_KEYS.some(k => k.key === tab)) {
+      handleTabPress(tab);
+    }
+    // If no deep screen is requested, clear immediately.
+    // Otherwise leave it for the destination navigator to consume on mount.
+    if (!pendingNav.screen) {
+      clearNav();
+    }
+  }, [pendingNav, clearNav, handleTabPress]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -53,8 +76,49 @@ export default function PartnerNavigator() {
     return () => sub.remove();
   }, [history]);
 
-  const handleAccept = useCallback(() => clearIncomingOrder(), [clearIncomingOrder]);
-  const handleReject = useCallback(() => clearIncomingOrder(), [clearIncomingOrder]);
+  const requestNav = useAppStore(s => s.requestNav);
+
+  const handleAccept = useCallback(async () => {
+    const order = useAppStore.getState().incomingOrder;
+    if (!order?.id) {
+      clearIncomingOrder();
+      return;
+    }
+    const res = await acceptOrder(order.id);
+    cancelIncomingOrderNotification().catch(() => {});
+    if (res?.success) {
+      clearIncomingOrder();
+      requestNav('orders', order.id);
+    } else {
+      Alert.alert(
+        t('partner.incoming.acceptFailedTitle') || 'Accept failed',
+        res?.error || t('partner.incoming.acceptFailedBody') || 'Could not accept the order. Please try again.',
+      );
+    }
+  }, [clearIncomingOrder, requestNav, t]);
+
+  const handleReject = useCallback(async (payload) => {
+    // payload is { reason: <code>, note?: string }
+    // (legacy callers passing a plain string are still tolerated)
+    const {reason, note} = typeof payload === 'string'
+      ? {reason: payload, note: undefined}
+      : (payload || {});
+    const order = useAppStore.getState().incomingOrder;
+    if (!order?.id) {
+      clearIncomingOrder();
+      return;
+    }
+    const res = await rejectOrder(order.id, reason || 'OTHER', note);
+    cancelIncomingOrderNotification().catch(() => {});
+    if (res?.success || reason === 'AUTO_TIMEOUT') {
+      clearIncomingOrder();
+    } else {
+      Alert.alert(
+        t('partner.incoming.rejectFailedTitle') || 'Reject failed',
+        res?.error || t('partner.incoming.rejectFailedBody') || 'Could not reject the order. Please try again.',
+      );
+    }
+  }, [clearIncomingOrder, t]);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -71,7 +135,6 @@ export default function PartnerNavigator() {
       <View style={[s.tabBar, {backgroundColor: colors.card}]}>
         {TAB_KEYS.map(({key, labelKey, Icon}) => {
           const isActive = key === activeTab;
-          const showBadge = key === 'orders' && unreadCount > 0;
           return (
             <TouchableOpacity
               key={key}
@@ -86,11 +149,6 @@ export default function PartnerNavigator() {
                     strokeWidth={isActive ? 2.5 : 1.8}
                   />
                 </View>
-                {showBadge && (
-                  <View style={[s.badge, {backgroundColor: colors.danger ?? '#EF4444'}]}>
-                    <Text style={s.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                  </View>
-                )}
               </View>
               <Text style={[s.tabLabel, {color: colors.textSecondary}]}>
                 {t(labelKey)}
@@ -130,7 +188,5 @@ const s = StyleSheet.create({
   tabItem:   {flex: 1, alignItems: 'center', gap: 5},
   iconOuter: {position: 'relative'},
   iconWrap:  {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
-  badge:     {position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3},
-  badgeText: {color: '#FFF', fontSize: 9, fontWeight: '800'},
   tabLabel:  {fontSize: 10, fontWeight: '500'},
 });

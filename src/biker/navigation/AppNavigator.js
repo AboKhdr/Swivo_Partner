@@ -3,10 +3,17 @@ import {BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'r
 import {Home, ClipboardList, Star, User} from 'lucide-react-native';
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
+import useAppStore from '../../store/appStore';
 import HomeScreen from '../features/home/HomeScreen';
 import OrdersNavigator from '../features/orders/OrdersNavigator';
 import ReviewsScreen from '../features/reviews/ReviewsScreen';
 import ProfileNavigator from '../features/profile/ProfileNavigator';
+
+// Notification tab keys → biker tab keys
+const NAV_TAB_MAP = {
+  orders:        'orders',
+  notifications: 'home',
+};
 
 const TAB_KEYS = [
   {key: 'home',    labelKey: 'nav.home',    Icon: Home,          Screen: HomeScreen},
@@ -22,12 +29,32 @@ export default function AppNavigator() {
   const [history, setHistory]     = useState(['home']);
   const [mounted, setMounted]     = useState({home: true});
 
+  const pendingNav      = useAppStore(s => s.pendingNav);
+  const clearNav        = useAppStore(s => s.clearNav);
+  const pendingOrderNav = useAppStore(s => s.pendingOrderNav);
+
   const handleTabPress = useCallback((key) => {
     if (key === activeTab) return;
     setMounted(prev => prev[key] ? prev : {...prev, [key]: true});
     setHistory(prev => [...prev, key]);
     setActiveTab(key);
   }, [activeTab]);
+
+  // Respond to notification-tap navigation from FirebaseContext
+  useEffect(() => {
+    if (!pendingNav) return;
+    const tab = NAV_TAB_MAP[pendingNav.tab] ?? pendingNav.tab;
+    clearNav();
+    if (TAB_KEYS.some(k => k.key === tab)) {
+      handleTabPress(tab);
+    }
+  }, [pendingNav, clearNav, handleTabPress]);
+
+  // Respond to HomeScreen order card taps → switch to orders tab
+  useEffect(() => {
+    if (!pendingOrderNav) return;
+    handleTabPress('orders');
+  }, [pendingOrderNav, handleTabPress]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {

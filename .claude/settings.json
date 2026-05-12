@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx jest *)",
+      "Bash(node -e ' *)",
+      "Bash(del jest-results.json)",
+      "Bash(node -e \"const d=require\\('./jest-results.json'\\); d.testResults.forEach\\(r=>{ if\\(!r||!r.testFilePath\\) return; const parts=r.testFilePath.split\\('__tests__'\\); const f='__tests__'+parts[1]; const pass=r.testResults.filter\\(t=>t.status==='passed'\\).length; const fail=r.testResults.filter\\(t=>t.status==='failed'\\).length; console.log\\(pass+' '+\\(fail?'FAIL\\('+fail+'\\)':'OK'\\)+' '+f\\); }\\);\")",
+      "Bash(del /f \"d:\\\\pioneers\\\\nativetamam\\\\__tests__\\\\navigation\\\\debug.test.js\")"
+    ]
+  }
+}

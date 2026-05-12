@@ -50,10 +50,11 @@ export default function AssignBikerScreen({visible, orderId, onClose, onAssigned
     if (!visible) return;
     setLoading(true);
     setSelected(null);
-    getStaff({role: 'BIKER', isOnDuty: true, sort: activeFilter, limit: 50}).then(res => {
+    getStaff({role: 'BIKER', isOnDuty: true, isActive: true, sort: activeFilter, limit: 50}).then(res => {
       if (res.success) {
         const list = res.data?.data ?? res.data ?? [];
-        setBikers(Array.isArray(list) ? list : []);
+        const available = (Array.isArray(list) ? list : []).filter(b => (b.activeOrdersCount ?? 0) === 0);
+        setBikers(available);
       }
       setLoading(false);
     });
@@ -61,14 +62,12 @@ export default function AssignBikerScreen({visible, orderId, onClose, onAssigned
 
   const handleConfirm = useCallback(async () => {
     if (!selected || confirming) return;
-    const staffId = selected._id ?? selected.id;
+    const staffId = selected.userId?._id ?? selected.userId ?? selected._id ?? selected.id;
     setConfirming(true);
     const res = await assignBiker(orderId, staffId);
     setConfirming(false);
-    if (res.success) {
-      setSelected(null);
-      onAssigned(staffId);
-    }
+    setSelected(null);
+    onAssigned(staffId, res);
   }, [selected, confirming, orderId, onAssigned]);
 
   const renderItem = useCallback(({item}) => (

@@ -1,6 +1,15 @@
-import { Alert } from 'react-native';
 import api from './api';
 import {uploadToCloudinary} from './cloudinary';
+
+function toQuery(filters) {
+  const parts = [];
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && v !== '') {
+      parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+    }
+  }
+  return parts.length ? `?${parts.join('&')}` : '';
+}
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 
@@ -31,9 +40,8 @@ export async function uploadPartnerPhoto(uri) {
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 export async function getOrders(filters = {}) {
-  // filters: { status?, page?, limit? }
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/tenant/orders${params ? `?${params}` : ''}`);
+  // filters: { status?, orderType?, page?, limit? }
+  return api.get(`/tenant/orders${toQuery(filters)}`);
   // Response: { data: [], pagination: { total, page, limit, totalPages, hasNextPage, hasPrevPage } }
 }
 
@@ -46,8 +54,13 @@ export async function acceptOrder(id) {
   // Response: { success, message, data: { orderId, status: 'ACCEPTED' } }
 }
 
-export async function rejectOrder(id, reason) {
-  return api.post(`/tenant/orders/${id}/reject`, {reason});
+export async function rejectOrder(id, reason, note) {
+  // reason must be a stable code from src/shared/constants/rejectReasons.js.
+  // `note` is required when reason === 'OTHER', optional otherwise.
+  return api.post(`/tenant/orders/${id}/reject`, {
+    reason,
+    ...(note ? {note} : {}),
+  });
   // Response: { success, message, data: { orderId, status: 'REJECTED' } }
 }
 
@@ -88,8 +101,7 @@ export async function completeOnshopOrder(orderId, photoUris) {
 
 export async function getStaff(filters = {}) {
   // filters: { role?: 'BIKER'|'MANAGER', branch?, page?, limit?, sort?, orderId? }
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/tenant/staff${params ? `?${params}` : ''}`);
+  return api.get(`/tenant/staff${toQuery(filters)}`);
   // Response: { data: [{ _id, userId, branchId, role, isOnDuty, isActive }], total, page, pages }
 }
 
@@ -127,8 +139,7 @@ export async function removeStaff(staffId) {
 
 export async function getServices(filters = {}) {
   // filters: { includeInactive?, categoryId?, availableFor? }
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/tenant/services${params ? `?${params}` : ''}`);
+  return api.get(`/tenant/services${toQuery(filters)}`);
 }
 
 export async function getCategoryServices() {
@@ -171,8 +182,7 @@ export async function getCategories() {
 // ── Packages ──────────────────────────────────────────────────────────────────
 
 export async function getPackages(filters = {}) {
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/tenant/packages${params ? `?${params}` : ''}`);
+  return api.get(`/tenant/packages${toQuery(filters)}`);
 }
 
 export async function createPackage(data) {
@@ -236,8 +246,7 @@ export async function toggleBranchService(branchId) {
 
 export async function getSkipRequests(filters = {}) {
   // filters: { status?: 'PENDING'|'APPROVED'|'REJECTED', page?, limit? }
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/tenant/skip-requests${params ? `?${params}` : ''}`);
+  return api.get(`/tenant/skip-requests${toQuery(filters)}`);
 }
 
 export async function approveSkipRequest(orderId, reviewNote) {
@@ -264,15 +273,13 @@ export async function getDashboardToday() {
 
 export async function getAnalytics(filters = {}) {
   // filters: { year?, month? }
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/dashboard/analytics/admin${params ? `?${params}` : ''}`);
+  return api.get(`/dashboard/analytics/admin${toQuery(filters)}`);
 }
 
 // ── Biker Payouts ──────────────────────────────────────────────────────────────
 
 export async function getBikerPayouts(filters = {}) {
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/dashboard/biker/payout${params ? `?${params}` : ''}`);
+  return api.get(`/dashboard/biker/payout${toQuery(filters)}`);
 }
 
 export async function createPayout(bikerId, amount, paymentMethod, notes) {
@@ -288,15 +295,13 @@ export async function createPayout(bikerId, amount, paymentMethod, notes) {
 
 export async function getNotifications(filters = {}) {
   // filters: { page?, limit?, createdAt?, comparison? }
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/dashboard/notification${params ? `?${params}` : ''}`);
+  return api.get(`/dashboard/notification${toQuery(filters)}`);
 }
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 
 export async function getReviews(filters = {}) {
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/dashboard/review/admin${params ? `?${params}` : ''}`);
+  return api.get(`/dashboard/review/admin${toQuery(filters)}`);
 }
 
 export async function deleteReview(id) {
@@ -305,7 +310,7 @@ export async function deleteReview(id) {
 
 export async function deleteReviews(ids) {
   // ids: string[]
-  return api.delete('/dashboard/review/admin', {body: JSON.stringify({ids})});
+  return api.delete('/dashboard/review/admin', {ids});
 }
 
 // ── Support ───────────────────────────────────────────────────────────────────
@@ -317,8 +322,7 @@ export async function sendSupportMessage(subject, message) {
 // ── Offers ────────────────────────────────────────────────────────────────────
 
 export async function getOffers(filters = {}) {
-  const params = new URLSearchParams(filters).toString();
-  return api.get(`/tenant/offers${params ? `?${params}` : ''}`);
+  return api.get(`/tenant/offers${toQuery(filters)}`);
   // Response: { data: [{ _id, name:{ar,en}, serviceIds[], prices:{serviceId:{small,medium,large}}, endDate, isActive }] }
 }
 

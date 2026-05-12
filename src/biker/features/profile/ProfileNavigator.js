@@ -4,11 +4,12 @@ import ProfileScreen from './ProfileScreen';
 import PersonalInfoScreen from './PersonalInfoScreen';
 import WalletScreen from './WalletScreen';
 import LanguageScreen from '../../../shared/components/LanguageScreen';
+import DeleteAccountScreen from '../../../shared/components/DeleteAccountScreen';
 import SupportScreen from './SupportScreen';
 import TermsScreen from './TermsScreen';
 
 export default function ProfileNavigator() {
-  const [screen, setScreen] = useState(null); // null | 'info' | 'wallet' | 'language' | 'support' | 'terms'
+  const [screen, setScreen] = useState(null); // null | 'info' | 'wallet' | 'language' | 'support' | 'terms' | 'deleteAccount'
 
   const goTo = useCallback(name => setScreen(name), []);
   const goBack = useCallback(() => setScreen(null), []);
@@ -51,6 +52,11 @@ export default function ProfileNavigator() {
       {screen === 'terms' && (
         <View style={s.screen}>
           <TermsScreen onBack={goBack} />
+        </View>
+      )}
+      {screen === 'deleteAccount' && (
+        <View style={s.screen}>
+          <DeleteAccountScreen onBack={goBack} />
         </View>
       )}
     </View>

@@ -3,12 +3,28 @@ import {
   ActivityIndicator, Image, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import {Bell, Car, MapPin, Phone} from 'lucide-react-native';
+import {Bell, Car, ClipboardList, MapPin, Phone, Settings2, Wallet} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAuthStore from '../../../store/authStore';
+import useAppStore from '../../../store/appStore';
 import {getDashboardToday, getStaff} from '../../../services/partner';
 import NotificationsScreen from './NotificationsScreen';
+
+// ── Quick Action Tile ─────────────────────────────────────────────────────────
+function QuickAction({Icon, label, colors, onPress}) {
+  return (
+    <TouchableOpacity
+      style={[s.quickTile, {backgroundColor: colors.card, borderColor: colors.border}]}
+      onPress={onPress}
+      activeOpacity={0.75}>
+      <View style={[s.quickIconCircle, {backgroundColor: colors.primary + '18'}]}>
+        <Icon size={22} color={colors.primary} strokeWidth={2} />
+      </View>
+      <Text style={[s.quickLabel, {color: colors.textPrimary}]} numberOfLines={1}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
 // ── Order Card ────────────────────────────────────────────────────────────────
 function OrderCard({item, colors, t, onPress}) {
@@ -106,7 +122,10 @@ export default function DashboardScreen({onOrderPress}) {
   const {t} = useI18n();
   const user = useAuthStore(s => s.user);
 
+  const showToast  = useAppStore(s => s.showToast);
+  const requestNav = useAppStore(s => s.requestNav);
   const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(false);
   const [refreshing, setRefreshing]     = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -115,19 +134,23 @@ export default function DashboardScreen({onOrderPress}) {
   const [activeBikers, setActiveBikers] = useState([]);
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    const [todayRes, bikersRes] = await Promise.all([
+    if (!silent) { setLoading(true); setError(false); }
+    const results = await Promise.allSettled([
       getDashboardToday(),
       getStaff({role: 'BIKER', isOnDuty: true, limit: 10}),
     ]);
 
+    const [todayRes, bikersRes] = results.map(r =>
+      r.status === 'fulfilled' ? r.value : {success: false},
+    );
+
     if (todayRes.success) {
       const d = todayRes.data?.data ?? todayRes.data ?? {};
       setStats({
-        todayRevenue:    d.todayRevenue    ?? 0,
-        pendingCount:    d.pendingOrdersCount ?? 0,
-        activeCount:     d.activeOrdersCount  ?? 0,
-        totalOrders:     d.totalOrdersToday   ?? 0,
+        todayRevenue: d.todayRevenue        ?? 0,
+        pendingCount: d.pendingOrdersCount  ?? 0,
+        activeCount:  d.activeOrdersCount   ?? 0,
+        totalOrders:  d.totalOrdersToday    ?? 0,
       });
       setPendingOrders(d.recentPendingOrders ?? []);
     }
@@ -137,8 +160,13 @@ export default function DashboardScreen({onOrderPress}) {
       setActiveBikers(Array.isArray(list) ? list : []);
     }
 
+    if (!todayRes.success && !silent) {
+      setError(true);
+      showToast('تعذّر تحميل بيانات اللوحة', 'error');
+    }
+
     if (!silent) setLoading(false);
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -178,6 +206,16 @@ export default function DashboardScreen({onOrderPress}) {
         <View style={s.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
+      ) : error ? (
+        <View style={s.center}>
+          <Text style={[s.errorText, {color: colors.textSecondary}]}>تعذّر تحميل البيانات</Text>
+          <TouchableOpacity
+            style={[s.retryBtn, {backgroundColor: colors.primary}]}
+            onPress={() => fetchData()}
+            activeOpacity={0.85}>
+            <Text style={s.retryBtnText}>إعادة المحاولة</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <ScrollView
           style={s.scroll}
@@ -208,6 +246,37 @@ export default function DashboardScreen({onOrderPress}) {
                 <Text style={s.heroStatValue}>{stats?.totalOrders ?? 0}</Text>
                 <Text style={s.heroStatLabel}>{t('partner.dashboard.orders')}</Text>
               </View>
+            </View>
+          </View>
+
+          {/* Quick actions */}
+          <View style={s.section}>
+            <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.quickActions')}</Text>
+            <View style={s.quickGrid}>
+              <QuickAction
+                Icon={Settings2}
+                label={t('partner.dashboard.manageServices')}
+                colors={colors}
+                onPress={() => requestNav('operations', null, 'services')}
+              />
+              <QuickAction
+                Icon={ClipboardList}
+                label={t('partner.dashboard.ordersAction')}
+                colors={colors}
+                onPress={() => requestNav('orders')}
+              />
+              <QuickAction
+                Icon={Wallet}
+                label={t('partner.dashboard.payouts')}
+                colors={colors}
+                onPress={() => requestNav('operations', null, 'payments')}
+              />
+              <QuickAction
+                Icon={Car}
+                label={t('partner.dashboard.services')}
+                colors={colors}
+                onPress={() => requestNav('operations', null, 'services')}
+              />
             </View>
           </View>
 
@@ -246,7 +315,10 @@ export default function DashboardScreen({onOrderPress}) {
 
 const s = StyleSheet.create({
   root:             {flex: 1},
-  center:           {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  center:           {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16},
+  errorText:        {fontSize: 15, fontWeight: '600'},
+  retryBtn:         {paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12},
+  retryBtnText:     {color: '#fff', fontWeight: '700', fontSize: 15},
   topBar:           {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12},
   topBarBtn:        {width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center'},
   avatarLetter:     {fontSize: 15, fontWeight: '800'},
@@ -263,6 +335,10 @@ const s = StyleSheet.create({
   heroStatLabel:    {fontSize: 12, color: 'rgba(255,255,255,0.8)'},
   section:          {paddingHorizontal: 16, paddingBottom: 8, marginBottom: 8},
   sectionTitle:     {fontSize: 16, fontWeight: '700', marginBottom: 12},
+  quickGrid:        {flexDirection: 'row', flexWrap: 'wrap', gap: 10},
+  quickTile:        {width: '47.5%', borderRadius: 14, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 10},
+  quickIconCircle:  {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
+  quickLabel:       {fontSize: 13, fontWeight: '700', textAlign: 'center'},
   pendingCard:      {borderRadius: 14, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 14, borderWidth: 1, marginBottom: 10, gap: 10},
   pendingBadge:     {alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20},
   pendingBadgeText: {fontSize: 11, fontWeight: '700'},

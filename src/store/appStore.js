@@ -35,6 +35,17 @@ const useAppStore = create((set, get) => ({
   unreadCount: 0,
   setUnreadCount: (n) => set({unreadCount: n}),
   decrementUnread: () => set(s => ({unreadCount: Math.max(0, s.unreadCount - 1)})),
+
+  // ── Notification-tap navigation ───────────────────────────────────────
+  // navigators watch this and switch tabs when it changes
+  pendingNav: null,   // { tab: string, orderId?: string, screen?: string } | null
+  requestNav: (tab, orderId, screen) => set({pendingNav: {tab, orderId: orderId ?? null, screen: screen ?? null}}),
+  clearNav:   () => set({pendingNav: null}),
+
+  // ── HomeScreen → OrdersNavigator cross-tab navigation ─────────────────
+  pendingOrderNav: null,  // { type: 'detail' | 'map', order: object } | null
+  setPendingOrderNav: (nav) => set({pendingOrderNav: nav}),
+  clearPendingOrderNav: () => set({pendingOrderNav: null}),
 }));
 
 export default useAppStore;

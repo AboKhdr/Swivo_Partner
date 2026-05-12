@@ -1,11 +1,11 @@
 import React, {useEffect, useState} from 'react';
 import {
-  Platform, ScrollView, StatusBar, StyleSheet,
+  ActivityIndicator, Platform, ScrollView, StatusBar, StyleSheet,
   Switch, Text, TouchableOpacity, View,
 } from 'react-native';
 import {
   ChevronLeft, Star, User, Wallet,
-  Moon, Globe, Headphones, FileText, LogOut,
+  Moon, Globe, Headphones, FileText, LogOut, Trash2,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
@@ -13,9 +13,9 @@ import useAuthStore from '../../../store/authStore';
 import {logout} from '../../../services/auth';
 import {getBikerProfile} from '../../../services/biker';
 
-function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, colors}) {
+function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, loading, colors}) {
   return (
-    <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7} disabled={loading}>
       <View style={[s.navIcon, {backgroundColor: iconBg}]}>
         <Icon size={18} color={iconColor} strokeWidth={2} />
       </View>
@@ -23,7 +23,9 @@ function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, co
         <Text style={[s.navLabel, {color: danger ? '#EF4444' : colors.textPrimary}]}>{label}</Text>
         {sub ? <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text> : null}
       </View>
-      {right !== undefined ? right : (
+      {loading ? (
+        <ActivityIndicator size="small" color={danger ? '#EF4444' : colors.primary} />
+      ) : right !== undefined ? right : (
         <ChevronLeft size={18} color={danger ? '#EF4444' : colors.textSecondary} strokeWidth={2} />
       )}
     </TouchableOpacity>
@@ -37,6 +39,7 @@ export default function ProfileScreen({onNavigate}) {
   const darkMode = isDark;
   const [rating, setRating] = useState(user?.rating ?? 0);
   const [balance, setBalance] = useState(user?.wallet?.balance ?? 0);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     getBikerProfile().then(res => {
@@ -49,7 +52,13 @@ export default function ProfileScreen({onNavigate}) {
   }, []);
 
   const handleLogout = async () => {
-    await logout();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -93,7 +102,11 @@ export default function ProfileScreen({onNavigate}) {
         </View>
 
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <NavRow Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.logout')} sub={t('profile.logoutSub')} onPress={handleLogout} danger colors={colors} />
+          <NavRow Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.logout')} sub={t('profile.logoutSub')} onPress={handleLogout} danger loading={loggingOut} colors={colors} />
+        </View>
+
+        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <NavRow Icon={Trash2} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.deleteAccount')} sub={t('profile.deleteAccountSub')} onPress={() => onNavigate('deleteAccount')} danger colors={colors} />
         </View>
 
         <View style={{height: 16}} />

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import useAppStore from '../../../store/appStore';
 import {getStaff, setStaffStatus, removeStaff, setDutyStatus} from '../../../services/partner';
 import AddBikerScreen from './AddBikerScreen';
 
@@ -200,6 +201,7 @@ function MemberCard({item, colors, tripsLabel, isBiker, onOptions, onDutyToggle}
 export default function StaffScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
+  const showToast = useAppStore(s => s.showToast);
 
   const [activeTab,    setActiveTab]    = useState('bikers');
   const [bikers,       setBikers]       = useState([]);
@@ -215,14 +217,18 @@ export default function StaffScreen({onBack}) {
 
   const fetchStaff = useCallback(async () => {
     setLoading(true);
-    const [bRes, mRes] = await Promise.all([
+    const results = await Promise.allSettled([
       getStaff({role: 'BIKER',   limit: 100}),
       getStaff({role: 'MANAGER', limit: 100}),
     ]);
-    if (bRes.success) setBikers(bRes.data?.data     ?? bRes.data   ?? []);
-    if (mRes.success) setManagers(mRes.data?.data   ?? mRes.data   ?? []);
+    const [bRes, mRes] = results.map(r =>
+      r.status === 'fulfilled' ? r.value : {success: false},
+    );
+    if (bRes.success) setBikers(bRes.data?.data   ?? bRes.data ?? []);
+    if (mRes.success) setManagers(mRes.data?.data ?? mRes.data ?? []);
+    if (!bRes.success && !mRes.success) showToast('تعذّر تحميل بيانات الفريق', 'error');
     setLoading(false);
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { fetchStaff(); }, [fetchStaff]);
 
@@ -253,35 +259,41 @@ export default function StaffScreen({onBack}) {
     const res = await setDutyStatus(id, val);
     if (!res.success) {
       setCurrentList(prev => prev.map(m => (m._id ?? m.id) === id ? {...m, isOnDuty: !val} : m));
+      showToast('فشل تغيير حالة الخدمة', 'error');
     }
-  }, [setCurrentList]);
+  }, [setCurrentList, showToast]);
 
   const handleAction = useCallback(async (action, member) => {
     const id = member._id ?? member.id;
+    let res;
 
     if (action === 'delete') {
-      const res = await removeStaff(id);
+      res = await removeStaff(id);
       if (res.success) setCurrentList(prev => prev.filter(m => (m._id ?? m.id) !== id));
+      else showToast('فشل حذف العضو', 'error');
 
     } else if (action === 'suspend') {
-      const res = await setStaffStatus(id, 'suspended');
+      res = await setStaffStatus(id, 'suspended');
       if (res.success) setCurrentList(prev => prev.map(m =>
         (m._id ?? m.id) === id ? {...m, isOnDuty: false, status: 'suspended'} : m,
       ));
+      else showToast('فشل تعليق العضو', 'error');
 
     } else if (action === 'deactive') {
-      const res = await setStaffStatus(id, 'deactivated');
+      res = await setStaffStatus(id, 'deactivated');
       if (res.success) setCurrentList(prev => prev.map(m =>
         (m._id ?? m.id) === id ? {...m, isOnDuty: false, status: 'deactivated'} : m,
       ));
+      else showToast('فشل تعطيل العضو', 'error');
 
     } else if (action === 'reactivate') {
-      const res = await setStaffStatus(id, 'active');
+      res = await setStaffStatus(id, 'active');
       if (res.success) setCurrentList(prev => prev.map(m =>
         (m._id ?? m.id) === id ? {...m, status: 'active'} : m,
       ));
+      else showToast('فشل استعادة الحساب', 'error');
     }
-  }, [setCurrentList]);
+  }, [setCurrentList, showToast]);
 
   const handleSaved = useCallback(() => {
     setAddTarget(null);

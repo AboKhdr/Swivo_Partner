@@ -3,7 +3,7 @@ import {
   ActivityIndicator, Linking, Platform, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
-import {ChevronLeft, MapPin, MessageCircle, Phone} from 'lucide-react-native';
+import {ChevronLeft, MapPin, MessageCircle, Phone, Play} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import config from '../../../config';
@@ -44,7 +44,7 @@ function initMap() {
 </body></html>`.trim();
 }
 
-export default function OrderMapScreen({order, onBack}) {
+export default function OrderMapScreen({order, onBack, onGoToDetail}) {
   const {colors, isDark} = useTheme();
   const {t} = useI18n();
   const [mapLoading, setMapLoading] = useState(true);
@@ -145,12 +145,16 @@ export default function OrderMapScreen({order, onBack}) {
           <>
             <WebView
               ref={webViewRef}
-              source={{html}}
-              originWhitelist={['*']}
+              source={{html, baseUrl: 'https://maps.google.com'}}
+              originWhitelist={[
+                'https://*.googleapis.com',
+                'https://*.gstatic.com',
+                'https://maps.google.com',
+              ]}
               javaScriptEnabled
               domStorageEnabled
               geolocationEnabled
-              mixedContentMode="always"
+              mixedContentMode="never"
               onLoadStart={() => { setMapLoading(true); setMapError(false); }}
               onLoadEnd={()   => setMapLoading(false)}
               onError={()     => { setMapLoading(false); setMapError(true); }}
@@ -192,6 +196,15 @@ export default function OrderMapScreen({order, onBack}) {
             activeOpacity={0.8}>
             <MessageCircle size={18} color="#25D366" strokeWidth={2} />
             <Text style={[s.actionBtnText, {color: '#25D366'}]}>{t('orderMap.whatsapp')}</Text>
+          </TouchableOpacity>
+        )}
+        {!!onGoToDetail && (
+          <TouchableOpacity
+            style={[s.actionBtn, {backgroundColor: colors.primary, borderColor: colors.primary}]}
+            onPress={() => onGoToDetail(order)}
+            activeOpacity={0.8}>
+            <Play size={18} color="#fff" strokeWidth={2} />
+            <Text style={[s.actionBtnText, {color: '#fff'}]}>{t('orderMap.startOrder')}</Text>
           </TouchableOpacity>
         )}
       </View>
