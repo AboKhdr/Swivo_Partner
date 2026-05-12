@@ -8,6 +8,7 @@ import BikerNavigator from './src/biker/navigation/AppNavigator';
 import PartnerNavigator from './src/partner/navigation/PartnerNavigator';
 import useAuthStore from './src/store/authStore';
 import {setUnauthorizedHandler} from './src/services/api';
+import {subscribeToTapDeepLink} from './src/services/tapDeepLink';
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ function AppRoot() {
   useEffect(() => {
     hydrate();
     setUnauthorizedHandler(logout);
+    const unsubscribeTap = subscribeToTapDeepLink();
+    return () => unsubscribeTap();
   }, [hydrate, logout]);
 
   if (!isReady) return null;

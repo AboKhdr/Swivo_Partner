@@ -39,6 +39,15 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <!-- Deep link: swivo://tap-callback?tap_id=...&status=...&orderId=...
+             Fired by the web TAP callback page after a hosted-checkout
+             payment completes, so the app can resume on the order screen. -->
+        <intent-filter android:autoVerify="false">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="swivo" />
+        </intent-filter>
       </activity>
 
       <!-- Incoming-order call screen — launched over the lock screen by the
