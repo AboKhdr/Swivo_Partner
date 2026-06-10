@@ -185,22 +185,30 @@ export default function OperationsNavigator() {
   const [focusOrderId, setFocusOrderId] = useState(null);
   const pendingNav = useAppStore(s => s.pendingNav);
   const clearNav   = useAppStore(s => s.clearNav);
+  const showToast  = useAppStore(s => s.showToast);
 
   const goTo   = useCallback(key => {
-    if (isSupervisor && FINANCIAL_SCREENS.has(key)) return;
+    if (isSupervisor && FINANCIAL_SCREENS.has(key)) {
+      showToast('غير مصرّح لك بالوصول لهذه الشاشة', 'error');
+      return;
+    }
     setScreen(key);
-  }, [isSupervisor]);
+  }, [isSupervisor, showToast]);
   const goBack = useCallback(() => { setScreen(null); setFocusOrderId(null); }, []);
 
   // Consume a deep-link request (e.g. dashboard → services) on mount/update
   useEffect(() => {
     if (pendingNav?.tab === 'operations' && pendingNav?.screen) {
-      if (isSupervisor && FINANCIAL_SCREENS.has(pendingNav.screen)) { clearNav(); return; }
+      if (isSupervisor && FINANCIAL_SCREENS.has(pendingNav.screen)) {
+        showToast('غير مصرّح لك بالوصول لهذه الشاشة', 'error');
+        clearNav();
+        return;
+      }
       setScreen(pendingNav.screen);
       setFocusOrderId(pendingNav.orderId ?? null);
       clearNav();
     }
-  }, [pendingNav, clearNav]);
+  }, [pendingNav, clearNav, isSupervisor, showToast]);
 
   useEffect(() => {
     if (!screen) return;

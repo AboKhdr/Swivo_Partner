@@ -75,6 +75,9 @@
       "pending": "Pending",
       "active": "Active",
       "orders": "Orders",
+      "heroPending": "Pending Orders",
+      "heroActive": "In-Progress Orders",
+      "heroOrders": "Total Orders",
       "activeBikers": "Active Bikers",
       "viewAll": "View All",
       "pendingOrders": "Pending Orders",
@@ -85,12 +88,12 @@
       "services": "Services",
       "addons": "Add-ons",
       "branchRevenue": "Branch Revenue",
-      "revCompleted": "Completed",
-      "revToday": "Today",
-      "revPending": "Pending",
+      "revCompleted": "Completed Revenue",
+      "revToday": "Today's Revenue",
+      "revPending": "Pending Revenue",
       "ordCompleted": "Completed Orders",
-      "ordActive": "Active Orders",
-      "ordToday": "Today Orders"
+      "ordActive": "In-Progress Orders",
+      "ordToday": "Today's Total Orders"
     },
     "orders": {
       "title": "Orders",

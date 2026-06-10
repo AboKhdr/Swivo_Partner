@@ -163,8 +163,6 @@ export default function PayoutsScreen({onBack}) {
     const res = await getBikerPayouts();
     if (res.success) {
       const list = res.data?.data ?? res.data ?? [];
-      console.log("list",list);
-      
       setBikers(Array.isArray(list) ? list : []);
     } else {
       setError(true);

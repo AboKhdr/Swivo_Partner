@@ -75,6 +75,9 @@
       "pending": "लंबित",
       "active": "सक्रिय",
       "orders": "ऑर्डर",
+      "heroPending": "लंबित ऑर्डर",
+      "heroActive": "प्रगति में ऑर्डर",
+      "heroOrders": "कुल ऑर्डर",
       "activeBikers": "सक्रिय बाइकर",
       "viewAll": "सब देखें",
       "pendingOrders": "लंबित ऑर्डर",
@@ -84,12 +87,12 @@
       "payouts": "भुगतान",
       "services": "सेवाएँ",
       "branchRevenue": "शाखा आय",
-      "revCompleted": "पूर्ण",
-      "revToday": "आज",
-      "revPending": "लंबित",
+      "revCompleted": "पूर्ण आय",
+      "revToday": "आज की आय",
+      "revPending": "लंबित आय",
       "ordCompleted": "पूर्ण ऑर्डर",
-      "ordActive": "सक्रिय ऑर्डर",
-      "ordToday": "आज के ऑर्डर"
+      "ordActive": "प्रगति में ऑर्डर",
+      "ordToday": "आज के कुल ऑर्डर"
     },
     "orders": {
       "title": "ऑर्डर",
