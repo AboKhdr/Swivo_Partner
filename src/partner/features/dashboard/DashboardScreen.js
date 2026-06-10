@@ -141,40 +141,25 @@ function BranchRevenueCard({data, colors, t, lang}) {
   const branchName = sv(data.branchName, lang);
   const rev = data.revenue ?? {};
   const ord = data.orders ?? {};
-  const cells = [
-    {label: t('partner.dashboard.revCompleted'), value: `${rev.completed ?? 0} ﷼`, color: '#22C55E'},
-    {label: t('partner.dashboard.revToday'),     value: `${rev.today ?? 0} ﷼`,     color: colors.primary},
-    {label: t('partner.dashboard.revPending'),   value: `${rev.pending ?? 0} ﷼`,   color: '#F59E0B'},
-  ];
 
   return (
-    <View style={s.section}>
-      <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>
+    <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
+      <Text style={s.heroRevenueLabel}>
         {t('partner.dashboard.branchRevenue')}{branchName ? ` — ${branchName}` : ''}
       </Text>
-      <View style={[s.revCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-        <View style={s.revRow}>
-          {cells.map((c, i) => (
-            <View key={i} style={s.revCell}>
-              <Text style={[s.revValue, {color: c.color}]}>{c.value}</Text>
-              <Text style={[s.revLabel, {color: colors.textSecondary}]}>{c.label}</Text>
-            </View>
-          ))}
+      <Text style={s.heroRevenue}>{rev.today ?? 0} ﷼</Text>
+      <View style={s.heroStats}>
+        <View style={s.heroStatItem}>
+          <Text style={s.heroStatValue}>{ord.completed ?? 0}</Text>
+          <Text style={s.heroStatLabel}>{t('partner.dashboard.ordCompleted')}</Text>
         </View>
-        <View style={[s.revDivider, {backgroundColor: colors.border}]} />
-        <View style={s.revRow}>
-          <View style={s.revCell}>
-            <Text style={[s.revValueSm, {color: colors.textPrimary}]}>{ord.completed ?? 0}</Text>
-            <Text style={[s.revLabel, {color: colors.textSecondary}]}>{t('partner.dashboard.ordCompleted')}</Text>
-          </View>
-          <View style={s.revCell}>
-            <Text style={[s.revValueSm, {color: colors.textPrimary}]}>{ord.active ?? 0}</Text>
-            <Text style={[s.revLabel, {color: colors.textSecondary}]}>{t('partner.dashboard.ordActive')}</Text>
-          </View>
-          <View style={s.revCell}>
-            <Text style={[s.revValueSm, {color: colors.textPrimary}]}>{ord.today ?? 0}</Text>
-            <Text style={[s.revLabel, {color: colors.textSecondary}]}>{t('partner.dashboard.ordToday')}</Text>
-          </View>
+        <View style={s.heroStatItem}>
+          <Text style={s.heroStatValue}>{ord.active ?? 0}</Text>
+          <Text style={s.heroStatLabel}>{t('partner.dashboard.ordActive')}</Text>
+        </View>
+        <View style={s.heroStatItem}>
+          <Text style={s.heroStatValue}>{ord.today ?? 0}</Text>
+          <Text style={s.heroStatLabel}>{t('partner.dashboard.ordToday')}</Text>
         </View>
       </View>
     </View>
@@ -306,25 +291,27 @@ export default function DashboardScreen() {
             </Text>
           </View>
 
-          {/* Hero card */}
+          {/* Hero card — today's revenue (admin only) */}
+          {!isSupervisor && (
           <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
             <Text style={s.heroRevenueLabel}>{t('partner.dashboard.revenue')}</Text>
             <Text style={s.heroRevenue}>{stats?.todayRevenue ?? 0} ﷼</Text>
             <View style={s.heroStats}>
               <View style={s.heroStatItem}>
                 <Text style={s.heroStatValue}>{stats?.pendingCount ?? 0}</Text>
-                <Text style={s.heroStatLabel}>{t('partner.dashboard.pending')}</Text>
+                <Text style={s.heroStatLabel}>{t('partner.dashboard.heroPending')}</Text>
               </View>
               <View style={s.heroStatItem}>
                 <Text style={s.heroStatValue}>{stats?.activeCount ?? 0}</Text>
-                <Text style={s.heroStatLabel}>{t('partner.dashboard.active')}</Text>
+                <Text style={s.heroStatLabel}>{t('partner.dashboard.heroActive')}</Text>
               </View>
               <View style={s.heroStatItem}>
                 <Text style={s.heroStatValue}>{stats?.totalOrders ?? 0}</Text>
-                <Text style={s.heroStatLabel}>{t('partner.dashboard.orders')}</Text>
+                <Text style={s.heroStatLabel}>{t('partner.dashboard.heroOrders')}</Text>
               </View>
             </View>
           </View>
+          )}
 
           {/* Branch revenue — supervisor only */}
           {isSupervisor && branchRevenue && (
@@ -347,14 +334,12 @@ export default function DashboardScreen() {
                 colors={colors}
                 onPress={() => requestNav('orders')}
               />
-              {!isSupervisor && (
-                <QuickAction
-                  Icon={Wallet}
-                  label={t('partner.dashboard.payouts')}
-                  colors={colors}
-                  onPress={() => requestNav('operations', null, 'payouts')}
-                />
-              )}
+              <QuickAction
+                Icon={Wallet}
+                label={t('partner.dashboard.payouts')}
+                colors={colors}
+                onPress={() => requestNav('operations', null, 'payouts')}
+              />
               <QuickAction
                 Icon={PlusSquare}
                 label={t('partner.dashboard.addons')}
@@ -412,22 +397,14 @@ const s = StyleSheet.create({
   greetingWrap:     {paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8},
   heroGreeting:     {fontSize: 14, fontWeight: '500'},
   heroCard:         {marginHorizontal: 16, marginBottom: 20, borderRadius: 20, padding: 20, gap: 4},
-  heroRevenueLabel: {fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 2},
-  heroRevenue:      {fontSize: 38, color: '#fff', fontWeight: '900', marginBottom: 20},
+  heroRevenueLabel: {fontSize: 12, color: 'rgba(255,255,255,0.75)', marginBottom: 2},
+  heroRevenue:      {fontSize: 30, color: '#fff', fontWeight: '900', marginBottom: 18},
   heroStats:        {flexDirection: 'row', justifyContent: 'space-between', gap: 10},
   heroStatItem:     {flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 14, paddingVertical: 12, gap: 4},
-  heroStatValue:    {fontSize: 20, color: '#fff', fontWeight: '800'},
-  heroStatLabel:    {fontSize: 12, color: 'rgba(255,255,255,0.8)'},
+  heroStatValue:    {fontSize: 17, color: '#fff', fontWeight: '800'},
+  heroStatLabel:    {fontSize: 10, color: 'rgba(255,255,255,0.8)', textAlign: 'center'},
   section:          {paddingHorizontal: 16, paddingBottom: 8, marginBottom: 8},
   sectionTitle:     {fontSize: 16, fontWeight: '700', marginBottom: 12},
-
-  revCard:          {borderRadius: 16, borderWidth: 1, padding: 16, gap: 14},
-  revRow:           {flexDirection: 'row', justifyContent: 'space-between'},
-  revCell:          {flex: 1, alignItems: 'center', gap: 4},
-  revValue:         {fontSize: 16, fontWeight: '900'},
-  revValueSm:       {fontSize: 18, fontWeight: '800'},
-  revLabel:         {fontSize: 11, textAlign: 'center'},
-  revDivider:       {height: 1},
 
   quickGrid:        {flexDirection: 'row', flexWrap: 'wrap', gap: 10},
   quickTile:        {width: '47.5%', borderRadius: 14, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 10},
