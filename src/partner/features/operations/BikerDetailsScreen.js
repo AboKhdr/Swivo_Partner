@@ -1,16 +1,18 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import {ArrowRight, Bike, Star, Phone, ShoppingBag, Clock, CheckCircle} from 'lucide-react-native';
+import {ArrowRight, Bike, Star, Phone, ShoppingBag, CheckCircle, Percent, DollarSign, ChevronDown} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-import {getStaffById, getOrders} from '../../../services/partner';
+import {getStaffById, getOrders, updateStaff} from '../../../services/partner';
 
 const STATUS_COLORS = {
   PENDING_PARTNER: '#F59E0B',
@@ -46,16 +48,22 @@ function StatBox({icon: Icon, value, label, color, colors}) {
   );
 }
 
+function safeStr(v) {
+  if (v == null) return '';
+  if (typeof v === 'object') return v.ar ?? v.en ?? '';
+  return String(v);
+}
+
 function OrderRow({item, colors}) {
-  const color      = STATUS_COLORS[item.status] ?? '#64748B';
-  const statusLabel = STATUS_LABELS[item.status] ?? item.status ?? '';
-  const orderNum   = item.orderNumber ?? item._id ?? '';
-  const serviceName =
-    item.itemsSnapshot?.[0]?.nameSnapshot?.ar
-    ?? item.items?.[0]?.service?.name?.ar
-    ?? item.items?.[0]?.name?.ar
-    ?? '';
-  const price = item.tenantNetSnapshot ?? item.totalAmount ?? '';
+  const color       = STATUS_COLORS[item.status] ?? '#64748B';
+  const statusLabel = STATUS_LABELS[item.status] ?? safeStr(item.status);
+  const orderNum    = safeStr(item.orderNumber ?? item._id);
+  const serviceName = safeStr(
+    item.itemsSnapshot?.[0]?.nameSnapshot
+    ?? item.items?.[0]?.service?.name
+    ?? item.items?.[0]?.name,
+  );
+  const price = safeStr(item.tenantNetSnapshot ?? item.totalAmount);
 
   return (
     <View style={[d.orderRow, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -72,6 +80,135 @@ function OrderRow({item, colors}) {
     </View>
   );
 }
+
+// ─── Commission Section ───────────────────────────────────────────────────────
+function CommissionSection({staffId, initialType, initialPercent, initialFixed, colors}) {
+  const [type,    setType]    = useState(initialType ?? 'percentage');
+  const [percent, setPercent] = useState(initialPercent != null ? String(initialPercent) : '');
+  const [fixed,   setFixed]   = useState(initialFixed   != null ? String(initialFixed)   : '');
+
+  useEffect(() => {
+    if (initialType)    setType(initialType);
+    if (initialPercent != null) setPercent(String(initialPercent));
+    if (initialFixed   != null) setFixed(String(initialFixed));
+  }, [initialType, initialPercent, initialFixed]);
+  const [saving,  setSaving]  = useState(false);
+  const [open,    setOpen]    = useState(true);
+
+  const handleSave = useCallback(async () => {
+    const val = type === 'percentage' ? parseFloat(percent) : parseFloat(fixed);
+    if (isNaN(val) || val < 0) {
+      Alert.alert('خطأ', 'أدخل قيمة صحيحة');
+      return;
+    }
+    setSaving(true);
+    const body = type === 'percentage'
+      ? {commissionType: 'percentage', commissionPercent: val}
+      : {commissionType: 'fixed',      commissionFixed:   val};
+    const res = await updateStaff(staffId, body);
+    setSaving(false);
+    if (!res.success) {
+      Alert.alert('خطأ', 'تعذّر حفظ العمولة، يرجى المحاولة مجدداً');
+    }
+  }, [staffId, type, percent, fixed]);
+
+  const displayVal = type === 'percentage'
+    ? (percent ? `${percent}%` : '—')
+    : (fixed   ? `${fixed} ﷼` : '—');
+
+  return (
+    <View style={[cm.card, {backgroundColor: colors.card}]}>
+      {/* Header row — tap to expand */}
+      <TouchableOpacity style={cm.header} onPress={() => setOpen(v => !v)} activeOpacity={0.75}>
+        <View style={[cm.iconBox, {backgroundColor: colors.primary + '15'}]}>
+          {type === 'percentage'
+            ? <Percent size={18} color={colors.primary} />
+            : <DollarSign size={18} color={colors.primary} />
+          }
+        </View>
+        <View style={cm.headerText}>
+          <Text style={[cm.headerLabel, {color: colors.textPrimary}]}>العمولة</Text>
+          <Text style={[cm.headerVal, {color: colors.textSecondary}]}>{displayVal}</Text>
+        </View>
+        <ChevronDown
+          size={18}
+          color={colors.textSecondary}
+          style={{transform: [{rotate: open ? '180deg' : '0deg'}]}}
+        />
+      </TouchableOpacity>
+
+      {open && (
+        <View style={[cm.body, {borderTopColor: colors.border}]}>
+          {/* Type toggle */}
+          <View style={[cm.toggle, {backgroundColor: colors.bg}]}>
+            <TouchableOpacity
+              style={[cm.toggleBtn, type === 'percentage' && {backgroundColor: colors.primary}]}
+              onPress={() => setType('percentage')}
+              activeOpacity={0.8}>
+              <Percent size={14} color={type === 'percentage' ? '#FFF' : colors.textSecondary} />
+              <Text style={[cm.toggleTxt, {color: type === 'percentage' ? '#FFF' : colors.textSecondary}]}>
+                نسبة مئوية
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[cm.toggleBtn, type === 'fixed' && {backgroundColor: colors.primary}]}
+              onPress={() => setType('fixed')}
+              activeOpacity={0.8}>
+              <DollarSign size={14} color={type === 'fixed' ? '#FFF' : colors.textSecondary} />
+              <Text style={[cm.toggleTxt, {color: type === 'fixed' ? '#FFF' : colors.textSecondary}]}>
+                قيمة ثابتة
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Input */}
+          <View style={[cm.inputRow, {backgroundColor: colors.bg, borderColor: colors.border}]}>
+            <TextInput
+              style={[cm.input, {color: colors.textPrimary}]}
+              keyboardType="decimal-pad"
+              value={type === 'percentage' ? percent : fixed}
+              onChangeText={type === 'percentage' ? setPercent : setFixed}
+              placeholder={type === 'percentage' ? 'مثال: 15' : 'مثال: 20'}
+              placeholderTextColor={colors.textSecondary}
+            />
+            <Text style={[cm.inputSuffix, {color: colors.textSecondary}]}>
+              {type === 'percentage' ? '%' : '﷼'}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[cm.saveBtn, {backgroundColor: colors.primary, opacity: saving ? 0.7 : 1}]}
+            onPress={handleSave}
+            disabled={saving}
+            activeOpacity={0.85}>
+            {saving
+              ? <ActivityIndicator size="small" color="#FFF" />
+              : <Text style={cm.saveTxt}>حفظ العمولة</Text>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const cm = StyleSheet.create({
+  card:        {borderRadius: 18, overflow: 'hidden', marginBottom: 12, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
+  header:      {flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16},
+  iconBox:     {width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center'},
+  headerText:  {flex: 1, gap: 2},
+  headerLabel: {fontSize: 14, fontWeight: '700'},
+  headerVal:   {fontSize: 12},
+  body:        {borderTopWidth: 1, padding: 16, gap: 12},
+  toggle:      {flexDirection: 'row', borderRadius: 12, padding: 4, gap: 4},
+  toggleBtn:   {flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10},
+  toggleTxt:   {fontSize: 13, fontWeight: '700'},
+  inputRow:    {flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 4},
+  input:       {flex: 1, fontSize: 20, fontWeight: '800', paddingVertical: 10},
+  inputSuffix: {fontSize: 18, fontWeight: '600', paddingHorizontal: 4},
+  saveBtn:     {paddingVertical: 14, borderRadius: 14, alignItems: 'center'},
+  saveTxt:     {color: '#FFF', fontSize: 15, fontWeight: '700'},
+});
 
 export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
   const {colors} = useTheme();
@@ -135,6 +272,7 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
   const ratingCnt = data.ratingCount ?? 0;
   const active    = data.activeOrdersCount ?? 0;
   const completed = data.completedOrdersCount ?? 0;
+  const branch = typeof data.branchId === 'object' ? safeStr(data.branchId?.name) : '';
 
   const renderItem    = useCallback(({item}) => <OrderRow item={item} colors={colors} />, [colors]);
   const keyExtractor  = useCallback(item => item._id ?? item.id, []);
@@ -149,6 +287,9 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
           </Text>
         </View>
         <Text style={[d.nameText, {color: colors.textPrimary}]}>{name}</Text>
+        {!!branch && (
+          <Text style={[d.branchText, {color: colors.textSecondary}]}>{branch}</Text>
+        )}
         {!!phone && (
           <TouchableOpacity
             style={[d.phoneRow, {backgroundColor: colors.primary + '12'}]}
@@ -172,6 +313,18 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
         <StatBox icon={CheckCircle} value={completed} label="مكتملة"  color="#22C55E" colors={colors} />
         <StatBox icon={Star}        value={rating > 0 ? rating.toFixed(1) : '—'} label={`${ratingCnt} تقييم`} color="#F59E0B" colors={colors} />
       </View>
+
+      {/* Commission — render only after details loaded so initial values are correct */}
+      {details && (
+        <CommissionSection
+          key={staffId}
+          staffId={staffId}
+          initialType={details.commissionType ?? 'percentage'}
+          initialPercent={details.commissionPercent ?? null}
+          initialFixed={details.commissionFixed ?? null}
+          colors={colors}
+        />
+      )}
 
       <Text style={[d.sectionTitle, {color: colors.textPrimary}]}>الطلبات</Text>
     </View>
@@ -227,6 +380,7 @@ const d = StyleSheet.create({
   avatar:       {width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center'},
   avatarLetter: {fontSize: 28, fontWeight: '900'},
   nameText:     {fontSize: 20, fontWeight: '800'},
+  branchText:   {fontSize: 13, fontWeight: '500'},
   phoneRow:     {flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20},
   phoneText:    {fontSize: 14, fontWeight: '600'},
   actionsBtn:   {marginTop: 4, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1},

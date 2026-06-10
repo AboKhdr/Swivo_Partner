@@ -358,12 +358,7 @@ export default function EditBranchScreen({branch, onBack, onSaved}) {
             trackColor={{false: colors.border, true: colors.primary}}
             thumbColor="#FFF"
           />
-          <View style={s.mainText}>
-            <Text style={[s.mainLabel, {color: colors.textPrimary}]}>اجعل هذا الفرع الاساسي</Text>
-            <Text style={[s.mainSub, {color: colors.textSecondary}]}>
-              سيتم اغلاق الخدمة 10 دقائق قبل وبعد الصلاة
-            </Text>
-          </View>
+          <Text style={[s.mainLabel, {color: colors.textPrimary}]}>اجعل هذا الفرع الاساسي</Text>
         </View>
 
         <View style={s.footer}>
@@ -456,10 +451,8 @@ const s = StyleSheet.create({
   svcsEmpty:    {flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16},
   svcsEmptyTxt: {fontSize: 13},
 
-  mainCard:     {flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
-  mainText:     {flex: 1, gap: 4},
-  mainLabel:    {fontSize: 14, fontWeight: '700'},
-  mainSub:      {fontSize: 12, lineHeight: 18},
+  mainCard:     {flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
+  mainLabel:    {flex: 1, fontSize: 14, fontWeight: '700'},
 
   footer:       {flexDirection: 'row', gap: 12, marginTop: 16},
   saveBtn:      {flex: 1, paddingVertical: 16, borderRadius: 16, alignItems: 'center'},

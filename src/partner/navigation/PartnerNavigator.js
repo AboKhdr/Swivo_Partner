@@ -1,16 +1,15 @@
 import React, {useState, useEffect, useCallback} from 'react';
-import {Alert, BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Home, ClipboardList, Settings, User} from 'lucide-react-native';
+import {BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {Home, ClipboardList, Settings, User, Wallet} from 'lucide-react-native';
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
 import DashboardScreen from '../features/dashboard/DashboardScreen';
 import OrdersNavigator from '../features/orders/OrdersNavigator';
 import OperationsNavigator from '../features/operations/OperationsNavigator';
+import PaymentsScreen from '../features/operations/PaymentsScreen';
 import PartnerProfileNavigator from '../features/profile/PartnerProfileNavigator';
-import IncomingOrderScreen from '../features/orders/IncomingOrderScreen';
 import useAppStore from '../../store/appStore';
-import {acceptOrder, rejectOrder} from '../../services/partner';
-import {cancelIncomingOrderNotification} from '../../services/notificationChannel';
+import useAuthStore from '../../store/authStore';
 
 // Notification tab keys → partner tab keys
 const NAV_TAB_MAP = {
@@ -23,24 +22,28 @@ const TAB_KEYS = [
   {key: 'dashboard',  labelKey: 'partner.nav.dashboard',  Icon: Home,          Screen: DashboardScreen,         unmount: false},
   {key: 'orders',     labelKey: 'partner.nav.orders',     Icon: ClipboardList, Screen: OrdersNavigator,         unmount: false},
   {key: 'operations', labelKey: 'partner.nav.operations', Icon: Settings,      Screen: OperationsNavigator,     unmount: true},
+  {key: 'wallet',     labelKey: 'partner.nav.wallet',     Icon: Wallet,        Screen: PaymentsScreen,          unmount: false},
   {key: 'profile',    labelKey: 'partner.nav.profile',    Icon: User,          Screen: PartnerProfileNavigator, unmount: false},
 ];
 
 export default function PartnerNavigator() {
   const {colors} = useTheme();
   const {t} = useI18n();
+  const user = useAuthStore(s => s.user);
+  const isSupervisor = user?.originalRole === 'supervisor';
+
+  const tabs = isSupervisor ? TAB_KEYS.filter(tab => tab.key !== 'wallet') : TAB_KEYS;
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [history, setHistory]     = useState(['dashboard']);
   const [mounted, setMounted]     = useState({dashboard: true});
 
-  const incomingOrder      = useAppStore(s => s.incomingOrder);
-  const clearIncomingOrder = useAppStore(s => s.clearIncomingOrder);
-  const pendingNav         = useAppStore(s => s.pendingNav);
-  const clearNav           = useAppStore(s => s.clearNav);
+  const pendingNav = useAppStore(s => s.pendingNav);
+  const clearNav   = useAppStore(s => s.clearNav);
 
   const handleTabPress = useCallback((key) => {
     if (key === activeTab) return;
-    const leavingTab = TAB_KEYS.find(t => t.key === activeTab);
+    const leavingTab = tabs.find(t => t.key === activeTab);
     setMounted(prev => {
       const next = leavingTab?.unmount ? {...prev, [leavingTab.key]: false} : prev;
       return next[key] ? next : {...next, [key]: true};
@@ -53,15 +56,22 @@ export default function PartnerNavigator() {
   useEffect(() => {
     if (!pendingNav) return;
     const tab = NAV_TAB_MAP[pendingNav.tab] ?? pendingNav.tab;
-    if (TAB_KEYS.some(k => k.key === tab)) {
-      handleTabPress(tab);
+    const tabExists = tabs.some(k => k.key === tab);
+
+    if (tabExists) {
+      // Mount the tab first, then let the child navigator consume pendingNav.
+      // We do NOT clearNav here when screen/orderId are present — the child
+      // navigator (OrdersNavigator) watches pendingNav and clears it itself.
+      setMounted(prev => prev[tab] ? prev : {...prev, [tab]: true});
+      setHistory(prev => [...prev, tab]);
+      setActiveTab(tab);
     }
-    // If no deep screen is requested, clear immediately.
-    // Otherwise leave it for the destination navigator to consume on mount.
-    if (!pendingNav.screen) {
+
+    // Only clear immediately when there is no deep navigation target.
+    if (!pendingNav.screen && !pendingNav.orderId) {
       clearNav();
     }
-  }, [pendingNav, clearNav, handleTabPress]);
+  }, [pendingNav, clearNav]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -76,54 +86,10 @@ export default function PartnerNavigator() {
     return () => sub.remove();
   }, [history]);
 
-  const requestNav = useAppStore(s => s.requestNav);
-
-  const handleAccept = useCallback(async () => {
-    const order = useAppStore.getState().incomingOrder;
-    if (!order?.id) {
-      clearIncomingOrder();
-      return;
-    }
-    const res = await acceptOrder(order.id);
-    cancelIncomingOrderNotification().catch(() => {});
-    if (res?.success) {
-      clearIncomingOrder();
-      requestNav('orders', order.id);
-    } else {
-      Alert.alert(
-        t('partner.incoming.acceptFailedTitle') || 'Accept failed',
-        res?.error || t('partner.incoming.acceptFailedBody') || 'Could not accept the order. Please try again.',
-      );
-    }
-  }, [clearIncomingOrder, requestNav, t]);
-
-  const handleReject = useCallback(async (payload) => {
-    // payload is { reason: <code>, note?: string }
-    // (legacy callers passing a plain string are still tolerated)
-    const {reason, note} = typeof payload === 'string'
-      ? {reason: payload, note: undefined}
-      : (payload || {});
-    const order = useAppStore.getState().incomingOrder;
-    if (!order?.id) {
-      clearIncomingOrder();
-      return;
-    }
-    const res = await rejectOrder(order.id, reason || 'OTHER', note);
-    cancelIncomingOrderNotification().catch(() => {});
-    if (res?.success || reason === 'AUTO_TIMEOUT') {
-      clearIncomingOrder();
-    } else {
-      Alert.alert(
-        t('partner.incoming.rejectFailedTitle') || 'Reject failed',
-        res?.error || t('partner.incoming.rejectFailedBody') || 'Could not reject the order. Please try again.',
-      );
-    }
-  }, [clearIncomingOrder, t]);
-
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <View style={s.screen}>
-        {TAB_KEYS.map(({key, Screen}) =>
+        {tabs.map(({key, Screen}) =>
           mounted[key] ? (
             <View key={key} style={[s.page, activeTab !== key && s.hidden]}>
               <Screen />
@@ -133,7 +99,7 @@ export default function PartnerNavigator() {
       </View>
 
       <View style={[s.tabBar, {backgroundColor: colors.card}]}>
-        {TAB_KEYS.map(({key, labelKey, Icon}) => {
+        {tabs.map(({key, labelKey, Icon}) => {
           const isActive = key === activeTab;
           return (
             <TouchableOpacity
@@ -158,13 +124,6 @@ export default function PartnerNavigator() {
         })}
       </View>
 
-      {/* Global incoming order modal — floats above all tabs */}
-      <IncomingOrderScreen
-        visible={!!incomingOrder}
-        order={incomingOrder}
-        onAccept={handleAccept}
-        onReject={handleReject}
-      />
     </View>
   );
 }

@@ -1,12 +1,13 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {Home, ClipboardList, Star, User} from 'lucide-react-native';
+import {Home, ClipboardList, Star, User, Wallet} from 'lucide-react-native';
 import {useTheme} from '../../shared/context/ThemeContext';
 import {useI18n} from '../../shared/i18n/I18nContext';
 import useAppStore from '../../store/appStore';
 import HomeScreen from '../features/home/HomeScreen';
 import OrdersNavigator from '../features/orders/OrdersNavigator';
 import ReviewsScreen from '../features/reviews/ReviewsScreen';
+import WalletScreen from '../features/profile/WalletScreen';
 import ProfileNavigator from '../features/profile/ProfileNavigator';
 
 // Notification tab keys → biker tab keys
@@ -19,6 +20,7 @@ const TAB_KEYS = [
   {key: 'home',    labelKey: 'nav.home',    Icon: Home,          Screen: HomeScreen},
   {key: 'orders',  labelKey: 'nav.orders',  Icon: ClipboardList, Screen: OrdersNavigator},
   {key: 'reviews', labelKey: 'nav.reviews', Icon: Star,          Screen: ReviewsScreen},
+  {key: 'wallet',  labelKey: 'nav.wallet',  Icon: Wallet,        Screen: WalletScreen},
   {key: 'profile', labelKey: 'nav.profile', Icon: User,          Screen: ProfileNavigator},
 ];
 
@@ -44,9 +46,11 @@ export default function AppNavigator() {
   useEffect(() => {
     if (!pendingNav) return;
     const tab = NAV_TAB_MAP[pendingNav.tab] ?? pendingNav.tab;
-    clearNav();
     if (TAB_KEYS.some(k => k.key === tab)) {
       handleTabPress(tab);
+    }
+    if (!pendingNav.screen) {
+      clearNav();
     }
   }, [pendingNav, clearNav, handleTabPress]);
 
@@ -96,6 +100,7 @@ export default function AppNavigator() {
           );
         })}
       </View>
+
     </View>
   );
 }

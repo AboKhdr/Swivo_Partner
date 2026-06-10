@@ -179,6 +179,42 @@ export async function getCategories() {
   // Response: { data: [{ _id, name: { ar, en } }] }
 }
 
+// ── Additional Services (add-ons) ─────────────────────────────────────────────
+// Backend payload shape (flat — NOT nested under name/description):
+//   { nameEn, nameAr, descriptionEn?, descriptionAr?, price, serviceId, image?, isActive }
+
+export async function getAdditionalServices(filters = {}) {
+  // filters: { serviceId? }
+  return api.get(`/tenant/additional-services${toQuery(filters)}`);
+}
+
+export async function getAdditionalServiceById(id) {
+  return api.get(`/tenant/additional-services/${id}`);
+}
+
+export async function createAdditionalService(data) {
+  if (data.imageUri) {
+    const up = await uploadToCloudinary(data.imageUri);
+    if (up.success) data = {...data, image: up.url};
+    delete data.imageUri;
+  }
+  return api.post('/tenant/additional-services', data);
+}
+
+export async function updateAdditionalService(id, data) {
+  if (data.imageUri) {
+    const up = await uploadToCloudinary(data.imageUri);
+    if (up.success) data = {...data, image: up.url};
+    delete data.imageUri;
+  }
+  return api.patch(`/tenant/additional-services/${id}`, data);
+}
+
+export async function deleteAdditionalService(id) {
+  // Soft delete on the backend
+  return api.delete(`/tenant/additional-services/${id}`);
+}
+
 // ── Packages ──────────────────────────────────────────────────────────────────
 
 export async function getPackages(filters = {}) {
@@ -249,15 +285,18 @@ export async function getSkipRequests(filters = {}) {
   return api.get(`/tenant/skip-requests${toQuery(filters)}`);
 }
 
-export async function approveSkipRequest(orderId, reviewNote) {
+export async function approveSkipRequest(orderId, phase) {
+  // phase: 'before' | 'after'
   return api.post(`/tenant/orders/${orderId}/review-photo-skip`, {
+    phase,
     decision: 'APPROVED',
-    ...(reviewNote ? {reviewNote} : {}),
   });
 }
 
-export async function rejectSkipRequest(orderId, reviewNote) {
+export async function rejectSkipRequest(orderId, phase, reviewNote) {
+  // phase: 'before' | 'after'
   return api.post(`/tenant/orders/${orderId}/review-photo-skip`, {
+    phase,
     decision: 'REJECTED',
     ...(reviewNote ? {reviewNote} : {}),
   });
@@ -267,13 +306,28 @@ export async function rejectSkipRequest(orderId, reviewNote) {
 
 export async function getDashboardToday() {
   return api.get('/dashboard/today');
-  // Response: { todayRevenue, pendingOrdersCount, activeOrdersCount, totalOrdersToday,
-  //             availableBikersCount, recentPendingOrders[] }
+}
+
+export async function getTenantSubscription() {
+  return api.get('/tenant/subscription');
 }
 
 export async function getAnalytics(filters = {}) {
   // filters: { year?, month? }
   return api.get(`/dashboard/analytics/admin${toQuery(filters)}`);
+}
+
+// Branch financial summary. Supervisor → own branch automatically (no params).
+// Admin → may pass { branchId } to scope to a specific branch.
+export async function getBranchRevenue(filters = {}) {
+  return api.get(`/tenant/branch/revenue${toQuery(filters)}`);
+  // Response: { data: { branchId, branchName:{ar,en}, revenue:{completed,pending,today},
+  //             orders:{completed,active,today}, bikers:[{firstName,lastName,available,totalEarned,totalPayouts}] } }
+}
+
+export async function getTransactionStatistics() {
+  return api.get('/dashboard/transaction/statistics');
+  // Response: { stats:{ totalTransactions, totalCredits, totalDebits, pendingCount }, scope? }
 }
 
 // ── Biker Payouts ──────────────────────────────────────────────────────────────
@@ -291,11 +345,44 @@ export async function createPayout(bikerId, amount, paymentMethod, notes) {
   });
 }
 
+// ── Transactions ──────────────────────────────────────────────────────────────
+
+export async function getTransactions(filters = {}) {
+  return api.get(`/dashboard/transaction${toQuery(filters)}`);
+  // Response: { success, data: [], pagination }
+}
+
+// ── Tenant Wallet ─────────────────────────────────────────────────────────────
+
+export async function getTenantWallet() {
+  return api.get('/tenant/wallet');
+  // Response: { success, data: { balance, currency, isLocked, lockedAt, lockedReason, updatedAt } }
+}
+
+// ── Plans ─────────────────────────────────────────────────────────────────────
+
+export async function getPlans(filters = {}) {
+  // filters: { search?, isActive?, isPopular?, billingInterval?, page?, limit? }
+  return api.get(`/guest/plans${toQuery(filters)}`);
+  // Response: { data: [{ plan:{ name, nameAr, description, descriptionAr,
+  //             price:{monthly,yearly,unlimited}, isPopular, image },
+  //             features:[{ limit, limitType, featureDetails:{nameAr,nameEn,...} }] }],
+  //             pagination }
+}
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 
 export async function getNotifications(filters = {}) {
   // filters: { page?, limit?, createdAt?, comparison? }
   return api.get(`/dashboard/notification${toQuery(filters)}`);
+}
+
+export async function markNotificationRead(id) {
+  return api.put(`/dashboard/notification/read/${id}`);
+}
+
+export async function markAllNotificationsRead() {
+  return api.put('/dashboard/notification/read-all');
 }
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
@@ -315,8 +402,8 @@ export async function deleteReviews(ids) {
 
 // ── Support ───────────────────────────────────────────────────────────────────
 
-export async function sendSupportMessage(subject, message) {
-  return api.post('/dashboard/support', {subject, message});
+export async function sendSupportMessage(subject, message, priority = 'NORMAL') {
+  return api.post('/dashboard/support', {subject, message, priority});
 }
 
 // ── Offers ────────────────────────────────────────────────────────────────────
@@ -341,6 +428,36 @@ export async function deleteOffer(id) {
 
 export async function toggleOffer(id, isActive) {
   return api.patch(`/tenant/offers/${id}/toggle`, {isActive});
+}
+
+// ── Package Subscriptions ─────────────────────────────────────────────────────
+
+export async function getPackageSubscriptions(filters = {}) {
+  // filters: { packageId?, status?, page?, limit? }
+  return api.get(`/tenant/package-subscriptions${toQuery(filters)}`);
+  // Response: { data: [{ _id, user:{firstName,lastName,phoneNumber}, package:{name,price},
+  //             status, usedCount, usageLimit, validityDays, startDate, endDate }], total, page, pages }
+}
+
+// ── Gallery ───────────────────────────────────────────────────────────────────
+
+export async function getGallery() {
+  return api.get('/tenant/gallery');
+  // Response: { data: [{ _id, url, caption, order, status, deletionRequest, createdAt }],
+  //             meta: { total, max, remaining } }
+}
+
+export async function addGalleryPhoto(url, caption) {
+  return api.post('/tenant/gallery', {url, ...(caption ? {caption} : {})});
+  // 201 → success, 409 → reached max (5)
+}
+
+export async function requestGalleryDeletion(photoId, reason, note) {
+  return api.post(`/tenant/gallery/${photoId}/request-deletion`, {
+    reason,
+    ...(note ? {note} : {}),
+  });
+  // 200 → status becomes pending_deletion, 409 → already pending
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────

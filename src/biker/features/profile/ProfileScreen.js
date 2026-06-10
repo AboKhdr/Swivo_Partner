@@ -4,7 +4,7 @@ import {
   Switch, Text, TouchableOpacity, View,
 } from 'react-native';
 import {
-  ChevronLeft, Star, User, Wallet,
+  ChevronLeft, Star, User, Wallet, ArrowLeftRight,
   Moon, Globe, Headphones, FileText, LogOut, Trash2,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
@@ -13,7 +13,7 @@ import useAuthStore from '../../../store/authStore';
 import {logout} from '../../../services/auth';
 import {getBikerProfile} from '../../../services/biker';
 
-function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, loading, colors}) {
+function NavRow({Icon, iconColor, iconBg, label, sub, subLoader, onPress, danger, right, loading, colors}) {
   return (
     <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7} disabled={loading}>
       <View style={[s.navIcon, {backgroundColor: iconBg}]}>
@@ -21,7 +21,10 @@ function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, lo
       </View>
       <View style={s.navText}>
         <Text style={[s.navLabel, {color: danger ? '#EF4444' : colors.textPrimary}]}>{label}</Text>
-        {sub ? <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text> : null}
+        {subLoader
+          ? <View style={[s.subSkeleton, {backgroundColor: colors.border}]} />
+          : sub ? <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text> : null
+        }
       </View>
       {loading ? (
         <ActivityIndicator size="small" color={danger ? '#EF4444' : colors.primary} />
@@ -37,9 +40,10 @@ export default function ProfileScreen({onNavigate}) {
   const {t} = useI18n();
   const user = useAuthStore(s => s.user);
   const darkMode = isDark;
-  const [rating, setRating] = useState(user?.rating ?? 0);
-  const [balance, setBalance] = useState(user?.wallet?.balance ?? 0);
-  const [loggingOut, setLoggingOut] = useState(false);
+  const [rating,         setRating]         = useState(user?.rating ?? 0);
+  const [balance,        setBalance]        = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [loggingOut,     setLoggingOut]     = useState(false);
 
   useEffect(() => {
     getBikerProfile().then(res => {
@@ -48,7 +52,8 @@ export default function ProfileScreen({onNavigate}) {
         setRating(p.rating ?? 0);
         setBalance(p.wallet?.balance ?? 0);
       }
-    }).catch(() => {});
+      setBalanceLoading(false);
+    }).catch(() => setBalanceLoading(false));
   }, []);
 
   const handleLogout = async () => {
@@ -75,7 +80,16 @@ export default function ProfileScreen({onNavigate}) {
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <NavRow Icon={User} iconColor={colors.primary} iconBg={colors.primary + '18'} label={t('profile.personalInfo')} sub={t('profile.personalInfoSub')} onPress={() => onNavigate('info')} colors={colors} />
           <View style={[s.divider, {backgroundColor: colors.border}]} />
-          <NavRow Icon={Wallet} iconColor="#10B981" iconBg="#10B98118" label={t('profile.wallet')} sub={`${t('wallet.balance')} ${balance.toFixed(0)} ﷼`} onPress={() => onNavigate('wallet')} colors={colors} />
+          <NavRow
+            Icon={Wallet} iconColor="#10B981" iconBg="#10B98118"
+            label={t('profile.wallet')}
+            sub={balanceLoading ? null : `${t('wallet.balance')} ${(balance ?? 0).toFixed(0)} ﷼`}
+            subLoader={balanceLoading}
+            onPress={() => onNavigate('wallet')}
+            colors={colors}
+          />
+          <View style={[s.divider, {backgroundColor: colors.border}]} />
+          <NavRow Icon={ArrowLeftRight} iconColor="#3B82F6" iconBg="#3B82F618" label={t('transactions.title')} sub={t('transactions.sub')} onPress={() => onNavigate('transactions')} colors={colors} />
         </View>
 
         <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('profile.options')}</Text>
@@ -142,6 +156,7 @@ const s = StyleSheet.create({
   navRow: {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 14},
   navIcon: {width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
   navText: {flex: 1, gap: 2},
-  navLabel: {fontSize: 14, fontWeight: '600'},
-  navSub: {fontSize: 12},
+  navLabel:    {fontSize: 14, fontWeight: '600'},
+  navSub:      {fontSize: 12},
+  subSkeleton: {width: 80, height: 10, borderRadius: 5, marginTop: 3},
 });

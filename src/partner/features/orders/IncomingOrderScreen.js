@@ -16,23 +16,73 @@ import {useI18n} from '../../../shared/i18n/I18nContext';
 import {cancelIncomingOrderNotification, RING_MAX_MS} from '../../../services/notificationChannel';
 import {REJECT_REASONS} from '../../../shared/constants/rejectReasons';
 
-// Sync with the ring duration (60s) — same as a WhatsApp call timeout
 const TIMEOUT_SECONDS = Math.floor(RING_MAX_MS / 1000);
+
+// ── Safe string: handles {ar, en} objects ──────────────────────────────────────
+function s2(val, lang) {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') return (lang && val[lang]) ?? val.ar ?? val.en ?? '';
+  return String(val);
+}
+
+// ── Resolve display fields from new or legacy shape ───────────────────────────
+// New API: client.name, client.phoneNumber, car.brand/model/plateNumber/color,
+//          services[].name, location.addressText, totalAmount
+// Legacy:  customerName, location (string), price, service, carModel, plate
+function resolveOrderFields(order, lang) {
+  if (!order) return {};
+
+  const clientName = order.client?.name
+    ?? (order.client
+      ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
+      : order.customerName ?? '');
+
+  const clientPhone = order.client?.phoneNumber ?? order.client?.phone ?? '';
+
+  const location = order.location?.addressText
+    ?? order.addressSnapshot?.addressText
+    ?? order.addressSnapshot?.district
+    ?? (typeof order.location === 'string' ? order.location : '')
+    ?? '';
+
+  const firstSvc = order.services?.[0];
+  const serviceName = s2(firstSvc?.name, lang)
+    || s2(order.itemsSnapshot?.[0]?.nameSnapshot, lang)
+    || s2(order.service?.name, lang)
+    || (typeof order.service === 'string' ? order.service : '');
+
+  const carBrand = s2(order.car?.brand, lang) || s2(order.userCar?.brand?.name, lang);
+  const carModel = s2(order.car?.model, lang) || s2(order.userCar?.model?.name, lang);
+  const carDisplay = [carBrand, carModel].filter(Boolean).join(' ') || order.carModel || '';
+
+  const carColor = s2(order.car?.color, lang) || '';
+
+  const plate = order.car?.plateNumber
+    ?? order.userCar?.plateNumber
+    ?? order.plate
+    ?? '';
+
+  const price = order.totalAmount ?? order.price ?? order.bikerEarning ?? null;
+
+  return {clientName, clientPhone, location, serviceName, carDisplay, carColor, plate, price};
+}
 
 export default function IncomingOrderScreen({visible, order, onAccept, onReject}) {
   const {colors} = useTheme();
-  const {t} = useI18n();
-  // Render localized labels but track selection by stable enum CODE
+  const {t, lang} = useI18n();
+
   const rejectReasons = REJECT_REASONS.map(r => ({
     key:   r.key,
     code:  r.code,
     label: t(`partner.incoming.rejectReasons.${r.key}`),
   }));
-  const [secondsLeft, setSecondsLeft]       = useState(TIMEOUT_SECONDS);
-  const [showReject, setShowReject]         = useState(false);
-  const [selectedCode, setSelectedCode]     = useState('');
-  const [otherNote, setOtherNote]           = useState('');
-  const [busy, setBusy]                     = useState(false);
+
+  const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_SECONDS);
+  const [showReject, setShowReject]   = useState(false);
+  const [selectedCode, setSelectedCode] = useState('');
+  const [otherNote, setOtherNote]     = useState('');
+  const [busy, setBusy]               = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -45,7 +95,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     }
   }, [visible]);
 
-  // Pulse animation on title
+  // Pulse animation
   useEffect(() => {
     if (!visible) return;
     const anim = Animated.loop(
@@ -58,7 +108,6 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     return () => anim.stop();
   }, [visible, pulseAnim]);
 
-
   // Countdown
   useEffect(() => {
     if (!visible) return;
@@ -67,8 +116,8 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
       onReject({reason: 'AUTO_TIMEOUT'});
       return;
     }
-    const t = setTimeout(() => setSecondsLeft(s => s - 1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setSecondsLeft(s => s - 1), 1000);
+    return () => clearTimeout(timer);
   }, [visible, secondsLeft, onReject]);
 
   const handleAccept = useCallback(async () => {
@@ -78,8 +127,6 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     try {
       await onAccept(order);
     } finally {
-      // PartnerNavigator clears incomingOrder on success → modal closes.
-      // On failure we re-enable the buttons so the user can try again.
       setBusy(false);
     }
   }, [order, onAccept, busy]);
@@ -99,106 +146,111 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
   const minutes   = Math.floor(secondsLeft / 60);
   const secs      = secondsLeft % 60;
   const timeLabel = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')} ${t('partner.incoming.timer')}`;
-
   const canConfirm = selectedCode && (selectedCode !== 'OTHER' || otherNote.trim().length > 0);
+
+  const {clientName, clientPhone, location, serviceName, carDisplay, carColor, plate, price} =
+    resolveOrderFields(order, lang);
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent>
       <View style={s.overlay}>
         <View style={s.sheet}>
 
-          {/* ── Blue header ── */}
+          {/* Blue header */}
           <View style={[s.blueHeader, {backgroundColor: colors.primary}]}>
-            {/* Live badge */}
             <View style={s.liveBadge}>
               <View style={s.liveDot} />
               <Text style={s.liveTxt}>{t('partner.incoming.live')}</Text>
             </View>
-
             <Animated.Text style={[s.mainTitle, {transform: [{scale: pulseAnim}]}]}>
               {t('partner.incoming.title')}
             </Animated.Text>
             <Text style={s.timerSub}>{timeLabel}</Text>
           </View>
 
-          {/* ── White body ── */}
+          {/* Body */}
           <ScrollView
             style={[s.body, {backgroundColor: colors.bg}]}
             contentContainerStyle={s.bodyContent}
             showsVerticalScrollIndicator={false}>
 
-            {/* Customer */}
+            {/* Customer + location */}
             <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
               <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
                 <User size={20} color={colors.primary} />
               </View>
               <View style={s.cardInfo}>
                 <Text style={[s.cardValue, {color: colors.textPrimary}]}>
-                  {order?.customerName || 'خالد العتيبي'}
+                  {clientName || '—'}
                 </Text>
-                <View style={s.locationRow}>
-                  <MapPin size={12} color={colors.textSecondary} />
-                  <Text style={[s.cardSub, {color: colors.textSecondary}]}>
-                    {order?.location || 'حي الملقا، الرياض'}
-                  </Text>
-                </View>
+                {!!clientPhone && (
+                  <Text style={[s.cardSub, {color: colors.textSecondary}]}>{clientPhone}</Text>
+                )}
+                {!!location && (
+                  <View style={s.locationRow}>
+                    <MapPin size={12} color={colors.textSecondary} />
+                    <Text style={[s.cardSub, {color: colors.textSecondary}]} numberOfLines={2}>
+                      {location}
+                    </Text>
+                  </View>
+                )}
               </View>
-              {/* Avatar placeholder */}
               <View style={[s.avatar, {backgroundColor: colors.primary + '20'}]}>
                 <User size={22} color={colors.primary} />
               </View>
             </View>
 
-            {/* Price */}
-            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-              <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
-                <DollarSign size={20} color={colors.primary} />
-              </View>
-              <View style={s.cardInfo}>
-                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.cost')}</Text>
-                <Text style={[s.priceValue, {color: colors.textPrimary}]}>
-                  ﷼ {order?.price || '180'}
-                </Text>
-              </View>
-            </View>
-
             {/* Service */}
-            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-              <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
-                <Droplets size={20} color={colors.primary} />
+            {!!serviceName && (
+              <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                  <Droplets size={20} color={colors.primary} />
+                </View>
+                <View style={s.cardInfo}>
+                  <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.serviceType')}</Text>
+                  <Text style={[s.cardValue, {color: colors.textPrimary}]}>{serviceName}</Text>
+                </View>
               </View>
-              <View style={s.cardInfo}>
-                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.serviceType')}</Text>
-                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
-                  {order?.service || 'غسيل خارجي + داخلي'}
-                </Text>
-              </View>
-            </View>
+            )}
 
-            {/* Car + Plate side by side */}
+            {/* Car + Plate */}
             <View style={s.twoCol}>
-              <View style={[s.halfCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-                <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
-                  <Car size={20} color={colors.primary} />
+              {!!carDisplay && (
+                <View style={[s.halfCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                  <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                    <Car size={20} color={colors.primary} />
+                  </View>
+                  <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.carType')}</Text>
+                  <Text style={[s.cardValue, {color: colors.textPrimary}]}>
+                    {carDisplay}{carColor ? `\n${carColor}` : ''}
+                  </Text>
                 </View>
-                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.carType')}</Text>
-                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
-                  {order?.carModel || 'BMW M4'}
-                </Text>
-              </View>
-
-              <View style={[s.halfCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-                <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
-                  <Hash size={20} color={colors.primary} />
+              )}
+              {!!plate && (
+                <View style={[s.halfCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                  <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                    <Hash size={20} color={colors.primary} />
+                  </View>
+                  <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.plate')}</Text>
+                  <Text style={[s.cardValue, {color: colors.textPrimary}]}>{plate}</Text>
                 </View>
-                <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.plate')}</Text>
-                <Text style={[s.cardValue, {color: colors.textPrimary}]}>
-                  {order?.plate || 'R T L 8756'}
-                </Text>
-              </View>
+              )}
             </View>
 
-            {/* Accept button */}
+            {/* Price — only show for biker (bikerEarning) or if totalAmount present */}
+            {price !== null && price !== undefined && (
+              <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                <View style={[s.iconCircle, {backgroundColor: colors.primary + '15'}]}>
+                  <DollarSign size={20} color={colors.primary} />
+                </View>
+                <View style={s.cardInfo}>
+                  <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.cost')}</Text>
+                  <Text style={[s.priceValue, {color: colors.textPrimary}]}>﷼ {price}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Accept */}
             <TouchableOpacity
               style={[s.acceptBtn, {backgroundColor: colors.primary, opacity: busy ? 0.7 : 1}]}
               onPress={handleAccept}
@@ -219,13 +271,13 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
               onPress={() => !busy && setShowReject(true)}
               disabled={busy}
               activeOpacity={0.75}>
-              <Text style={[s.rejectLinkTxt, {color: colors.textSecondary}]}>{t('partner.incoming.reject')}</Text>
+              <Text style={[s.rejectLinkTxt, {color: '#EF4444'}]}>{t('partner.incoming.reject')}</Text>
             </TouchableOpacity>
 
           </ScrollView>
         </View>
 
-        {/* ── Reject bottom sheet ── */}
+        {/* Reject bottom sheet */}
         {showReject && (
           <View style={[s.rejectSheet, {backgroundColor: colors.card}]}>
             <View style={[s.handle, {backgroundColor: colors.border}]} />
@@ -272,7 +324,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
             </View>
 
             <TouchableOpacity
-              style={[s.confirmBtn, {backgroundColor: canConfirm && !busy ? colors.danger : colors.border}]}
+              style={[s.confirmBtn, {backgroundColor: canConfirm && !busy ? colors.danger ?? '#EF4444' : colors.border}]}
               onPress={handleRejectConfirm}
               disabled={!canConfirm || busy}
               activeOpacity={0.8}>
@@ -293,7 +345,6 @@ const s = StyleSheet.create({
   overlay:      {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)'},
   sheet:        {borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden', maxHeight: '92%'},
 
-  // Blue header
   blueHeader:   {paddingTop: 24, paddingBottom: 28, paddingHorizontal: 20, alignItems: 'center', gap: 8},
   liveBadge:    {flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 50},
   liveDot:      {width: 7, height: 7, borderRadius: 4, backgroundColor: '#FFF'},
@@ -301,32 +352,27 @@ const s = StyleSheet.create({
   mainTitle:    {color: '#FFF', fontSize: 28, fontWeight: '900'},
   timerSub:     {color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '500'},
 
-  // Body
   body:         {},
   bodyContent:  {padding: 16, gap: 10, paddingBottom: 8},
 
-  // Cards
   card:         {flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 16, borderWidth: 1},
   iconCircle:   {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
-  cardInfo:     {flex: 1, gap: 2},
+  cardInfo:     {flex: 1, gap: 3},
   cardLabel:    {fontSize: 11},
   cardValue:    {fontSize: 15, fontWeight: '700'},
   cardSub:      {fontSize: 12},
-  locationRow:  {flexDirection: 'row', alignItems: 'center', gap: 4},
+  locationRow:  {flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 2},
   avatar:       {width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center'},
   priceValue:   {fontSize: 22, fontWeight: '900'},
 
-  // Two-column row
   twoCol:       {flexDirection: 'row', gap: 10},
   halfCard:     {flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, gap: 6, alignItems: 'center'},
 
-  // Buttons
   acceptBtn:    {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 16, marginTop: 6},
   acceptTxt:    {color: '#FFF', fontSize: 16, fontWeight: '800'},
   rejectLink:   {alignItems: 'center', paddingVertical: 12},
-  rejectLinkTxt:{fontSize: 14, fontWeight: '700', color: '#EF4444'},
+  rejectLinkTxt:{fontSize: 14, fontWeight: '700'},
 
-  // Reject sheet
   rejectSheet:  {position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36},
   handle:       {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16},
   rejectHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16},

@@ -1,8 +1,9 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, Alert, Clipboard, FlatList, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, ToastAndroid, TouchableOpacity, View} from 'react-native';
+import {ActivityIndicator, Alert, Clipboard, FlatList, Platform, RefreshControl, StyleSheet, Text, TextInput, ToastAndroid, TouchableOpacity, View} from 'react-native';
 import {Search} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
+import SelectField from '../../../shared/components/SelectField';
 import {getOrders, getPartnerProfile} from '../../../services/partner';
 
 const STATUS_COLORS = {
@@ -32,20 +33,29 @@ function OrderCard({item, colors, t, onPress}) {
   const orderNumber  = item.orderNumber ?? item._id ?? '';
   const rawType      = (item.orderType ?? item.type ?? '').toUpperCase();
   const isOnshop     = rawType === 'IN_SHOP' || rawType === 'ONSHOP';
-  const serviceName  =
-    item.itemsSnapshot?.[0]?.nameSnapshot?.ar
-    ?? item.itemsSnapshot?.[0]?.nameSnapshot?.en
-    ?? item.items?.[0]?.service?.name?.ar
-    ?? item.items?.[0]?.service?.name?.en
-    ?? item.items?.[0]?.name?.ar
-    ?? item.items?.[0]?.name?.en
-    ?? item.service?.name?.ar
-    ?? item.service?.name?.en
-    ?? (typeof item.service?.name === 'string' ? item.service.name : '')
+  const isPackageOrder = !!item.isPackageOrder
+    || !!(item.packageSnapshot ?? item.package ?? item.packageId);
+  const packageName  = item.packageSnapshot?.name?.ar
+    ?? item.packageSnapshot?.name?.en
+    ?? item.package?.name?.ar
+    ?? item.package?.name?.en
+    ?? (typeof item.package?.name === 'string' ? item.package.name : '')
     ?? '';
+  const serviceName  = isPackageOrder
+    ? (packageName || 'باقة')
+    : (item.itemsSnapshot?.[0]?.nameSnapshot?.ar
+      ?? item.itemsSnapshot?.[0]?.nameSnapshot?.en
+      ?? item.items?.[0]?.service?.name?.ar
+      ?? item.items?.[0]?.service?.name?.en
+      ?? item.items?.[0]?.name?.ar
+      ?? item.items?.[0]?.name?.en
+      ?? item.service?.name?.ar
+      ?? item.service?.name?.en
+      ?? (typeof item.service?.name === 'string' ? item.service.name : '')
+      ?? '');
   const branchName   = item.branch?.name?.ar ?? item.branch?.name?.en ?? (typeof item.branch?.name === 'string' ? item.branch.name : '') ?? '';
   const location     = item.addressSnapshot?.addressText ?? item.addressSnapshot?.district ?? branchName;
-  const price        = item.tenantNetSnapshot ?? item.totalAmount ?? '';
+  const price        = isPackageOrder ? '' : (item.tenantNetSnapshot ?? item.totalAmount ?? '');
   const scheduledAt  = item.scheduledAt
     ? new Date(item.scheduledAt).toLocaleString('ar-SA', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})
     : '';
@@ -79,8 +89,16 @@ function OrderCard({item, colors, t, onPress}) {
 
       <View style={s.cardBottom}>
         <View style={s.priceCol}>
-          <Text style={[s.priceLabel, {color: colors.textSecondary}]}>{t('partner.orders.fullAmount')}</Text>
-          <Text style={[s.priceValue, {color: colors.textPrimary}]}>{price} {price ? '﷼' : '—'}</Text>
+          {isPackageOrder ? (
+            <View style={[s.pkgPill, {backgroundColor: colors.primary + '15'}]}>
+              <Text style={[s.pkgPillTxt, {color: colors.primary}]}>عن طريق الباقة</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={[s.priceLabel, {color: colors.textSecondary}]}>{t('partner.orders.fullAmount')}</Text>
+              <Text style={[s.priceValue, {color: colors.textPrimary}]}>{price} {price ? '﷼' : '—'}</Text>
+            </>
+          )}
         </View>
         <TouchableOpacity
           style={[s.detailsBtn, {backgroundColor: colors.primary + '12'}]}
@@ -123,12 +141,18 @@ export default function OrdersScreen({onSelectOrder, refreshKey}) {
 
   const STATUS_FILTERS = [
     {key: 'all',             label: t('partner.orders.all')},
+    {key: 'PENDING_PAYMENT', label: t('partner.orders.status.PENDING_PAYMENT')},
+    {key: 'AUTHORIZING',     label: t('partner.orders.status.AUTHORIZING')},
+    {key: 'AUTHORIZED',      label: t('partner.orders.status.AUTHORIZED')},
     {key: 'PENDING_PARTNER', label: t('partner.orders.status.PENDING_PARTNER')},
     {key: 'ACCEPTED',        label: t('partner.orders.status.ACCEPTED')},
     {key: 'ASSIGNED',        label: t('partner.orders.status.ASSIGNED')},
     {key: 'ON_THE_WAY',      label: t('partner.orders.status.ON_THE_WAY')},
+    {key: 'ARRIVED',         label: t('partner.orders.status.ARRIVED')},
     {key: 'STARTED',         label: t('partner.orders.status.STARTED')},
     {key: 'COMPLETED',       label: t('partner.orders.status.COMPLETED')},
+    {key: 'CANCELLED',       label: t('partner.orders.status.CANCELLED')},
+    {key: 'REJECTED',        label: t('partner.orders.status.REJECTED')},
   ];
 
   const TYPE_FILTERS = [
@@ -233,34 +257,16 @@ export default function OrdersScreen({onSelectOrder, refreshKey}) {
           </View>
         )}
 
-        {/* Status filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filters}>
-          {[...STATUS_FILTERS].reverse().map(f => {
-            const isActive = activeStatusFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                style={[
-                  s.filterChip,
-                  {
-                    backgroundColor: isActive ? colors.primary : colors.card,
-                    borderColor:     isActive ? colors.primary : colors.border,
-                    opacity: filtersDisabled ? 0.4 : 1,
-                  },
-                ]}
-                onPress={() => !filtersDisabled && setActiveStatusFilter(f.key)}
-                disabled={filtersDisabled}
-                activeOpacity={0.75}>
-                <Text style={[s.filterText, {color: isActive ? '#fff' : colors.textSecondary}]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* Status filter — select dropdown */}
+        <View style={[s.statusSelectWrap, filtersDisabled && s.statusSelectDisabled]} pointerEvents={filtersDisabled ? 'none' : 'auto'}>
+          <SelectField
+            label={t('partner.orders.statusFilter')}
+            placeholder={t('partner.orders.all')}
+            options={STATUS_FILTERS.map(f => ({value: f.key, label: f.label}))}
+            value={activeStatusFilter}
+            onChange={setActiveStatusFilter}
+          />
+        </View>
       </View>
 
       {loading ? (
@@ -307,10 +313,9 @@ const s = StyleSheet.create({
   typeChip:     {flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12, borderWidth: 1},
   typeChipText: {fontSize: 12, fontWeight: '700'},
 
-  // Status filter
-  filters:      {gap: 6, paddingBottom: 10, paddingHorizontal: 2, flexDirection: 'row-reverse', alignItems: 'center'},
-  filterChip:   {paddingHorizontal: 12, paddingVertical: 7, borderRadius: 50, borderWidth: 1},
-  filterText:   {fontSize: 12, fontWeight: '600'},
+  // Status filter (select)
+  statusSelectWrap:    {marginBottom: 10},
+  statusSelectDisabled:{opacity: 0.4},
 
   list:         {paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8},
   card:         {borderRadius: 16, borderWidth: 1, marginBottom: 12, padding: 16, gap: 10},
@@ -332,6 +337,8 @@ const s = StyleSheet.create({
   priceCol:     {gap: 2},
   priceLabel:   {fontSize: 11},
   priceValue:   {fontSize: 24, fontWeight: '800'},
+  pkgPill:      {paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start'},
+  pkgPillTxt:   {fontSize: 13, fontWeight: '700'},
   empty:        {alignItems: 'center', paddingTop: 60},
   emptyText:    {fontSize: 14},
 });

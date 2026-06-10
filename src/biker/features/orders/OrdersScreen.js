@@ -22,29 +22,42 @@ const BADGE_STYLE = {
   CANCELLED:  {bg: '#FF3B3B1A', font: '#FF3B3B',  icon: '#FF3B3B'},
 };
 
+// Safe string — if value is {ar, en} object, pick ar then en, else return as-is
+function str(val) {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') return val.ar ?? val.en ?? '';
+  return String(val);
+}
+
 // helpers — تحويل الـ data الحقيقية لقيم جاهزة للعرض
 function resolveOrderFields(order) {
-  const clientName = order.client
-    ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
-    : '';
-  const brand      = order.userCar?.brand?.name ?? '';
-  const model      = order.userCar?.model?.name ?? '';
-  const plate      = order.userCar?.plateNumber ?? '';
-  // العنوان: addressSnapshot أولاً ثم branch.address
-  const address    = order.addressSnapshot?.addressText
+  // client — new: client.name  |  legacy: client.firstName + lastName
+  const clientName = order.client?.name
+    ?? (order.client ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim() : '');
+
+  // car — new: car.brand/model/plateNumber (strings)  |  legacy: userCar.brand.name (nested)
+  const brand = str(order.car?.brand) || str(order.userCar?.brand?.name);
+  const model = str(order.car?.model) || str(order.userCar?.model?.name);
+  const plate = order.car?.plateNumber ?? order.userCar?.plateNumber ?? '';
+
+  // address — new: location.addressText  |  legacy: addressSnapshot
+  const address = order.location?.addressText
+    ?? order.addressSnapshot?.addressText
     ?? order.addressSnapshot?.district
     ?? order.branch?.address
     ?? '';
-  // اسم الخدمة: من itemsSnapshot (أول عنصر) أو service.name القديم
-  const firstItem  = order.itemsSnapshot?.[0];
-  const serviceName = firstItem?.nameSnapshot?.ar
-    ?? firstItem?.nameSnapshot?.en
-    ?? order.service?.name
-    ?? '';
-  // orderType: 'MOBILE' | 'IN_SHOP' أو type: 'mobile'|'onshop' القديم
-  const isOnshop   = (order.orderType ?? order.type ?? '').toUpperCase() === 'IN_SHOP'
+
+  // service name — new: services[0].name  |  legacy: itemsSnapshot[0].nameSnapshot
+  const firstSvc  = order.services?.[0];
+  const firstItem = order.itemsSnapshot?.[0];
+  const serviceName = str(firstSvc?.name)
+    || str(firstItem?.nameSnapshot)
+    || str(order.service?.name);
+
+  const isOnshop = (order.orderType ?? order.type ?? '').toUpperCase() === 'IN_SHOP'
     || (order.orderType ?? order.type ?? '') === 'onshop';
-  // scheduledAt: timestamp رقمي أو ISO string
+
   const scheduledAt = order.scheduledAt
     ? new Date(order.scheduledAt).toLocaleString('ar-SA', {
         hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',

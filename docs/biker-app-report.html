@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تقرير تطبيق البايكر — Tamam Biker App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Cairo', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#ecfdf5',100:'#d1fae5',500:'#10b981',600:'#059669',700:'#047857' },
+            ink: '#0f172a',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Cairo', sans-serif; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .card-anim { transition: transform .18s ease, box-shadow .18s ease; }
+    .card-anim:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -18px rgba(15,23,42,.25); }
+    [id] { scroll-margin-top: 90px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-ink antialiased">
+
+  <!-- ===== Top Nav ===== -->
+  <header class="sticky top-0 z-40 backdrop-blur bg-white/80 border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-600 text-white grid place-items-center font-extrabold text-lg shadow-lg shadow-brand-600/30">🛵</div>
+        <div>
+          <h1 class="font-extrabold text-base sm:text-lg leading-tight">تطبيق البايكر</h1>
+          <p class="text-[11px] text-slate-500 leading-tight">Tamam — Biker App</p>
+        </div>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 text-sm font-semibold">
+        <a href="#overview" class="px-3 py-2 rounded-lg hover:bg-slate-100">نظرة عامة</a>
+        <a href="#home" class="px-3 py-2 rounded-lg hover:bg-slate-100">الرئيسية</a>
+        <a href="#orders" class="px-3 py-2 rounded-lg hover:bg-slate-100">الطلبات</a>
+        <a href="#reviews" class="px-3 py-2 rounded-lg hover:bg-slate-100">التقييمات</a>
+        <a href="#profile" class="px-3 py-2 rounded-lg hover:bg-slate-100">الملف الشخصي</a>
+        <a href="#lifecycle" class="px-3 py-2 rounded-lg hover:bg-slate-100">سير الطلب</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===== Hero ===== -->
+  <section class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-bl from-brand-600 to-brand-700"></div>
+    <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="absolute -bottom-24 -right-10 w-80 h-80 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-white">
+      <span class="inline-flex items-center gap-2 text-xs font-semibold bg-white/15 border border-white/20 rounded-full px-3 py-1">
+        <span class="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span> تقرير شامل — رؤية تجارية
+      </span>
+      <h2 class="mt-5 text-3xl sm:text-5xl font-extrabold leading-tight">دليل صفحات تطبيق البايكر</h2>
+      <p class="mt-4 max-w-2xl text-white/85 leading-relaxed text-sm sm:text-base">
+        واجهة عمل السائق الميداني: يبدأ يومه بتفعيل حالة «على الخدمة»، يستقبل الطلبات لحظياً،
+        يتنقّل عبر مراحل التنفيذ (الوصول → بدء الغسيل → رفع الصور → الإكمال)، ويتابع أرباحه ومحفظته وتقييماته.
+        التطبيق مبنيّ على <b>4 تبويبات رئيسية</b> تشمل <b>13 شاشة</b>.
+      </p>
+      <div class="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl">
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">4</div><div class="text-xs text-white/80 mt-1">تبويبات رئيسية</div></div>
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">13</div><div class="text-xs text-white/80 mt-1">شاشة</div></div>
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">5</div><div class="text-xs text-white/80 mt-1">مراحل تنفيذ</div></div>
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">3</div><div class="text-xs text-white/80 mt-1">لغات مدعومة</div></div>
+      </div>
+    </div>
+  </section>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-16">
+
+    <!-- ===== Overview ===== -->
+    <section id="overview">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">①</span>
+        <h3 class="text-2xl font-extrabold">الهيكل العام والتنقّل</h3>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 leading-relaxed text-slate-700">
+        <p>
+          شريط سفلي ثابت بـ 4 تبويبات. كل تبويب يُحمّل بشكل كسول عند أول دخول ويبقى محفوظاً.
+          وفوق كل التبويبات توجد <b>نافذة الطلب الوارد</b> التي تظهر عند وصول طلب جديد عبر الإشعار.
+        </p>
+        <div class="mt-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm p-3">
+          <b>قاعدة مهمة:</b> في نافذة الطلب الوارد على مستوى التطبيق، <b>البايكر يقبل الطلب فقط — لا يوجد رفض</b> (تعليق صريح في الكود)، بينما شاشة الطلب الوارد المنفصلة تتيح «تخطّي».
+        </div>
+        <div class="mt-6 grid sm:grid-cols-4 gap-3">
+          <a href="#home" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">🏠</div><div class="mt-2 font-bold text-sm">الرئيسية</div></a>
+          <a href="#orders" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">📦</div><div class="mt-2 font-bold text-sm">الطلبات</div></a>
+          <a href="#reviews" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">⭐</div><div class="mt-2 font-bold text-sm">التقييمات</div></a>
+          <a href="#profile" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">👤</div><div class="mt-2 font-bold text-sm">الملف الشخصي</div></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Home Tab ===== -->
+    <section id="home">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">②</span>
+        <h3 class="text-2xl font-extrabold">تبويب الرئيسية <span class="text-slate-400 font-bold text-lg">Home</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">لوحة التحكم ونقطة البداية اليومية: حالة التوفّر والأرباح والطلبات الفورية.</p>
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">🏠</span><h4 class="font-extrabold">1. الشاشة الرئيسية <span class="text-slate-400 text-xs font-mono">HomeScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">لوحة تحكّم البايكر: حالة الدوام والأرباح والطلبات الفورية.</p>
+            <div><span class="font-bold text-slate-800">تعرض:</span>
+              <ul class="mt-1 space-y-1 text-slate-600 list-disc pr-5">
+                <li>زر «على الخدمة / خارج الخدمة» دائري متحرّك.</li>
+                <li>3 بطاقات: أرباح الأسبوع، عدد الطلبات، التقييم.</li>
+                <li>منتقي الفرع + خلاصة طلبات أفقية (حتى 10).</li>
+              </ul>
+            </div>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">تبديل الدوام</span><span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">اختيار الفرع</span><span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">سحب للتحديث</span></div>
+            <div class="rounded-lg bg-slate-50 border border-slate-200 text-xs p-2.5 text-slate-600"><b>ملاحظة:</b> الطلبات تظهر فقط عند تفعيل الخدمة.</div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">🔔</span><h4 class="font-extrabold">2. الإشعارات <span class="text-slate-400 text-xs font-mono">NotificationsScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">مركز الإشعارات بأنواعها مع حالة مقروء/غير مقروء وتجميع بالتاريخ.</p>
+            <p class="text-slate-600">الأنواع: طلب · عرض · نظام · تذكير · قسيمة · هدية — لكلٍّ أيقونة ولون.</p>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">تمرير لا نهائي (20/صفحة)</span><span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">تعليم الكل كمقروء</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Orders Tab ===== -->
+    <section id="orders">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">③</span>
+        <h3 class="text-2xl font-extrabold">تبويب الطلبات <span class="text-slate-400 font-bold text-lg">Orders</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">قلب العمل: استقبال الطلب وتنفيذه ميدانياً حتى الإكمال.</p>
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">📋</span><h4 class="font-extrabold">3. قائمة الطلبات <span class="text-slate-400 text-xs font-mono">OrdersScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">3 تبويبات فلترة + تجميع بالتاريخ + بطاقات قابلة للتوسّع.</p>
+            <div class="flex flex-wrap gap-2">
+              <span class="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">طلبات اليوم</span>
+              <span class="px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-semibold">الطلبات المجدولة</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">الطلبات السابقة</span>
+            </div>
+            <p class="text-slate-600">عند التوسّع: العميل، السيارة، نوع الغسيل، الموقع، زر «ابدأ الغسيل» + الخريطة.</p>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">🧾</span><h4 class="font-extrabold">4. تفاصيل الطلب <span class="text-slate-400 text-xs font-mono">OrderDetailsScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">شاشة العمل الأساسية: تتبّع المراحل، صور الإثبات، الإلغاء، واحتفال الإكمال 🎉.</p>
+            <div class="overflow-hidden rounded-lg border border-slate-200 text-xs">
+              <table class="w-full text-right">
+                <thead class="bg-slate-50 text-slate-500"><tr><th class="p-2 font-semibold">الحالة</th><th class="p-2 font-semibold">زر الإجراء</th></tr></thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                  <tr><td class="p-2 font-mono">ASSIGNED</td><td class="p-2">اذهب إلى الموقع</td></tr>
+                  <tr><td class="p-2 font-mono">ON_THE_WAY</td><td class="p-2">تأكيد الوصول</td></tr>
+                  <tr><td class="p-2 font-mono">ARRIVED</td><td class="p-2">ابدأ الغسيل</td></tr>
+                  <tr><td class="p-2 font-mono">STARTED</td><td class="p-2">أضف صورة النتيجة</td></tr>
+                  <tr><td class="p-2 font-mono">COMPLETED</td><td class="p-2">العودة للطلبات</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs p-2.5"><b>الإلغاء:</b> متاح فقط قبل بدء الغسيل. <b>صور الإثبات</b> قابلة للتخطّي بسبب.</div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">🗺️</span><h4 class="font-extrabold">5. خريطة الطلب <span class="text-slate-400 text-xs font-mono">OrderMapScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">موقع الطلب على خريطة Google تفاعلية + شريط معلومات.</p>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">اتصال</span><span class="px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-semibold">واتس آب</span><span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">ابدأ الطلب</span></div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border-2 border-rose-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-rose-100 bg-rose-50"><span class="text-xl">🚗</span><h4 class="font-extrabold">6. الطلب الوارد <span class="text-slate-400 text-xs font-mono">BikerIncomingOrderScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">نافذة عاجلة بكامل الشاشة عند وصول طلب جديد مع <b>عدّاد تنازلي</b> وبطاقة أرباح بارزة.</p>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">قبول الطلب</span><span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">تخطّي</span><span class="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold">رفض تلقائي عند الانتهاء</span></div>
+            <p class="text-slate-600 text-xs">لون العدّاد: أخضر &gt; 40% · كهرماني 20–40% · أحمر &lt; 20%.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Reviews Tab ===== -->
+    <section id="reviews">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">④</span>
+        <h3 class="text-2xl font-extrabold">تبويب التقييمات <span class="text-slate-400 font-bold text-lg">Reviews</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">سمعة البايكر كما يراها العملاء.</p>
+      <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden md:w-2/3">
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">⭐</span><h4 class="font-extrabold">7. التقييمات <span class="text-slate-400 text-xs font-mono">ReviewsScreen</span></h4></div>
+        <div class="p-5 space-y-3 text-sm">
+          <p class="text-slate-700">بطاقة المتوسّط + توزيع النجوم 1–5 بمخطّط أعمدة + بطاقات تقييم فردية.</p>
+          <p class="text-slate-600">اسم العميل <b>مُقنّع</b> للخصوصية. التعليق والسيارة معروضان. للقراءة فقط.</p>
+          <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">فلترة: الكل / 5★ / 4★ / 3★</span><span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">تمرير لا نهائي</span></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ===== Profile Tab ===== -->
+    <section id="profile">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">⑤</span>
+        <h3 class="text-2xl font-extrabold">تبويب الملف الشخصي <span class="text-slate-400 font-bold text-lg">Profile</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">الحساب والمحفظة والتفضيلات والدعم.</p>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">8. الملف الشخصي</h4><p class="text-slate-600">قائمة الإعدادات: المعلومات، المحفظة (مع الرصيد)، المظهر، اللغة، الدعم، الشروط، تسجيل الخروج، حذف الحساب.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">9. المعلومات الشخصية</h4><p class="text-slate-600">تعديل الصورة (Cloudinary)، الاسم، الهاتف، البريد. الفرع/منطقة العمل للقراءة فقط.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">10. المحفظة</h4><p class="text-slate-600">بطاقة الرصيد + سجلّ معاملات مجمّع بالتاريخ (أرباح/عمولة/صرف/استرداد) بإشارة +/−.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">11. اللغة</h4><p class="text-slate-600">اختيار فوري: 🇸🇦 العربية · 🇺🇸 الإنجليزية · 🇮🇳 الهندية، مع بطاقة تفاصيل وشارة «فعّال».</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">12. الدعم</h4><p class="text-slate-600">نموذج رسالة للدعم، زر «إرسال» (معطّل إن فارغة) وحالة نجاح مع «إرسال رسالة أخرى».</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">13. الشروط والأحكام</h4><p class="text-slate-600">أقسام تُجلب من الخادم مع نصوص احتياطية محلّية وزر إعادة محاولة عند الفشل.</p></article>
+      </div>
+    </section>
+
+    <!-- ===== Lifecycle ===== -->
+    <section id="lifecycle">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">⑥</span>
+        <h3 class="text-2xl font-extrabold">سير حالة الطلب لدى البايكر</h3>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+        <div>
+          <p class="text-xs font-bold text-slate-500 mb-2">طلب متنقّل (Mobile)</p>
+          <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span class="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700">مُوكَّل (ASSIGNED)</span><span class="text-slate-300">←</span>
+            <span class="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700">في الطريق</span><span class="text-slate-300">←</span>
+            <span class="px-3 py-1.5 rounded-lg bg-sky-100 text-sky-700">وصل (ARRIVED)</span><span class="text-slate-300">←</span>
+            <span class="px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700">بدأ الغسيل</span><span class="text-slate-300">←</span>
+            <span class="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700">مكتمل</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs font-bold text-slate-500 mb-2">طلب في الموقع (In-Shop)</p>
+          <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span class="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700">مُوكَّل (ASSIGNED)</span><span class="text-slate-300">←</span>
+            <span class="px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700">بدأ الغسيل</span><span class="text-slate-300">←</span>
+            <span class="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700">مكتمل</span>
+          </div>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3 text-sm pt-1">
+          <div class="rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-800"><b>الإلغاء:</b> متاح فقط قبل بدء الغسيل (ASSIGNED / ON_THE_WAY / ARRIVED).</div>
+          <div class="rounded-xl bg-orange-50 border border-orange-200 p-3 text-orange-800"><b>صور الإثبات:</b> قبل/بعد، إلزامية إلا عند «التخطّي بسبب».</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Summary Table ===== -->
+    <section id="summary">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">⑦</span>
+        <h3 class="text-2xl font-extrabold">جدول ملخّص شامل</h3>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-right text-sm">
+            <thead class="bg-slate-50 text-slate-500 text-xs">
+              <tr><th class="p-3 font-semibold">#</th><th class="p-3 font-semibold">الشاشة</th><th class="p-3 font-semibold">التبويب</th><th class="p-3 font-semibold">الوظيفة المختصرة</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr class="hover:bg-slate-50"><td class="p-3">1</td><td class="p-3 font-semibold">الرئيسية</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-brand-50 text-brand-700">الرئيسية</span></td><td class="p-3 text-slate-600">حالة الدوام + الأرباح + الطلبات الفورية</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">2</td><td class="p-3 font-semibold">الإشعارات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-brand-50 text-brand-700">الرئيسية</span></td><td class="p-3 text-slate-600">مركز الإشعارات بالتجميع والتمرير اللانهائي</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">3</td><td class="p-3 font-semibold">قائمة الطلبات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">تبويبات اليوم/المجدولة/السابقة</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">4</td><td class="p-3 font-semibold">تفاصيل الطلب</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">تنفيذ الطلب + صور الإثبات + الإلغاء</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">5</td><td class="p-3 font-semibold">خريطة الطلب</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">الموقع + اتصال/واتس آب</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">6</td><td class="p-3 font-semibold">الطلب الوارد</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-rose-50 text-rose-700">عام</span></td><td class="p-3 text-slate-600">نافذة عاجلة بعدّاد قبول/تخطّي</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">7</td><td class="p-3 font-semibold">التقييمات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-amber-50 text-amber-700">التقييمات</span></td><td class="p-3 text-slate-600">متوسّط + توزيع نجوم + تعليقات</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">8</td><td class="p-3 font-semibold">الملف الشخصي</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">قائمة الإعدادات + الرصيد</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">9</td><td class="p-3 font-semibold">المعلومات الشخصية</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">تعديل البيانات والصورة</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">10</td><td class="p-3 font-semibold">المحفظة</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">الرصيد + سجلّ المعاملات</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">11</td><td class="p-3 font-semibold">اللغة</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">اختيار اللغة (ar/en/hi)</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">12</td><td class="p-3 font-semibold">الدعم</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">إرسال رسالة دعم</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">13</td><td class="p-3 font-semibold">الشروط والأحكام</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">الشروط والأحكام</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 text-center text-sm text-slate-500">
+      <p class="font-bold text-slate-700">تقرير صفحات تطبيق البايكر — Tamam Biker App</p>
+      <p class="mt-1">تقرير برؤية تجارية مبنيّ على الكود الفعلي للتطبيق · ١٣ شاشة عبر ٤ تبويبات.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

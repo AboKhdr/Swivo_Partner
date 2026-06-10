@@ -18,9 +18,10 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  Lock,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-import {getBikerPayouts} from '../../../services/partner';
+import {getTransactions, getTenantWallet} from '../../../services/partner';
 
 
 const DATE_FILTERS = [
@@ -137,15 +138,126 @@ const fm = StyleSheet.create({
   doneTxt:     {color: '#FFF', fontSize: 15, fontWeight: '700'},
 });
 
-// ─── Payment Card ─────────────────────────────────────────────────────────────
-function PaymentCard({item, colors}) {
-  const isIn     = item.type === 'in';
-  const isPending = item.status === 'pending';
-  const iconColor = isIn ? colors.success : colors.danger;
+// ─── Status helpers ───────────────────────────────────────────────────────────
+// status: 0=pending/yellow  1=completed/green  2=failed/red  3=cancelled/grey
+const STATUS_COLOR = {
+  0: '#F59E0B',
+  1: '#22C55E',
+  2: '#EF4444',
+  3: '#9CA3AF',
+};
+const STATUS_LABEL = {
+  0: 'قيد الانتظار',
+  1: 'مكتملة',
+  2: 'فشلت',
+  3: 'ملغاة',
+};
+
+// paymentMethod display map
+const METHOD_LABEL = {
+  wallet:        'محفظة',
+  card:          'بطاقة',
+  apple_pay:     'Apple Pay',
+  google_pay:    'Google Pay',
+  mada:          'مدى',
+  cash:          'نقداً',
+  bank_transfer: 'تحويل بنكي',
+  voucher:       'كود هدية',
+  'wallet & card': 'محفظة + بطاقة',
+};
+
+// ─── Transaction Detail Modal ─────────────────────────────────────────────────
+function TxDetailModal({item, colors, onClose}) {
+  if (!item) return null;
+  const isIn        = item.entryType === 'credit';
+  const statusColor = STATUS_COLOR[item.status] ?? '#9CA3AF';
+  const statusLabel = STATUS_LABEL[item.status] ?? '';
+  const methodDisplay = METHOD_LABEL[item.paymentMethod] ?? item.paymentMethod ?? null;
   const amountColor = isIn ? colors.success : colors.danger;
 
+  function Row({label, value, valueColor}) {
+    if (!value && value !== 0) return null;
+    return (
+      <View style={dm.row}>
+        <Text style={[dm.rowLabel, {color: colors.textSecondary}]}>{label}</Text>
+        <Text style={[dm.rowValue, {color: valueColor ?? colors.textPrimary}]} numberOfLines={2}>{value}</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={[pc.card, {backgroundColor: colors.card}]}>
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={dm.overlay} />
+      </TouchableWithoutFeedback>
+
+      <View style={dm.sheet}>
+        <View style={[dm.card, {backgroundColor: colors.card}]}>
+          <View style={[dm.handle, {backgroundColor: colors.border}]} />
+
+          {/* Amount hero */}
+          <View style={dm.hero}>
+            <Text style={[dm.heroAmount, {color: amountColor}]}>
+              {isIn ? '+' : '-'}{Number(item.amount ?? 0).toFixed(2)} ﷼
+            </Text>
+            <View style={[dm.heroBadge, {backgroundColor: statusColor + '22'}]}>
+              <Text style={[dm.heroBadgeTxt, {color: statusColor}]}>{statusLabel}</Text>
+            </View>
+          </View>
+
+          <Text style={[dm.title, {color: colors.textPrimary}]} numberOfLines={2}>{item.label}</Text>
+
+          <View style={[dm.divider, {backgroundColor: colors.border}]} />
+
+          <Row label="التاريخ"       value={item.date ? formatDate(item.date) : null} />
+          <Row label="المستخدم"      value={item.userFullName || null} />
+          <Row label="طريقة الدفع"  value={methodDisplay} />
+          <Row label="المرجع"        value={item.reference} />
+          <Row label="الاتجاه"       value={isIn ? 'دخول (credit)' : 'خروج (debit)'} valueColor={amountColor} />
+
+          <TouchableOpacity
+            style={[dm.closeBtn, {backgroundColor: colors.primary}]}
+            onPress={onClose}
+            activeOpacity={0.85}>
+            <Text style={dm.closeTxt}>إغلاق</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const dm = StyleSheet.create({
+  overlay:      {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)'},
+  sheet:        {flex: 1, justifyContent: 'flex-end'},
+  card:         {borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 36, paddingHorizontal: 20},
+  handle:       {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20},
+  hero:         {flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6},
+  heroAmount:   {fontSize: 32, fontWeight: '900'},
+  heroBadge:    {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10},
+  heroBadgeTxt: {fontSize: 13, fontWeight: '700'},
+  title:        {fontSize: 16, fontWeight: '700', marginBottom: 16},
+  divider:      {height: 1, marginBottom: 14},
+  row:          {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 9, gap: 12},
+  rowLabel:     {fontSize: 13, fontWeight: '500', flexShrink: 0},
+  rowValue:     {fontSize: 13, fontWeight: '700', flexShrink: 1},
+  closeBtn:     {marginTop: 20, paddingVertical: 14, borderRadius: 14, alignItems: 'center'},
+  closeTxt:     {color: '#FFF', fontSize: 15, fontWeight: '700'},
+});
+
+// ─── Payment Card ─────────────────────────────────────────────────────────────
+function PaymentCard({item, colors, onPress}) {
+  const isIn        = item.entryType === 'credit';
+  const iconColor   = isIn ? colors.success : colors.danger;
+  const statusColor = STATUS_COLOR[item.status] ?? '#9CA3AF';
+  const statusLabel = STATUS_LABEL[item.status] ?? '';
+  const methodDisplay = METHOD_LABEL[item.paymentMethod] ?? item.paymentMethod ?? null;
+
+  return (
+    <TouchableOpacity
+      style={[pc.card, {backgroundColor: colors.card}]}
+      onPress={onPress}
+      activeOpacity={0.75}>
       <View style={[pc.iconWrap, {backgroundColor: iconColor + '15'}]}>
         {isIn
           ? <ArrowDownLeft size={20} color={iconColor} />
@@ -154,46 +266,66 @@ function PaymentCard({item, colors}) {
       </View>
 
       <View style={pc.info}>
-        <Text style={[pc.label, {color: colors.textPrimary}]}>{item.label}</Text>
+        <Text style={[pc.label, {color: colors.textPrimary}]} numberOfLines={1}>{item.label}</Text>
         <View style={pc.meta}>
-          <Text style={[pc.method, {color: colors.textSecondary}]}>{item.method}</Text>
-          {isPending && (
-            <View style={[pc.pendingBadge, {backgroundColor: colors.warning + '20'}]}>
-              <Text style={[pc.pendingTxt, {color: colors.warning}]}>قيد التحويل</Text>
-            </View>
-          )}
+          {methodDisplay ? (
+            <Text style={[pc.method, {color: colors.textSecondary}]} numberOfLines={1}>
+              {[item.userFullName, methodDisplay].filter(Boolean).join(' · ')}
+            </Text>
+          ) : item.userFullName ? (
+            <Text style={[pc.method, {color: colors.textSecondary}]} numberOfLines={1}>{item.userFullName}</Text>
+          ) : null}
+          <View style={[pc.statusBadge, {backgroundColor: statusColor + '22'}]}>
+            <Text style={[pc.statusTxt, {color: statusColor}]}>{statusLabel}</Text>
+          </View>
         </View>
       </View>
 
-      <Text style={[pc.amount, {color: amountColor}]}>
-        {isIn ? '+' : '-'}{item.amount} ﷼
+      <Text style={[pc.amount, {color: isIn ? colors.success : colors.danger}]}>
+        {isIn ? '+' : '-'}{Number(item.amount ?? 0).toFixed(2)} ﷼
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 const pc = StyleSheet.create({
-  card:         {flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 14, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
-  iconWrap:     {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
-  info:         {flex: 1, gap: 4},
-  label:        {fontSize: 14, fontWeight: '700'},
-  meta:         {flexDirection: 'row', alignItems: 'center', gap: 8},
-  method:       {fontSize: 12},
-  pendingBadge: {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6},
-  pendingTxt:   {fontSize: 11, fontWeight: '700'},
-  amount:       {fontSize: 15, fontWeight: '800'},
+  card:        {flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 14, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: {width: 0, height: 1}},
+  iconWrap:    {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
+  info:        {flex: 1, gap: 4},
+  label:       {fontSize: 14, fontWeight: '700'},
+  meta:        {flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap'},
+  method:      {fontSize: 12, flexShrink: 1},
+  statusBadge: {paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6},
+  statusTxt:   {fontSize: 11, fontWeight: '700'},
+  amount:      {fontSize: 15, fontWeight: '800'},
 });
 
-// ─── Map API payout to display shape ─────────────────────────────────────────
-function mapPayout(p) {
+// ─── Map API transaction to display shape ────────────────────────────────────
+function mapTransaction(tx) {
+  const isCredit    = tx.entryType === 'credit';
+  const orderNum    = tx.order?.orderNumber ? `#${tx.order.orderNumber}` : '';
+  const userFull    = tx.user
+    ? `${tx.user.firstName ?? ''} ${tx.user.lastName ?? ''}`.trim()
+    : '';
+  // prefer server-side typeLabel if present
+  const label = tx.typeLabel
+    ?? tx.description
+    ?? (orderNum ? `${tx.typeLabel ?? 'معاملة'} ${orderNum}` : null)
+    ?? (isCredit ? 'إيداع' : 'خصم');
+
   return {
-    id:     p._id ?? p.id,
-    date:   p.createdAt ? p.createdAt.slice(0, 10) : (p.date ?? ''),
-    label:  p.notes ?? p.label ?? `دفعة #${(p._id ?? '').slice(-6)}`,
-    amount: p.amount ?? 0,
-    type:   'out',
-    method: p.paymentMethod ?? p.method ?? 'bank_transfer',
-    status: p.status ?? 'completed',
+    id:            tx._id,
+    date:          typeof tx.createdAt === 'number'
+      ? new Date(tx.createdAt).toISOString().slice(0, 10)
+      : (tx.createdAt ?? '').slice(0, 10),
+    label:         orderNum ? `${label} ${orderNum}` : label,
+    userFullName:  userFull,
+    amount:        tx.amount ?? 0,
+    entryType:     tx.entryType,   // 'credit' | 'debit'
+    status:        tx.status ?? 1, // 0=pending 1=completed 2=failed 3=cancelled
+    paymentMethod: tx.paymentMethod ?? tx.paymentGateway ?? null,
+    reference:     tx.reference ?? null,
+    type:          tx.type,        // 0-7 numeric
   };
 }
 
@@ -201,27 +333,35 @@ function mapPayout(p) {
 export default function PaymentsScreen({onBack}) {
   const {colors} = useTheme();
   const [payments,    setPayments]   = useState([]);
+  const [balance,     setBalance]    = useState(null);
+  const [isLocked,    setIsLocked]   = useState(false);
   const [loading,     setLoading]    = useState(true);
   const [dateFilter,  setDateFilter] = useState('month');
   const [showFilter,  setShowFilter] = useState(false);
+  const [selectedTx,  setSelectedTx] = useState(null);
 
   useEffect(() => {
-    getBikerPayouts({limit: 100}).then(res => {
-      if (res.success) {
-        const list = res.data?.data ?? res.data ?? [];
-        setPayments((Array.isArray(list) ? list : []).map(mapPayout));
-      }
+    Promise.all([
+      getTransactions({limit: 200}),
+      getTenantWallet(),
+    ]).then(([txRes, walletRes]) => {
+      const list = txRes.data?.data ?? txRes.data ?? [];
+      setPayments(Array.isArray(list) ? list.map(mapTransaction) : []);
+      const walletData = walletRes.data?.data ?? walletRes.data;
+      if (walletData?.balance != null) setBalance(walletData.balance);
+      if (walletData?.isLocked) setIsLocked(true);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => filterByDate(payments, dateFilter), [payments, dateFilter]);
 
   const groups = useMemo(() => groupByDate(filtered), [filtered]);
 
-  const totalIn  = useMemo(() => filtered.filter(p => p.type === 'in').reduce((s, p) => s + p.amount, 0), [filtered]);
-  const totalOut = useMemo(() => filtered.filter(p => p.type === 'out').reduce((s, p) => s + p.amount, 0), [filtered]);
-  const net      = totalIn - totalOut;
+  const completed = useMemo(() => filtered.filter(p => p.status === 1), [filtered]);
+  const totalIn   = useMemo(() => completed.filter(p => p.entryType === 'credit').reduce((s, p) => s + p.amount, 0), [completed]);
+  const totalOut  = useMemo(() => completed.filter(p => p.entryType === 'debit').reduce((s, p) => s + p.amount, 0), [completed]);
+  const net       = totalIn - totalOut;
 
   const activeFilters = dateFilter !== 'all' ? 1 : 0;
 
@@ -229,7 +369,7 @@ export default function PaymentsScreen({onBack}) {
     if (item.isHeader) {
       return <Text style={[s.dateHeader, {color: colors.textSecondary}]}>{item.label}</Text>;
     }
-    return <PaymentCard item={item} colors={colors} />;
+    return <PaymentCard item={item} colors={colors} onPress={() => setSelectedTx(item)} />;
   }, [colors]);
 
   const keyExtractor = useCallback(item => item.id ?? item.label, []);
@@ -247,11 +387,15 @@ export default function PaymentsScreen({onBack}) {
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       {/* Header */}
       <View style={[s.header, {backgroundColor: colors.bg}]}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
-          <ArrowRight size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        {onBack ? (
+          <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
+            <ArrowRight size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={s.backBtn} />
+        )}
         <View style={s.headerText}>
-          <Text style={[s.headerTitle, {color: colors.textPrimary}]}>سجل المدفوعات</Text>
+          <Text style={[s.headerTitle, {color: colors.textPrimary}]}>المحفظة</Text>
           <Text style={[s.headerSub, {color: colors.textSecondary}]}>
             {filtered.length} عملية
           </Text>
@@ -268,6 +412,44 @@ export default function PaymentsScreen({onBack}) {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Balance card */}
+      {balance != null && (
+        <View style={[s.balanceCard, {
+          backgroundColor: isLocked ? '#DC2626' : colors.primary,
+          shadowColor: isLocked ? '#DC2626' : colors.primary,
+        }]}>
+          {/* decorative circles */}
+          <View style={s.decorCircleLg} />
+          <View style={s.decorCircleSm} />
+
+          <View style={s.balanceTopRow}>
+            <View style={s.balanceIconBox}>
+              {isLocked
+                ? <Lock size={20} color="#FFF" strokeWidth={2.2} />
+                : <Wallet size={20} color="#FFF" strokeWidth={2.2} />
+              }
+            </View>
+            <Text style={s.balanceLbl}>
+              {isLocked ? 'محفظة مقفلة' : 'رصيد المحفظة'}
+            </Text>
+            {isLocked && (
+              <View style={s.lockedBadge}>
+                <Text style={s.lockedBadgeTxt}>مقفلة</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={s.balanceAmountRow}>
+            <Text style={s.balanceVal}>{Number(balance).toLocaleString()}</Text>
+            <Text style={s.balanceCurrency}>﷼</Text>
+          </View>
+
+          {isLocked && (
+            <Text style={s.balanceHint}>تواصل مع الدعم لرفع القفل</Text>
+          )}
+        </View>
+      )}
 
       {/* Summary cards */}
       <View style={s.summaryRow}>
@@ -318,6 +500,12 @@ export default function PaymentsScreen({onBack}) {
         onClose={() => setShowFilter(false)}
         colors={colors}
       />
+
+      <TxDetailModal
+        item={selectedTx}
+        colors={colors}
+        onClose={() => setSelectedTx(null)}
+      />
     </View>
   );
 }
@@ -333,6 +521,23 @@ const s = StyleSheet.create({
   filterBtn:      {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center'},
   filterBadge:    {position: 'absolute', top: 4, left: 4, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
   filterBadgeTxt: {fontSize: 9, fontWeight: '900'},
+
+  balanceCard:     {
+    marginHorizontal: 16, marginBottom: 12, padding: 20, borderRadius: 24,
+    overflow: 'hidden', position: 'relative',
+    shadowOffset: {width: 0, height: 8}, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
+  },
+  decorCircleLg:   {position: 'absolute', top: -40, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.10)'},
+  decorCircleSm:   {position: 'absolute', bottom: -30, right: 40, width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(255,255,255,0.08)'},
+  balanceTopRow:   {flexDirection: 'row', alignItems: 'center', gap: 10},
+  balanceIconBox:  {width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center'},
+  balanceLbl:      {fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.9)'},
+  balanceAmountRow:{flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 14},
+  balanceVal:      {fontSize: 40, fontWeight: '900', color: '#FFF', lineHeight: 44},
+  balanceCurrency: {fontSize: 20, fontWeight: '700', color: 'rgba(255,255,255,0.9)', marginBottom: 5},
+  balanceHint:     {fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.85)', marginTop: 8},
+  lockedBadge:     {backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8},
+  lockedBadgeTxt:  {fontSize: 11, fontWeight: '700', color: '#FFF'},
 
   summaryRow:  {flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 8},
   summaryCard: {flex: 1, borderRadius: 14, padding: 10, gap: 6},

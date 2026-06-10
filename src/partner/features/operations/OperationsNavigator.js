@@ -15,13 +15,19 @@ import {
   Package,
   Bike,
   Users,
-  DollarSign,
   Tag,
   Star,
+  Camera,
+  PlusSquare,
+  BadgeCheck,
+  Images,
+  Wallet,
+  Send,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAppStore from '../../../store/appStore';
+import useAuthStore from '../../../store/authStore';
 import {getSettings, updateSettings} from '../../../services/partner';
 
 import ServicesScreen from './ServicesScreen';
@@ -30,9 +36,13 @@ import StaffScreen from './StaffScreen';
 import BikersScreen from './BikersScreen';
 import BranchesScreen from './BranchesScreen';
 import PaymentsScreen from './PaymentsScreen';
+import PayoutsScreen from './PayoutsScreen';
 import SkipReviewScreen from '../orders/SkipReviewScreen';
 import ReviewsScreen from './ReviewsScreen';
 import OffersScreen from './OffersScreen';
+import AddonsScreen from './AddonsScreen';
+import SubscriptionsScreen from './SubscriptionsScreen';
+import GalleryScreen from './GalleryScreen';
 
 function buildSections(t) {
   return [
@@ -42,7 +52,9 @@ function buildSections(t) {
         {key: 'branches',   label: t('partner.operations.menu.branches'),   sub: t('partner.operations.menu.branchesSub'),   Icon: GitBranch,  dot: false},
         {key: 'services',   label: t('partner.operations.menu.services'),   sub: t('partner.operations.menu.servicesSub'),   Icon: Car,        dot: false},
         {key: 'packages',   label: t('partner.operations.menu.packages'),   sub: t('partner.operations.menu.packagesSub'),   Icon: Package,    dot: false},
-        {key: 'offers',     label: t('partner.operations.menu.offers'),     sub: t('partner.operations.menu.offersSub'),     Icon: Tag,        dot: true},
+        {key: 'addons',     label: t('partner.operations.menu.addons'),     sub: t('partner.operations.menu.addonsSub'),     Icon: PlusSquare, dot: false},
+        {key: 'gallery',    label: t('partner.operations.menu.gallery'),    sub: t('partner.operations.menu.gallerySub'),    Icon: Images,     dot: false},
+        {key: 'offers',     label: t('partner.operations.menu.offers'),     sub: t('partner.operations.menu.offersSub'),     Icon: Tag,        dot: false},
       ],
     },
     {
@@ -50,13 +62,16 @@ function buildSections(t) {
       items: [
         {key: 'bikers',     label: t('partner.operations.menu.bikers'),     sub: t('partner.operations.menu.bikersSub'),     Icon: Bike,       dot: false},
         {key: 'staff',      label: t('partner.operations.menu.staff'),      sub: t('partner.operations.menu.staffSub'),      Icon: Users,      dot: false},
+        {key: 'skipReview', label: t('partner.operations.menu.skipReview'), sub: t('partner.operations.menu.skipReviewSub'), Icon: Camera,     dot: true},
       ],
     },
     {
       title: t('partner.operations.sections.financial'),
       items: [
-        {key: 'payments',   label: t('partner.operations.menu.payments'),   sub: t('partner.operations.menu.paymentsSub'),   Icon: DollarSign, dot: false},
-        {key: 'reviews',    label: t('partner.operations.menu.reviews'),    sub: t('partner.operations.menu.reviewsSub'),    Icon: Star,       dot: false},
+        {key: 'wallet',         label: t('partner.operations.menu.wallet'),         sub: t('partner.operations.menu.walletSub'),         Icon: Wallet,      dot: false},
+        {key: 'payouts',        label: t('partner.operations.menu.payouts'),        sub: t('partner.operations.menu.payoutsSub'),        Icon: Send,        dot: false},
+        {key: 'subscriptions',  label: t('partner.operations.menu.subscriptions'),  sub: t('partner.operations.menu.subscriptionsSub'),  Icon: BadgeCheck,  dot: false},
+        {key: 'reviews',        label: t('partner.operations.menu.reviews'),        sub: t('partner.operations.menu.reviewsSub'),        Icon: Star,        dot: false},
       ],
     },
   ];
@@ -90,11 +105,14 @@ function MenuRow({item, colors, onPress}) {
   );
 }
 
-function OperationsMenu({colors, onNavigate}) {
+function OperationsMenu({colors, onNavigate, isSupervisor}) {
   const {t} = useI18n();
   const autoAccept    = useAppStore(s => s.autoAccept);
   const setAutoAccept = useAppStore(s => s.setAutoAccept);
-  const sections      = buildSections(t);
+  const allSections   = buildSections(t);
+  const sections      = isSupervisor
+    ? allSections.filter(sec => sec.title !== t('partner.operations.sections.financial'))
+    : allSections;
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
@@ -156,19 +174,30 @@ function OperationsMenu({colors, onNavigate}) {
   );
 }
 
+const FINANCIAL_SCREENS = new Set(['wallet', 'payouts', 'subscriptions']);
+
 export default function OperationsNavigator() {
   const {colors} = useTheme();
+  const user = useAuthStore(s => s.user);
+  const isSupervisor = user?.originalRole === 'supervisor';
+
   const [screen, setScreen] = useState(null);
+  const [focusOrderId, setFocusOrderId] = useState(null);
   const pendingNav = useAppStore(s => s.pendingNav);
   const clearNav   = useAppStore(s => s.clearNav);
 
-  const goTo   = useCallback(key => setScreen(key), []);
-  const goBack = useCallback(() => setScreen(null), []);
+  const goTo   = useCallback(key => {
+    if (isSupervisor && FINANCIAL_SCREENS.has(key)) return;
+    setScreen(key);
+  }, [isSupervisor]);
+  const goBack = useCallback(() => { setScreen(null); setFocusOrderId(null); }, []);
 
   // Consume a deep-link request (e.g. dashboard → services) on mount/update
   useEffect(() => {
     if (pendingNav?.tab === 'operations' && pendingNav?.screen) {
+      if (isSupervisor && FINANCIAL_SCREENS.has(pendingNav.screen)) { clearNav(); return; }
       setScreen(pendingNav.screen);
+      setFocusOrderId(pendingNav.orderId ?? null);
       clearNav();
     }
   }, [pendingNav, clearNav]);
@@ -184,16 +213,20 @@ export default function OperationsNavigator() {
 
   return (
     <View style={s.flex}>
-      {!screen && <OperationsMenu colors={colors} onNavigate={goTo} />}
+      {!screen && <OperationsMenu colors={colors} onNavigate={goTo} isSupervisor={isSupervisor} />}
       {screen === 'services'   && <ServicesScreen   onBack={goBack} />}
       {screen === 'packages'   && <PackagesScreen   onBack={goBack} />}
       {screen === 'bikers'     && <BikersScreen     onBack={goBack} />}
       {screen === 'staff'      && <StaffScreen      onBack={goBack} />}
       {screen === 'branches'   && <BranchesScreen   onBack={goBack} />}
-      {screen === 'payments'   && <PaymentsScreen   onBack={goBack} />}
+      {screen === 'wallet'     && <PaymentsScreen   onBack={goBack} />}
+      {screen === 'payouts'    && <PayoutsScreen    onBack={goBack} />}
       {screen === 'skipReview' && <SkipReviewScreen onBack={goBack} />}
       {screen === 'reviews'    && <ReviewsScreen    onBack={goBack} />}
       {screen === 'offers'     && <OffersScreen     onBack={goBack} />}
+      {screen === 'addons'         && <AddonsScreen         onBack={goBack} />}
+      {screen === 'gallery'        && <GalleryScreen        onBack={goBack} />}
+      {screen === 'subscriptions'  && <SubscriptionsScreen  onBack={goBack} />}
     </View>
   );
 }
@@ -242,7 +275,4 @@ const s = StyleSheet.create({
   dot:           {width: 8, height: 8, borderRadius: 4},
   iconCircle:    {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
 
-  // DEV test button
-  devBtn:        {borderWidth: 1.5, borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginBottom: 4},
-  devBtnText:    {fontSize: 14, fontWeight: '700', color: '#F59E0B'},
 });

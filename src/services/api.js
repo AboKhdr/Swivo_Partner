@@ -25,6 +25,20 @@ export function setUnauthorizedHandler(fn) {
   _onUnauthorized = fn;
 }
 
+// Backend gate/permission codes the UI needs to react to globally.
+const SCOPED_ERROR_CODES = [
+  'ADMIN_ONLY',           // 403 — supervisor hit an admin-only action
+  'SUPERVISOR_NO_BRANCH', // 409 — supervisor has no branch linked
+  'TENANT_SUSPENDED',     // 402 — tenant suspended → renew subscription
+  'TRIAL_EXPIRED',        // 402 — trial ended → renew subscription
+  'INSUFFICIENT_FUNDS',   // 400 — not enough balance for a payout
+];
+
+let _onScopedError = null;
+export function setScopedErrorHandler(fn) {
+  _onScopedError = fn;
+}
+
 async function request(method, path, body, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -59,7 +73,13 @@ async function request(method, path, body, options = {}) {
     }
 
     if (!res.ok) {
-      return {success: false, error: data?.message || `HTTP_${res.status}`, data: null};
+      const code = data?.code ?? null;
+      // Surface scoped/financial gate errors to the global handler so the UI can
+      // react (hide elements, show renew-subscription screen, alert, …).
+      if (SCOPED_ERROR_CODES.includes(code)) {
+        _onScopedError?.(code, data?.message);
+      }
+      return {success: false, error: data?.message || `HTTP_${res.status}`, code, data: null};
     }
 
     return {success: true, data, error: null};

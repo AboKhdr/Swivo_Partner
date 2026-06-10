@@ -4,6 +4,9 @@ import {MapPin, Car, User, Droplets, ChevronUp, ChevronDown, Sparkles} from 'luc
 import {useTheme} from '../../../../shared/context/ThemeContext';
 import {useI18n} from '../../../../shared/i18n/I18nContext';
 
+// Safe string — handles {ar, en} objects from backend
+const s2 = v => (!v ? '' : typeof v === 'string' ? v : v.ar ?? v.en ?? '');
+
 function GridItem({Icon, iconBg, iconColor, label, value, colors}) {
   return (
     <View style={g.item}>
@@ -38,7 +41,7 @@ export default function OrderListCard({order, onPress}) {
           </View>
         )}
         <View style={s.topRight}>
-          <Text style={[s.serviceName, {color: colors.textSecondary}]}>{order.service.name}</Text>
+          <Text style={[s.serviceName, {color: colors.textSecondary}]}>{s2(order.services?.[0]?.name) || s2(order.service?.name)}</Text>
           <Text style={[s.time, {color: colors.textPrimary}]}>{order.scheduledAt}</Text>
         </View>
       </View>
@@ -46,10 +49,10 @@ export default function OrderListCard({order, onPress}) {
       {expanded && (
         <>
           <View style={s.grid}>
-            <GridItem Icon={User} iconBg="#EFF6FF" iconColor={colors.primary} label={t('orders.fields.owner')} value={`${order.client.firstName} ${order.client.lastName}`} colors={colors} />
-            <GridItem Icon={Car} iconBg="#EEF2FF" iconColor="#6366F1" label={t('orders.fields.carType')} value={`${order.car.brand} ${order.car.model} | ${order.car.plateNumber}`} colors={colors} />
-            <GridItem Icon={Droplets} iconBg="#E0F2FE" iconColor="#0EA5E9" label={t('orders.fields.washType')} value={order.service.name} colors={colors} />
-            <GridItem Icon={MapPin} iconBg="#EFF6FF" iconColor={colors.primary} label={t('orders.fields.location')} value={order.address} colors={colors} />
+            <GridItem Icon={User} iconBg="#EFF6FF" iconColor={colors.primary} label={t('orders.fields.owner')} value={order.client?.name ?? `${order.client?.firstName ?? ''} ${order.client?.lastName ?? ''}`.trim()} colors={colors} />
+            <GridItem Icon={Car} iconBg="#EEF2FF" iconColor="#6366F1" label={t('orders.fields.carType')} value={`${s2(order.car?.brand) || s2(order.userCar?.brand?.name)} ${s2(order.car?.model) || s2(order.userCar?.model?.name)} | ${order.car?.plateNumber ?? order.userCar?.plateNumber ?? ''}`} colors={colors} />
+            <GridItem Icon={Droplets} iconBg="#E0F2FE" iconColor="#0EA5E9" label={t('orders.fields.washType')} value={s2(order.services?.[0]?.name) || s2(order.service?.name)} colors={colors} />
+            <GridItem Icon={MapPin} iconBg="#EFF6FF" iconColor={colors.primary} label={t('orders.fields.location')} value={order.location?.addressText ?? order.addressSnapshot?.addressText ?? order.address ?? ''} colors={colors} />
           </View>
 
           <View style={s.actionRow}>

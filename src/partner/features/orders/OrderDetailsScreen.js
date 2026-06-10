@@ -29,6 +29,8 @@ import {
   Camera,
   CheckCircle,
   X,
+  Package,
+  PlusCircle,
 } from 'lucide-react-native';
 import {launchCamera} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
@@ -36,6 +38,7 @@ import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getOrderById, acceptOrder, rejectOrder, startOnshopOrder, completeOnshopOrder} from '../../../services/partner';
 import AssignBikerScreen from './AssignBikerScreen';
 import RejectOrderModal from './RejectOrderModal';
+import useAppStore from '../../../store/appStore';
 
 const TIMELINE_STEPS_MOBILE = [
   {key: 'received', labelKey: 'partnerOrders.timeline.received',     Icon: CarFront},
@@ -165,6 +168,20 @@ export default function OrderDetailsScreen({order, onBack}) {
       setLoading(false);
     });
   }, [orderId]);
+
+  // Re-fetch when a foreground notification signals a refresh (e.g. photo_skip_decision)
+  const orderRefreshSignal = useAppStore(s => s.orderRefreshSignal);
+  useEffect(() => {
+    if (orderRefreshSignal === 0 || !orderId) return;
+    getOrderById(orderId).then(res => {
+      if (!res.success) return;
+      const fresh = res.data?.data ?? res.data;
+      if (!fresh) return;
+      setOrderData(fresh);
+      setStatus(prev => fresh?.status ?? prev);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderRefreshSignal]);
 
   const d = useMemo(() => orderData ?? order ?? {}, [orderData, order]);
 
@@ -356,17 +373,33 @@ export default function OrderDetailsScreen({order, onBack}) {
 
   // Derived display values from API response
   const orderNumber  = d.orderNumber ?? d._id ?? '';
-  const serviceName  =
-    d.itemsSnapshot?.[0]?.nameSnapshot?.ar
-    ?? d.itemsSnapshot?.[0]?.nameSnapshot?.en
-    ?? d.items?.[0]?.service?.name?.ar
-    ?? d.items?.[0]?.service?.name?.en
-    ?? d.items?.[0]?.name?.ar
-    ?? d.items?.[0]?.name?.en
-    ?? d.service?.name?.ar
-    ?? d.service?.name?.en
-    ?? (typeof d.service?.name === 'string' ? d.service.name : '')
+
+  // Package vs service
+  const isPackageOrder = !!d.isPackageOrder
+    || !!(d.packageSnapshot ?? d.package ?? d.packageId);
+  const packageName  = d.packageSnapshot?.name?.ar
+    ?? d.packageSnapshot?.name?.en
+    ?? d.package?.name?.ar
+    ?? d.package?.name?.en
+    ?? (typeof d.package?.name === 'string' ? d.package.name : '')
     ?? '';
+  const serviceName  = isPackageOrder
+    ? (packageName || 'باقة')
+    : (d.itemsSnapshot?.[0]?.nameSnapshot?.ar
+      ?? d.itemsSnapshot?.[0]?.nameSnapshot?.en
+      ?? d.items?.[0]?.service?.name?.ar
+      ?? d.items?.[0]?.service?.name?.en
+      ?? d.items?.[0]?.name?.ar
+      ?? d.items?.[0]?.name?.en
+      ?? d.service?.name?.ar
+      ?? d.service?.name?.en
+      ?? (typeof d.service?.name === 'string' ? d.service.name : '')
+      ?? '');
+
+  // Additional services (add-ons)
+  // Backend returns additionalServicesSnapshot with { nameAr, nameEn, unitPrice }
+  const additionals = d.additionalServicesSnapshot ?? d.additionalServices ?? d.addons ?? [];
+
   const branchName   = d.branch?.name?.ar ?? d.branch?.name?.en ?? (typeof d.branch?.name === 'string' ? d.branch.name : '') ?? '';
   const clientName   = d.client
     ? `${d.client.firstName ?? ''} ${d.client.lastName ?? ''}`.trim()
@@ -377,7 +410,11 @@ export default function OrderDetailsScreen({order, onBack}) {
     d.userCar?.model?.name?.ar ?? d.userCar?.model?.name?.en ?? (typeof d.userCar?.model?.name === 'string' ? d.userCar.model.name : ''),
   ].filter(Boolean).join(' ');
   const plate        = d.userCar?.plate ?? d.plate ?? '';
-  const price        = d.tenantNetSnapshot ?? d.totalAmount ?? '';
+
+  // Price: show only if not package, OR if there are additional services
+  const basePrice    = d.tenantNetSnapshot ?? d.totalAmount ?? '';
+  const addonsPrice  = additionals.reduce((sum, a) => sum + (a.unitPrice ?? a.totalSnapshot ?? a.unitPriceSnapshot ?? a.price ?? 0), 0);
+  const price        = (!isPackageOrder || additionals.length > 0) ? basePrice : '';
   const notes        = d.notes ?? '';
   const beforePhotos = d.proof?.beforePhotos ?? [];
   const afterPhotos  = d.proof?.afterPhotos  ?? [];
@@ -434,19 +471,60 @@ export default function OrderDetailsScreen({order, onBack}) {
       ) : (
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
-        {/* Service card */}
+        {/* Service / Package card */}
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={s.cardRow}>
             <View style={[s.iconBox, {backgroundColor: colors.primary + '15'}]}>
-              <ShoppingBag size={20} color={colors.primary} />
+              {isPackageOrder
+                ? <Package size={20} color={colors.primary} />
+                : <ShoppingBag size={20} color={colors.primary} />
+              }
             </View>
             <View style={s.cardInfo}>
               {!!scheduledAt && <Text style={[s.cardTime, {color: colors.textSecondary}]}>{scheduledAt}</Text>}
-              <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{serviceName || t('partnerOrders.details.service')}</Text>
+              <View style={s.cardTitleRow}>
+                <Text style={[s.cardTitle, {color: colors.textPrimary}]}>{serviceName || t('partnerOrders.details.service')}</Text>
+                {isPackageOrder && (
+                  <View style={[s.pkgBadge, {backgroundColor: colors.primary + '18'}]}>
+                    <Text style={[s.pkgBadgeTxt, {color: colors.primary}]}>باقة</Text>
+                  </View>
+                )}
+              </View>
               {!!branchName && <Text style={[s.cardSub, {color: colors.textSecondary}]}>{t('partnerOrders.details.branch')}: {branchName}</Text>}
             </View>
           </View>
         </View>
+
+        {/* Additional services */}
+        {additionals.length > 0 && (
+          <>
+            <Text style={[s.sectionLabel, {color: colors.textPrimary}]}>الخدمات الإضافية</Text>
+            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              {additionals.map((a, i) => {
+                const aName  = a.nameAr ?? a.nameEn
+                  ?? a.nameSnapshot?.ar ?? a.nameSnapshot?.en
+                  ?? a.name?.ar ?? a.name?.en
+                  ?? (typeof a.name === 'string' ? a.name : '') ?? '';
+                const aPrice = a.unitPrice ?? a.totalSnapshot ?? a.unitPriceSnapshot ?? a.price ?? a.priceSnapshot ?? null;
+                const aQty   = (a.qty && a.qty > 1) ? a.qty : null;
+                return (
+                  <View key={a._id ?? i} style={[s.addonRow, i > 0 && {borderTopWidth: 1, borderTopColor: colors.border}]}>
+                    <View style={[s.addonIcon, {backgroundColor: colors.primary + '12'}]}>
+                      <PlusCircle size={14} color={colors.primary} />
+                    </View>
+                    <Text style={[s.addonName, {color: colors.textPrimary}]}>{aName}</Text>
+                    {aQty != null && (
+                      <Text style={[s.addonQty, {color: colors.textSecondary}]}>x{aQty}</Text>
+                    )}
+                    {aPrice != null && (
+                      <Text style={[s.addonPrice, {color: colors.primary}]}>{aPrice} ﷼</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* Customer card */}
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -568,8 +646,20 @@ export default function OrderDetailsScreen({order, onBack}) {
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={s.payRow}>
             <View style={s.payTextCol}>
-              <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price ? `${price} ${t('partnerOrders.details.currency')}` : '—'}</Text>
-              <Text style={[s.cardSub, {color: colors.textSecondary}]}>{t('partnerOrders.details.paidVia')}</Text>
+              {isPackageOrder && additionals.length === 0 ? (
+                <>
+                  <View style={[s.pkgPayBadge, {backgroundColor: colors.primary + '15'}]}>
+                    <Package size={14} color={colors.primary} />
+                    <Text style={[s.pkgPayTxt, {color: colors.primary}]}>عن طريق الباقة</Text>
+                  </View>
+                  <Text style={[s.cardSub, {color: colors.textSecondary}]}>لا يوجد مبلغ إضافي</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price ? `${price} ${t('partnerOrders.details.currency')}` : '—'}</Text>
+                  <Text style={[s.cardSub, {color: colors.textSecondary}]}>{t('partnerOrders.details.paidVia')}</Text>
+                </>
+              )}
             </View>
             <View style={[s.payIconBox, {backgroundColor: colors.primary + '15'}]}>
               <CreditCard size={22} color={colors.primary} />
@@ -679,8 +769,18 @@ const s = StyleSheet.create({
   iconBox:         {width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center'},
   cardInfo:        {flex: 1, gap: 4},
   cardTime:        {fontSize: 12},
+  cardTitleRow:    {flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap'},
   cardTitle:       {fontSize: 15, fontWeight: '700'},
   cardSub:         {fontSize: 12},
+  pkgBadge:        {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8},
+  pkgBadgeTxt:     {fontSize: 11, fontWeight: '700'},
+  addonRow:        {flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10},
+  addonIcon:       {width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
+  addonName:       {flex: 1, fontSize: 13, fontWeight: '600'},
+  addonQty:        {fontSize: 12, fontWeight: '600'},
+  addonPrice:      {fontSize: 13, fontWeight: '800'},
+  pkgPayBadge:     {flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start'},
+  pkgPayTxt:       {fontSize: 14, fontWeight: '700'},
   avatar:          {width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center'},
   avatarText:      {fontSize: 20, fontWeight: '800'},
   phoneBtn:        {width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1},

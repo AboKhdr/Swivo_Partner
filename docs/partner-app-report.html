@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تقرير تطبيق الشريك — Tamam Partner App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Cairo', 'sans-serif'] },
+          colors: {
+            brand: { 50:'#eef4ff',100:'#d9e6ff',500:'#2f6bff',600:'#1f54e6',700:'#1842b8' },
+            ink: '#0f172a',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Cairo', sans-serif; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .card-anim { transition: transform .18s ease, box-shadow .18s ease; }
+    .card-anim:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -18px rgba(15,23,42,.25); }
+    [id] { scroll-margin-top: 90px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-ink antialiased">
+
+  <!-- ===== Top Nav ===== -->
+  <header class="sticky top-0 z-40 backdrop-blur bg-white/80 border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-600 text-white grid place-items-center font-extrabold text-lg shadow-lg shadow-brand-600/30">ت</div>
+        <div>
+          <h1 class="font-extrabold text-base sm:text-lg leading-tight">تطبيق الشريك</h1>
+          <p class="text-[11px] text-slate-500 leading-tight">Tamam — Partner App</p>
+        </div>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 text-sm font-semibold">
+        <a href="#overview" class="px-3 py-2 rounded-lg hover:bg-slate-100">نظرة عامة</a>
+        <a href="#dashboard" class="px-3 py-2 rounded-lg hover:bg-slate-100">البيت</a>
+        <a href="#orders" class="px-3 py-2 rounded-lg hover:bg-slate-100">الطلبات</a>
+        <a href="#operations" class="px-3 py-2 rounded-lg hover:bg-slate-100">العمليات</a>
+        <a href="#profile" class="px-3 py-2 rounded-lg hover:bg-slate-100">الملف الشخصي</a>
+        <a href="#lifecycle" class="px-3 py-2 rounded-lg hover:bg-slate-100">دورة الطلب</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===== Hero ===== -->
+  <section class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-bl from-brand-600 to-brand-700"></div>
+    <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="absolute -bottom-24 -right-10 w-80 h-80 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-white">
+      <span class="inline-flex items-center gap-2 text-xs font-semibold bg-white/15 border border-white/20 rounded-full px-3 py-1">
+        <span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span> تقرير شامل — رؤية تجارية
+      </span>
+      <h2 class="mt-5 text-3xl sm:text-5xl font-extrabold leading-tight">دليل صفحات تطبيق الشريك</h2>
+      <p class="mt-4 max-w-2xl text-white/85 leading-relaxed text-sm sm:text-base">
+        لوحة تحكّم متكاملة يُدير من خلالها صاحب أو مدير المغسلة كامل عملياته: استقبال الطلبات،
+        إدارة أسطول البايكرز، تكوين الخدمات والأسعار والعروض، ومتابعة المالية والتقييمات.
+        التطبيق مبنيّ على <b>4 تبويبات رئيسية</b> تشمل <b>24 شاشة</b>.
+      </p>
+      <div class="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl">
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">4</div><div class="text-xs text-white/80 mt-1">تبويبات رئيسية</div></div>
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">24</div><div class="text-xs text-white/80 mt-1">شاشة</div></div>
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">9</div><div class="text-xs text-white/80 mt-1">أقسام عمليات</div></div>
+        <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center"><div class="text-3xl font-extrabold">9</div><div class="text-xs text-white/80 mt-1">حالات للطلب</div></div>
+      </div>
+    </div>
+  </section>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-16">
+
+    <!-- ===== Overview ===== -->
+    <section id="overview">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">①</span>
+        <h3 class="text-2xl font-extrabold">الهيكل العام والتنقّل</h3>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 leading-relaxed text-slate-700">
+        <p>
+          شريط سفلي ثابت يحتوي 4 تبويبات. تبويب <b>العمليات</b> يُعاد بناؤه كل مرة عند الدخول (لا يحتفظ بحالته)،
+          بينما باقي التبويبات تبقى محمّلة للحفاظ على موضع التمرير. وفوق كل التبويبات توجد
+          <b>نافذة الطلب الوارد</b> التي تظهر فجأة عند وصول طلب جديد عبر الإشعار — أينما كان المدير داخل التطبيق.
+        </p>
+        <div class="mt-6 grid sm:grid-cols-4 gap-3">
+          <a href="#dashboard" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">🏠</div><div class="mt-2 font-bold text-sm">البيت</div></a>
+          <a href="#orders" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">📦</div><div class="mt-2 font-bold text-sm">الطلبات</div></a>
+          <a href="#operations" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">⚙️</div><div class="mt-2 font-bold text-sm">العمليات</div></a>
+          <a href="#profile" class="rounded-xl border border-slate-200 p-4 text-center hover:border-brand-400 hover:bg-brand-50 transition"><div class="text-2xl">👤</div><div class="mt-2 font-bold text-sm">الملف الشخصي</div></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Dashboard Tab ===== -->
+    <section id="dashboard">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">②</span>
+        <h3 class="text-2xl font-extrabold">تبويب البيت <span class="text-slate-400 font-bold text-lg">Dashboard</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">الصفحة الرئيسية وملخّص العمليات اليومية لحظياً.</p>
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <!-- card -->
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <span class="text-xl">🏠</span>
+            <h4 class="font-extrabold">1. لوحة التحكم <span class="text-slate-400 text-xs font-mono">DashboardScreen</span></h4>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700"><b>الوظيفة:</b> الصفحة الرئيسية وملخّص العمليات لحظياً.</p>
+            <div><span class="font-bold text-slate-800">تعرض:</span>
+              <ul class="mt-1 space-y-1 text-slate-600 list-disc pr-5">
+                <li>بطاقة إيراد اليوم بالريال (﷼).</li>
+                <li>إحصائيات: طلبات معلّقة، نشطة، إجمالي اليوم.</li>
+                <li>قائمة الطلبات المعلّقة + البايكرز على الخدمة.</li>
+              </ul>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">4 أزرار وصول سريع</span>
+              <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">اتصال بالبايكر</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">سحب للتحديث</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <span class="text-xl">🔔</span>
+            <h4 class="font-extrabold">2. الإشعارات <span class="text-slate-400 text-xs font-mono">NotificationsScreen</span></h4>
+          </div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700"><b>الوظيفة:</b> صندوق وارد لكل الإشعارات.</p>
+            <div><span class="font-bold text-slate-800">تعرض:</span>
+              <ul class="mt-1 space-y-1 text-slate-600 list-disc pr-5">
+                <li>مؤشّر "غير مقروء" + شارة نوع ملوّنة.</li>
+                <li>الوقت ("منذ X دقيقة") + العنوان والنص.</li>
+              </ul>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">انتقال برابط عميق</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">تعليم الكل كمقروء</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Orders Tab ===== -->
+    <section id="orders">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">③</span>
+        <h3 class="text-2xl font-extrabold">تبويب الطلبات <span class="text-slate-400 font-bold text-lg">Orders</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">قلب التطبيق: استقبال الطلبات وتوكيلها ومتابعتها حتى الإكمال.</p>
+
+      <div class="grid md:grid-cols-2 gap-5">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">📋</span><h4 class="font-extrabold">3. قائمة الطلبات <span class="text-slate-400 text-xs font-mono">OrdersScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">قائمة قابلة للبحث (بالاسم/رقم الطلب) والفلترة بالنوع والحالة.</p>
+            <p class="text-slate-600">لكل بطاقة: رقم الطلب (قابل للنسخ)، شارة حالة ملوّنة، الخدمة، الموقع، الوقت، المبلغ.</p>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold">تمرير لا نهائي (20/صفحة)</span><span class="px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">فلتر النوع: موبايل / في الموقع</span></div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">🧾</span><h4 class="font-extrabold">4. تفاصيل الطلب <span class="text-slate-400 text-xs font-mono">OrderDetailsScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">عرض كامل لطلب واحد مع أزرار <b>تتغيّر حسب الحالة والنوع</b>.</p>
+            <p class="text-slate-600">بطاقات: الخدمة، العميل، السيارة واللوحة، الخريطة (موبايل)، صور قبل/بعد (الموقع)، الدفع، الخط الزمني.</p>
+            <div class="overflow-hidden rounded-lg border border-slate-200 text-xs">
+              <table class="w-full text-right">
+                <thead class="bg-slate-50 text-slate-500"><tr><th class="p-2 font-semibold">الحالة</th><th class="p-2 font-semibold">النوع</th><th class="p-2 font-semibold">الإجراء</th></tr></thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                  <tr><td class="p-2 font-mono">PENDING_PARTNER</td><td class="p-2">الكل</td><td class="p-2">رفض + قبول وتوكيل</td></tr>
+                  <tr><td class="p-2 font-mono">ACCEPTED</td><td class="p-2">موبايل</td><td class="p-2">توكيل بايكر</td></tr>
+                  <tr><td class="p-2 font-mono">ACCEPTED</td><td class="p-2">في الموقع</td><td class="p-2">التقاط صورة البداية</td></tr>
+                  <tr><td class="p-2 font-mono">STARTED</td><td class="p-2">في الموقع</td><td class="p-2">التقاط صورة النهاية</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border-2 border-rose-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-rose-100 bg-rose-50"><span class="text-xl">🔴</span><h4 class="font-extrabold">5. الطلب الوارد <span class="text-slate-400 text-xs font-mono">IncomingOrderScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">نافذة عاجلة بكامل الشاشة عند وصول طلب جديد، مع <b>عدّاد تنازلي</b>.</p>
+            <p class="text-slate-600">تعرض: شارة "مباشر" نابضة، بيانات العميل/الخدمة/السيارة/السعر.</p>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">اقبل الطلب</span><span class="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-semibold">رفض</span><span class="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold">رفض تلقائي عند انتهاء الوقت</span></div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">🛵</span><h4 class="font-extrabold">6. توكيل بايكر <span class="text-slate-400 text-xs font-mono">AssignBikerScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">نافذة سفلية لاختيار بايكر متاح لطلب الموبايل.</p>
+            <p class="text-slate-600">فرز: الأقرب مسافة / الأعلى تقييماً. لكل بايكر: الاسم، الطلبات النشطة، التقييم.</p>
+            <div class="rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs p-2.5"><b>قاعدة:</b> يظهر فقط البايكرز على الخدمة بلا طلبات نشطة.</div>
+          </div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">✋</span><h4 class="font-extrabold">7. نافذة رفض الطلب <span class="text-slate-400 text-xs font-mono">RejectOrderModal</span></h4></div>
+          <div class="p-5 space-y-2 text-sm text-slate-700">اختيار سبب الرفض (خيارات راديو) + حقل ملاحظة <b>إلزامي</b> عند اختيار "أخرى". زر التأكيد معطّل حتى اكتمال الشرط.</div>
+        </article>
+
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50"><span class="text-xl">📷</span><h4 class="font-extrabold">8. مراجعة تخطّي الصور <span class="text-slate-400 text-xs font-mono">SkipReviewScreen</span></h4></div>
+          <div class="p-5 space-y-3 text-sm">
+            <p class="text-slate-700">إدارة طلبات البايكرز بتخطّي تصوير قبل/بعد الغسيل.</p>
+            <p class="text-slate-600">شريط إحصائيات (معلّق/موافق/مرفوض) + تبويبات فلترة + بيانات البايكر والطلب والسبب.</p>
+            <div class="flex flex-wrap gap-2"><span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">موافقة</span><span class="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-semibold">رفض مع ملاحظة</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Operations Tab ===== -->
+    <section id="operations">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">④</span>
+        <h3 class="text-2xl font-extrabold">تبويب العمليات <span class="text-slate-400 font-bold text-lg">Operations</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">مركز يربط 9 أقسام في 3 مجموعات، إضافةً لمفتاح <b>القبول التلقائي للطلبات</b>.</p>
+
+      <!-- group: management -->
+      <h4 class="text-sm font-bold text-slate-500 mb-3 mt-2">🗂️ مجموعة الإدارة</h4>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">9. قائمة العمليات <span class="text-slate-400 text-xs font-mono">OperationsNavigator</span></h4><p class="text-slate-600">المركز الذي يربط 9 أقسام + مفتاح القبول التلقائي (يُزامَن مع الخادم ويتراجع عند الفشل).</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">10. الخدمات <span class="text-slate-400 text-xs font-mono">Services</span></h4><p class="text-slate-600">خدمات مجمّعة بفئات قابلة للطيّ، لكل خدمة <b>3 أسعار</b> (صغيرة/متوسطة/كبيرة) + مدة + نوع (مغسل/جوال/كلاهما) + مفتاح تفعيل.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">11. الباقات <span class="text-slate-400 text-xs font-mono">Packages</span></h4><p class="text-slate-600">حزم خدمات ببانر واسم، اختيار خدمات وتحديد <b>كمية كل خدمة</b> مع ملخّص لحظي.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">12. العروض <span class="text-slate-400 text-xs font-mono">Offers</span></h4><p class="text-slate-600">عروض ترويجية مربوطة بخدمة، أسعار مخصّصة لكل حجم، تاريخ انتهاء اختياري، تفعيل/تعطيل، حذف فوري.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">13. الإضافات <span class="text-slate-400 text-xs font-mono">Add-ons</span></h4><p class="text-slate-600">خدمات بيع إضافي (Upsell) بسعر ثابت، أسماء عربي/إنجليزي، مربوطة بخدمة أساسية.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">18. الفروع <span class="text-slate-400 text-xs font-mono">Branches</span></h4><p class="text-slate-600">إدارة الفروع: بانر، عنوان، فرع أساسي، <b>أيام وفترات العمل</b>، تفعيل الخدمات، حذف نهائي. تنبيه إغلاق ±10د حول الصلاة.</p></article>
+      </div>
+
+      <!-- group: staff -->
+      <h4 class="text-sm font-bold text-slate-500 mb-3">🧑‍🔧 مجموعة الطاقم</h4>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">15. الطاقم <span class="text-slate-400 text-xs font-mono">Staff</span></h4><p class="text-slate-600">تبويبان: البايكرز والمديرون. حالة كل عضو + مفتاح On/Off Duty + إجراءات (إيقاف/تعطيل/حذف/إعادة تفعيل).</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">16. البايكرز + التفاصيل <span class="text-slate-400 text-xs font-mono">Bikers</span></h4><p class="text-slate-600">قائمة البايكرز، والضغط ينقل لشاشة تفاصيل بها إحصائيات (نشطة/مكتملة/تقييم) وسجلّ طلبات مرقّم.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">17. إضافة بايكر <span class="text-slate-400 text-xs font-mono">AddBiker</span></h4><p class="text-slate-600">تسجيل/تعديل عضو: صورة، اسم وهاتف، الفرع التابع، وساعات العمل (الجمعة معطّلة افتراضياً للصلاة).</p></article>
+      </div>
+
+      <!-- group: financial -->
+      <h4 class="text-sm font-bold text-slate-500 mb-3">💳 المجموعة المالية</h4>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">14. الاشتراكات <span class="text-slate-400 text-xs font-mono">Subscriptions</span></h4><p class="text-slate-600">سجلّ اشتراكات العملاء (قراءة فقط): العميل، الباقة، السيارة، <b>شريط استخدام</b> (3/10)، تاريخ الانتهاء، الحالة.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">19. التقييمات <span class="text-slate-400 text-xs font-mono">Reviews</span></h4><p class="text-slate-600">المتوسط + توزيع 1–5 بمخطّط أعمدة، فلترة بالفرع، وبطاقات تقييم العملاء مع التعليقات.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">20. المدفوعات <span class="text-slate-400 text-xs font-mono">Payments</span></h4><p class="text-slate-600">3 بطاقات (الوارد/الصادر/الصافي)، فلتر زمني، ومعاملات مجمّعة بالتاريخ مع شارة "قيد التحويل".</p></article>
+      </div>
+    </section>
+
+    <!-- ===== Profile Tab ===== -->
+    <section id="profile">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">⑤</span>
+        <h3 class="text-2xl font-extrabold">تبويب الملف الشخصي <span class="text-slate-400 font-bold text-lg">Profile</span></h3>
+      </div>
+      <p class="text-slate-500 mb-6 text-sm">إعدادات الحساب والتفضيلات والدعم.</p>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">21. الملف الشخصي</h4><p class="text-slate-600">قائمة الإعدادات: الحساب، الإشعارات، المظهر، اللغة، الدعم، الشروط، تسجيل الخروج، حذف الحساب.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">22. معلومات الحساب</h4><p class="text-slate-600">تعديل الاسم الأول والأخير فقط (الهاتف والبريد للقراءة) + عرض رمز FCM مع زر نسخ.</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">23. الدعم</h4><p class="text-slate-600">بطاقتا اتصال (هاتف وبريد) + نموذج إرسال رسالة (موضوع + رسالة إلزاميان).</p></article>
+        <article class="card-anim bg-white rounded-2xl border border-slate-200 p-5 text-sm"><h4 class="font-extrabold mb-1">24. الشروط والأحكام</h4><p class="text-slate-600">أقسام قابلة للطيّ تُجلب من الخادم، مع نصوص احتياطية محلّية عند الفشل.</p></article>
+      </div>
+    </section>
+
+    <!-- ===== Lifecycle ===== -->
+    <section id="lifecycle">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">⑥</span>
+        <h3 class="text-2xl font-extrabold">دورة حياة الطلب</h3>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <span class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">بانتظار الدفع</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">جارٍ التفويض</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700">مُفوَّض</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700">بانتظار الشريك</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700">مقبول</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700">مُوكَّل</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-sky-100 text-sky-700">في الطريق</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700">بدأ</span><span class="text-slate-300">←</span>
+          <span class="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700">مكتمل</span>
+        </div>
+        <div class="mt-5 grid sm:grid-cols-2 gap-3 text-sm">
+          <div class="rounded-xl bg-rose-50 border border-rose-200 p-3 text-rose-800"><b>الرفض:</b> متاح فقط من حالة "بانتظار الشريك".</div>
+          <div class="rounded-xl bg-orange-50 border border-orange-200 p-3 text-orange-800"><b>الإلغاء:</b> من مقبول / مُوكَّل / في الطريق / بدأ.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Summary Table ===== -->
+    <section id="summary">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 grid place-items-center font-bold">⑦</span>
+        <h3 class="text-2xl font-extrabold">جدول ملخّص شامل</h3>
+      </div>
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-right text-sm">
+            <thead class="bg-slate-50 text-slate-500 text-xs">
+              <tr><th class="p-3 font-semibold">#</th><th class="p-3 font-semibold">الشاشة</th><th class="p-3 font-semibold">التبويب</th><th class="p-3 font-semibold">الوظيفة المختصرة</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              <tr class="hover:bg-slate-50"><td class="p-3">1</td><td class="p-3 font-semibold">لوحة التحكم</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-brand-50 text-brand-700">البيت</span></td><td class="p-3 text-slate-600">ملخّص يومي + وصول سريع</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">2</td><td class="p-3 font-semibold">الإشعارات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-brand-50 text-brand-700">البيت</span></td><td class="p-3 text-slate-600">صندوق وارد الإشعارات</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">3</td><td class="p-3 font-semibold">قائمة الطلبات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">قائمة قابلة للبحث والفلترة</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">4</td><td class="p-3 font-semibold">تفاصيل الطلب</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">عرض كامل + إجراءات حسب الحالة</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">5</td><td class="p-3 font-semibold">الطلب الوارد</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-rose-50 text-rose-700">عام</span></td><td class="p-3 text-slate-600">نافذة عاجلة بعدّاد قبول/رفض</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">6</td><td class="p-3 font-semibold">توكيل بايكر</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">اختيار بايكر متاح</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">7</td><td class="p-3 font-semibold">رفض الطلب</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">اختيار سبب الرفض</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">8</td><td class="p-3 font-semibold">مراجعة التخطّي</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">الطلبات</span></td><td class="p-3 text-slate-600">موافقة/رفض تخطّي الصور</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">9</td><td class="p-3 font-semibold">قائمة العمليات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">مركز 9 أقسام + قبول تلقائي</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">10</td><td class="p-3 font-semibold">الخدمات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">خدمات بأسعار 3 أحجام</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">11</td><td class="p-3 font-semibold">الباقات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">حزم خدمات بكميات</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">12</td><td class="p-3 font-semibold">العروض</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">عروض ترويجية بأسعار مخصّصة</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">13</td><td class="p-3 font-semibold">الإضافات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">خدمات بيع إضافي</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">14</td><td class="p-3 font-semibold">الاشتراكات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">سجلّ اشتراكات العملاء</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">15</td><td class="p-3 font-semibold">الطاقم</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">إدارة البايكرز والمديرين</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">16</td><td class="p-3 font-semibold">البايكرز + التفاصيل</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">قائمة وسجلّ كل بايكر</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">17</td><td class="p-3 font-semibold">إضافة بايكر</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">تسجيل/تعديل عضو</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">18</td><td class="p-3 font-semibold">الفروع + التعديل</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">إدارة الفروع وساعاتها</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">19</td><td class="p-3 font-semibold">التقييمات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">تجميع تقييمات العملاء</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">20</td><td class="p-3 font-semibold">المدفوعات</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">العمليات</span></td><td class="p-3 text-slate-600">سجلّ مالي بفلتر زمني</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">21</td><td class="p-3 font-semibold">الملف الشخصي</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">قائمة الإعدادات</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">22</td><td class="p-3 font-semibold">معلومات الحساب</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">تعديل الاسم + رمز FCM</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">23</td><td class="p-3 font-semibold">الدعم</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">تواصل وإرسال رسالة</td></tr>
+              <tr class="hover:bg-slate-50"><td class="p-3">24</td><td class="p-3 font-semibold">الشروط والأحكام</td><td class="p-3"><span class="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">الملف</span></td><td class="p-3 text-slate-600">الشروط والأحكام</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 text-center text-sm text-slate-500">
+      <p class="font-bold text-slate-700">تقرير صفحات تطبيق الشريك — Tamam Partner App</p>
+      <p class="mt-1">تقرير برؤية تجارية مبنيّ على الكود الفعلي للتطبيق · ٢٤ شاشة عبر ٤ تبويبات.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

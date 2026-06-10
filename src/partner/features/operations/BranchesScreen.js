@@ -114,7 +114,9 @@ function BannerArea({image, colors, onChangeImage, onEdit, uploading}) {
 }
 
 function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
-  const [banner,        setBanner]        = useState(item.banner ?? item.image ?? null);
+  const [banner,        setBanner]        = useState(
+    item.banner ?? item.image ?? item.photo ?? item.coverImage ?? item.coverPhoto ?? null,
+  );
   const [showImgPick,   setShowImgPick]   = useState(false);
   const [uploading,     setUploading]     = useState(false);
   const [branchSvcs,    setBranchSvcs]    = useState([]);
@@ -146,7 +148,7 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
     setUploading(false);
     if (!res.success) {
       Alert.alert('خطأ', `تعذّر رفع الصورة\n${res.error ?? ''}`);
-      setBanner(item.banner ?? item.image ?? null);
+      setBanner(item.banner ?? item.image ?? item.photo ?? item.coverImage ?? item.coverPhoto ?? null);
     }
   };
 
@@ -176,7 +178,7 @@ function BranchCard({item, colors, ordersLabel, mainLabel, onEdit}) {
     setUploading(false);
     if (!res.success) {
       Alert.alert('خطأ', 'تعذّر حذف الصورة، يرجى المحاولة مجدداً');
-      setBanner(item.banner ?? item.image ?? null);
+      setBanner(item.banner ?? item.image ?? item.photo ?? item.coverImage ?? item.coverPhoto ?? null);
     }
   };
 

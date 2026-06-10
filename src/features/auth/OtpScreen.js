@@ -178,7 +178,7 @@ export default function OtpScreen({phone, prefix, onBack}) {
         ) : null}
 
         {/* OTP boxes */}
-        <Animated.View style={[s.boxRow, {transform: [{translateX: shakeAnim}]}]}>
+        <Animated.View style={[s.boxRow, {transform: [{translateX: shakeAnim}], direction :"ltr"}]}>
           {digits.map((d, idx) => (
             <TouchableOpacity
               key={idx}

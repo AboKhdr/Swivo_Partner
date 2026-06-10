@@ -1,8 +1,9 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
-  KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {ArrowRight, MessageCircle, Phone, Mail, Send} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
@@ -13,24 +14,73 @@ const CONTACT_ITEMS = [
   {Icon: Mail,  key: 'email',   value: 'support@tamam.sa', color: '#1B7BF5'},
 ];
 
+const DAILY_LIMIT   = 3;
+const STORAGE_KEY   = 'partner_support_daily';
+const SUCCESS_TTL   = 3000;
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function loadCount() {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) return 0;
+    const {date, count} = JSON.parse(raw);
+    return date === todayStr() ? count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function incrementCount() {
+  try {
+    const count = await loadCount();
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({date: todayStr(), count: count + 1}));
+    return count + 1;
+  } catch {
+    return 1;
+  }
+}
+
 export default function SupportScreen({onBack}) {
   const {colors} = useTheme();
   const {t} = useI18n();
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [sent,    setSent]    = useState(false);
-
   const [sending, setSending] = useState(false);
-  const canSend = subject.trim() && message.trim();
+  const [sent,    setSent]    = useState(false);
+  const [error,   setError]   = useState(null);
+  const [dailyCount, setDailyCount] = useState(0);
+  const hideTimer = useRef(null);
+
+  useEffect(() => {
+    loadCount().then(setDailyCount);
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, []);
+
+  const msgTrimmed = message.trim();
+  const msgValid   = msgTrimmed.length >= 10;
+  const limitHit   = dailyCount >= DAILY_LIMIT;
+  const canSend    = subject.trim().length > 0 && msgValid && !limitHit;
 
   const handleSend = async () => {
     if (!canSend || sending) return;
+    if (!msgValid) { setError(t('partner.support.msgMinLength')); return; }
+    setError(null);
     setSending(true);
-    await sendSupportMessage(subject.trim(), message.trim());
+    const res = await sendSupportMessage(subject.trim(), msgTrimmed);
     setSending(false);
-    setSent(true);
-    setSubject('');
-    setMessage('');
+    if (res.success) {
+      const next = await incrementCount();
+      setDailyCount(next);
+      setSent(true);
+      setSubject('');
+      setMessage('');
+      hideTimer.current = setTimeout(() => setSent(false), SUCCESS_TTL);
+    } else {
+      setError(res.error ?? t('common.error'));
+    }
   };
 
   return (
@@ -62,10 +112,17 @@ export default function SupportScreen({onBack}) {
           ))}
         </View>
 
+        {limitHit && (
+          <View style={[s.limitBox, {backgroundColor: '#F59E0B18', borderColor: '#F59E0B44'}]}>
+            <Text style={[s.limitText, {color: '#F59E0B'}]}>{t('partner.support.limitReached')}</Text>
+          </View>
+        )}
+
         <View style={[s.formCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <View style={s.formHeader}>
             <MessageCircle size={18} color={colors.primary} />
             <Text style={[s.formTitle, {color: colors.textPrimary}]}>{t('partner.support.sendMessage')}</Text>
+            <Text style={[s.counter, {color: colors.textSecondary}]}>{dailyCount}/{DAILY_LIMIT}</Text>
           </View>
           <View style={[s.sep, {backgroundColor: colors.border}]} />
           <View style={s.formBody}>
@@ -76,21 +133,28 @@ export default function SupportScreen({onBack}) {
                 placeholder={t('partner.support.subjectPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={subject}
-                onChangeText={setSubject}
+                onChangeText={v => { setSubject(v); setError(null); }}
                 textAlign="right"
+                editable={!sending && !limitHit}
               />
             </View>
-            <Text style={[s.fieldLabel, {color: colors.textSecondary}]}>{t('partner.support.message')}</Text>
+            <View style={s.msgLabelRow}>
+              <Text style={[s.fieldLabel, {color: colors.textSecondary}]}>{t('partner.support.message')}</Text>
+              <Text style={[s.charHint, {color: msgValid ? '#22C55E' : colors.textSecondary}]}>
+                {msgTrimmed.length}/10
+              </Text>
+            </View>
             <View style={[s.inputBox, s.textAreaBox, {backgroundColor: colors.bg, borderColor: colors.border}]}>
               <TextInput
                 style={[s.input, s.textArea, {color: colors.textPrimary}]}
                 placeholder={t('partner.support.messagePlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={message}
-                onChangeText={setMessage}
+                onChangeText={v => { setMessage(v); setError(null); }}
                 multiline
                 textAlignVertical="top"
                 textAlign="right"
+                editable={!sending && !limitHit}
               />
             </View>
           </View>
@@ -102,11 +166,21 @@ export default function SupportScreen({onBack}) {
           </View>
         )}
 
+        {!!error && (
+          <View style={[s.errorBox, {backgroundColor: '#EF444418', borderColor: '#EF444444'}]}>
+            <Text style={[s.errorText, {color: '#EF4444'}]}>{error}</Text>
+          </View>
+        )}
+
         <TouchableOpacity
-          style={[s.sendBtn, {backgroundColor: canSend ? colors.primary : colors.border}]}
-          onPress={handleSend} disabled={!canSend} activeOpacity={0.85}>
-          <Send size={18} color="#FFF" />
-          <Text style={s.sendTxt}>{t('partner.support.send')}</Text>
+          style={[s.sendBtn, {backgroundColor: canSend && !sending ? colors.primary : colors.border}]}
+          onPress={handleSend}
+          disabled={!canSend || sending}
+          activeOpacity={0.85}>
+          {sending
+            ? <ActivityIndicator color="#FFF" size="small" />
+            : <><Send size={18} color="#FFF" /><Text style={s.sendTxt}>{t('partner.support.send')}</Text></>
+          }
         </TouchableOpacity>
 
         <View style={{height: 32}} />
@@ -128,21 +202,24 @@ const s = StyleSheet.create({
   content:      {padding: 16, gap: 14},
 
   contactRow:   {flexDirection: 'row', gap: 12},
-  contactCard:  {
-    flex: 1, alignItems: 'center', gap: 6,
-    padding: 16, borderRadius: 16, borderWidth: 1,
-  },
+  contactCard:  {flex: 1, alignItems: 'center', gap: 6, padding: 16, borderRadius: 16, borderWidth: 1},
   contactIcon:  {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
   contactLabel: {fontSize: 11, fontWeight: '600'},
   contactValue: {fontSize: 13, fontWeight: '700'},
 
+  limitBox:     {borderRadius: 12, borderWidth: 1, padding: 14},
+  limitText:    {fontSize: 13, fontWeight: '600', textAlign: 'center'},
+
   formCard:     {borderRadius: 16, borderWidth: 1, overflow: 'hidden'},
   formHeader:   {flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16},
-  formTitle:    {fontSize: 15, fontWeight: '700'},
+  formTitle:    {flex: 1, fontSize: 15, fontWeight: '700'},
+  counter:      {fontSize: 12, fontWeight: '600'},
   sep:          {height: 1},
   formBody:     {padding: 16, gap: 8},
 
   fieldLabel:   {fontSize: 13, fontWeight: '600'},
+  msgLabelRow:  {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+  charHint:     {fontSize: 11, fontWeight: '600'},
   inputBox:     {borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12},
   textAreaBox:  {minHeight: 120},
   input:        {fontSize: 14, padding: 0},
@@ -150,7 +227,9 @@ const s = StyleSheet.create({
 
   successBox:   {borderRadius: 12, borderWidth: 1, padding: 14},
   successText:  {fontSize: 13, fontWeight: '600', textAlign: 'center'},
+  errorBox:     {borderRadius: 12, borderWidth: 1, padding: 14},
+  errorText:    {fontSize: 13, fontWeight: '600', textAlign: 'center'},
 
-  sendBtn:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 16},
+  sendBtn:      {flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 16, minHeight: 54},
   sendTxt:      {color: '#FFF', fontSize: 16, fontWeight: '700'},
 });

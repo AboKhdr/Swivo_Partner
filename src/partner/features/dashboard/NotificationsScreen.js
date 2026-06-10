@@ -1,142 +1,248 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {ArrowRight, ShoppingBag, Star, CreditCard, Bike, Bell} from 'lucide-react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import {ArrowRight, ShoppingBag} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
-import {getNotifications} from '../../../services/partner';
+import {getNotifications, markAllNotificationsRead} from '../../../services/partner';
+import {handleNavigate} from '../../../shared/context/FirebaseContext';
+import {useI18n} from '../../../shared/i18n/I18nContext';
 
-const ICON_MAP = {
-  order:   {Icon: ShoppingBag, color: '#1B7BF5'},
-  review:  {Icon: Star,        color: '#8B5CF6'},
-  payment: {Icon: CreditCard,  color: '#22C55E'},
-  biker:   {Icon: Bike,        color: '#F59E0B'},
+const ORDER_TYPE = 0;
+
+const ACTION_LABELS = {
+  photo_skip_decision: 'قرار تخطي الصورة',
+  photo_skip_review:   'طلب تخطي الصورة',
+  new_order:           'طلب جديد',
+  order_updates:       'تحديث الطلب',
 };
 
-function iconForType(type) {
-  if (!type || typeof type !== 'string') return ICON_MAP.order;
-  const lower = type.toLowerCase();
-  const key = Object.keys(ICON_MAP).find(k => lower.includes(k));
-  return ICON_MAP[key] ?? ICON_MAP.order;
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'الآن';
+  if (m < 60) return `منذ ${m} دقيقة`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `منذ ${h} ساعة`;
+  const d = Math.floor(h / 24);
+  return `منذ ${d} يوم`;
 }
 
-function NotifItem({item, colors}) {
-  const rawType = item.type ?? item.icon;
-  const typeStr = typeof rawType === 'string' ? rawType : '';
-  const {Icon, color} = iconForType(typeStr);
-  const title = item.title?.ar ?? item.title?.en ?? (typeof item.title === 'string' ? item.title : '')
-    ?? item.titleAr ?? item.body ?? '';
-  const body  = item.body?.ar ?? item.body?.en ?? (typeof item.body === 'string' ? item.body : '')
-    ?? item.message ?? item.content ?? '';
-  const time  = item.createdAt
-    ? new Date(item.createdAt).toLocaleString('ar-SA', {
-        year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
-    : item.time ?? '';
+function NotifItem({item, colors, lang, onPress}) {
+  const lc    = item.localizedContent ?? {};
+  const title = lc[lang]?.title ?? lc.ar?.title ?? lc.en?.title ?? item.title ?? '';
+  const body  = lc[lang]?.body  ?? lc.ar?.body  ?? lc.en?.body  ?? item.body  ?? '';
+
+  const action     = item.data?.action ?? item.data?.notificationType ?? '';
+  const actionLabel = ACTION_LABELS[action] ?? '';
+  const isRead = item.isRead ?? item.read ?? (item.readAt != null) ?? false;
+  const timeStr    = timeAgo(item.sentAt ?? item.scheduledAt ?? item.createdAt);
 
   return (
-    <View style={s.itemWrapper}>
-      <View style={s.dotCol}>
-        {!item.read && <View style={[s.unreadDot, {backgroundColor: colors.primary}]} />}
+    <TouchableOpacity
+      onPress={() => onPress(item)}
+      activeOpacity={0.75}
+      style={[
+        st.card,
+        {
+          backgroundColor: isRead ? colors.card : colors.primary + '0D',
+          borderColor:     isRead ? colors.border : colors.primary + '40',
+          borderWidth:     isRead ? 1 : 1.5,
+        },
+      ]}>
+
+      {!isRead && <View style={[st.unreadBar, {backgroundColor: colors.primary}]} />}
+
+      <View style={[st.iconWrap, {backgroundColor: isRead ? colors.border + '60' : colors.primary + '20'}]}>
+        <ShoppingBag size={20} color={isRead ? colors.textSecondary : colors.primary} />
       </View>
-      <View style={[s.card, {backgroundColor: colors.card}]}>
-        <View style={[s.iconBox, {backgroundColor: color + '18'}]}>
-          <Icon size={20} color={color} />
+
+      <View style={st.content}>
+        <View style={st.topRow}>
+          {!!actionLabel && (
+            <View style={[st.actionBadge, {backgroundColor: isRead ? colors.border + '80' : colors.primary + '18'}]}>
+              <Text style={[st.actionText, {color: isRead ? colors.textSecondary : colors.primary}]}>{actionLabel}</Text>
+            </View>
+          )}
+          <Text style={[st.time, {color: colors.textSecondary}]}>{timeStr}</Text>
         </View>
-        <View style={s.cardContent}>
-          <Text style={[s.itemTime, {color: colors.textSecondary}]}>{time}</Text>
-          <Text style={[s.itemTitle, {color: colors.textPrimary}]} numberOfLines={1}>{title}</Text>
-          <Text style={[s.itemBody, {color: colors.textSecondary}]} numberOfLines={2}>{body}</Text>
-        </View>
+        <Text style={[st.title, {color: colors.textPrimary, fontWeight: isRead ? '600' : '800'}]} numberOfLines={2}>
+          {title}
+        </Text>
+        {!!body && (
+          <Text style={[st.body, {color: colors.textSecondary}]} numberOfLines={2}>
+            {body}
+          </Text>
+        )}
       </View>
-    </View>
+
+      {!isRead && <View style={[st.unreadDot, {backgroundColor: colors.primary}]} />}
+
+    </TouchableOpacity>
   );
 }
 
 export default function NotificationsScreen({onBack}) {
-  const {colors} = useTheme();
-  const [items,   setItems]   = useState([]);
-  const [loading, setLoading] = useState(true);
+  const {colors}   = useTheme();
+  const {lang}     = useI18n();
 
-  useEffect(() => {
-    getNotifications({limit: 50}).then(res => {
-      if (res.success) {
-        const list = res.data?.data ?? res.data ?? [];
-        setItems(Array.isArray(list) ? list : []);
-      }
-      setLoading(false);
-    });
+  const [items,     setItems]     = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetch = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const res = await getNotifications({limit: 50, page: 1});
+    if (res.success) {
+      const list   = res.data?.data ?? res.data ?? [];
+      setItems(list);
+    }
+    if (!silent) setLoading(false);
   }, []);
 
-  const renderItem = useCallback(({item}) => (
-    <NotifItem item={item} colors={colors} />
-  ), [colors]);
+  useEffect(() => { fetch(); }, [fetch]);
 
-  const keyExtractor = useCallback((item, index) => item._id ?? item.id ?? String(index), []);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetch(true);
+    setRefreshing(false);
+  }, [fetch]);
+
+  const handlePress = useCallback((item) => {
+    handleNavigate({
+      ...(item.data ?? {}),
+      _itemType: item.type,
+      action: item.data?.action ?? '',
+    });
+    onBack?.();
+  }, [onBack]);
+
+  const [markingAll, setMarkingAll] = useState(false);
+
+  const handleMarkAllRead = useCallback(async () => {
+    if (markingAll) return;
+    setMarkingAll(true);
+    await markAllNotificationsRead().catch(() => {});
+    setItems(prev => prev.map(n => ({...n, isRead: true})));
+    setMarkingAll(false);
+  }, [markingAll]);
+
+  const unreadCount = items.filter(n => !(n.isRead ?? n.read ?? (n.readAt != null))).length;
+
+  const renderItem = useCallback(({item}) => (
+    <NotifItem item={item} colors={colors} lang={lang} onPress={handlePress} />
+  ), [colors, lang, handlePress]);
+
+  const keyExtractor = useCallback(
+    (item, i) => item._id ?? item.id ?? String(i),
+    [],
+  );
 
   return (
-    <View style={[s.root, {backgroundColor: colors.bg}]}>
-      <View style={[s.header, {backgroundColor: colors.bg}]}>
-        <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.75}>
+    <View style={[st.root, {backgroundColor: colors.bg}]}>
+
+      <View style={[st.header, {backgroundColor: colors.bg}]}>
+        <TouchableOpacity onPress={onBack} style={st.headerBtn} activeOpacity={0.75}>
           <ArrowRight size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[s.headerTitle, {color: colors.textPrimary}]}>الاشعارات</Text>
-        <View style={s.backBtn} />
+
+        <View style={st.headerCenter}>
+          <Text style={[st.headerTitle, {color: colors.textPrimary}]}>الإشعارات</Text>
+          {unreadCount > 0 && (
+            <View style={[st.badge, {backgroundColor: colors.primary}]}>
+              <Text style={st.badgeText}>{unreadCount}</Text>
+            </View>
+          )}
+        </View>
+
+        {unreadCount > 0 && (
+          <TouchableOpacity
+            onPress={handleMarkAllRead}
+            disabled={markingAll}
+            style={[st.markAllBtn, {borderColor: colors.primary + '40'}]}
+            activeOpacity={0.75}>
+            {markingAll
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <Text style={[st.markAllTxt, {color: colors.primary}]}>تعيين الكل كمقروء</Text>
+            }
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
-        <View style={s.center}>
+        <View style={st.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
           data={items}
-          keyExtractor={keyExtractor}
           renderItem={renderItem}
-          contentContainerStyle={s.list}
+          keyExtractor={keyExtractor}
+          contentContainerStyle={[st.list, items.length === 0 && st.listEmpty]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
           ListEmptyComponent={
-            <View style={s.empty}>
-              <Bell size={40} color={colors.border} />
-              <Text style={[s.emptyText, {color: colors.textSecondary}]}>لا توجد إشعارات</Text>
+            <View style={st.empty}>
+              <View style={[st.emptyIcon, {backgroundColor: colors.primary + '10'}]}>
+                <Bell size={36} color={colors.primary} />
+              </View>
+              <Text style={[st.emptyTitle, {color: colors.textPrimary}]}>لا توجد إشعارات</Text>
+              <Text style={[st.emptySub,   {color: colors.textSecondary}]}>
+                ستظهر هنا إشعارات الطلبات الجديدة
+              </Text>
             </View>
           }
         />
       )}
+
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  root:         {flex: 1},
-  center:       {flex: 1, alignItems: 'center', justifyContent: 'center'},
-  header:       {
-    flexDirection:    'row',
-    alignItems:       'center',
-    justifyContent:   'space-between',
-    paddingHorizontal: 20,
-    paddingTop:       56,
-    paddingBottom:    16,
-  },
+const st = StyleSheet.create({
+  root:   {flex: 1},
+  center: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  header:       {flexDirection: 'row', alignItems: 'center',
+                 paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, gap: 12},
+  headerBtn:    {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
+  markAllBtn:   {paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1},
+  markAllTxt:   {fontSize: 12, fontWeight: '700'},
+  headerCenter: {flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8},
   headerTitle:  {fontSize: 20, fontWeight: '800'},
-  backBtn:      {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
-  list:         {paddingHorizontal: 16, paddingBottom: 32},
-  itemWrapper:  {flexDirection: 'row', alignItems: 'stretch', marginBottom: 10},
-  dotCol:       {width: 20, alignItems: 'center', justifyContent: 'center'},
-  unreadDot:    {width: 8, height: 8, borderRadius: 4},
-  card:         {
-    flex:          1,
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           12,
-    paddingHorizontal: 14,
-    paddingVertical:   12,
-    borderRadius:  16,
-  },
-  iconBox:      {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
-  cardContent:  {flex: 1, gap: 2},
-  itemTitle:    {fontSize: 14, fontWeight: '800'},
-  itemTime:     {fontSize: 11},
-  itemBody:     {fontSize: 12, lineHeight: 18},
-  empty:        {alignItems: 'center', gap: 12, paddingTop: 80},
-  emptyText:    {fontSize: 14},
+  badge:        {minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6,
+                 alignItems: 'center', justifyContent: 'center'},
+  badgeText:    {color: '#FFF', fontSize: 11, fontWeight: '800'},
+  list:      {padding: 16, gap: 10},
+  listEmpty: {flexGrow: 1},
+  card:       {flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+               borderRadius: 16, padding: 14, overflow: 'hidden'},
+  unreadBar:  {position: 'absolute', top: 0, bottom: 0, width: 4, borderRadius: 2},
+  unreadDot:  {width: 9, height: 9, borderRadius: 5, alignSelf: 'center', flexShrink: 0},
+  iconWrap:   {width: 44, height: 44, borderRadius: 22,
+               alignItems: 'center', justifyContent: 'center', marginRight: 2},
+  content:    {flex: 1, gap: 4},
+  topRow:     {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8},
+  actionBadge:{paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20},
+  actionText: {fontSize: 10, fontWeight: '700'},
+  time:       {fontSize: 11},
+  title:      {fontSize: 14, fontWeight: '700', lineHeight: 20},
+  body:       {fontSize: 12, lineHeight: 18},
+  empty:      {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 80},
+  emptyIcon:  {width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center'},
+  emptyTitle: {fontSize: 16, fontWeight: '700'},
+  emptySub:   {fontSize: 13, textAlign: 'center', paddingHorizontal: 40},
 });

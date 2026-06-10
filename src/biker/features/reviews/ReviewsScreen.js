@@ -31,13 +31,11 @@ function ReviewCard({review, index, colors}) {
     ]).start();
   }, [index, opacity, translateY]);
 
-  // user أو client حسب نسخة الـ backend
   const userObj    = review.user ?? review.client;
-  const firstName  = typeof userObj === 'string' ? userObj : (userObj?.firstName ?? review.clientName ?? '؟');
+  const firstName  = typeof userObj === 'string' ? userObj : (userObj?.firstName ?? review.clientName ?? '*********');
   const lastName   = typeof userObj === 'object' ? (userObj?.lastName ?? '') : '';
   const fullName   = `${firstName} ${lastName}`.trim();
-  const initial    = fullName.charAt(0) || '؟';
-  // إخفاء باقي الاسم حفاظاً على الخصوصية
+  const initial    = fullName.charAt(0) || '*';
   const maskedName = firstName.charAt(0) + '*'.repeat(Math.max(0, firstName.length - 1));
 
   const dateStr    = review.createdAt
@@ -45,7 +43,6 @@ function ReviewCard({review, index, colors}) {
     : '';
   const comment    = review.description ?? review.comment ?? '';
 
-  const orderNum   = review.order?.orderNumber ?? '';
   const carBrand   = review.order?.car?.brand ?? review.order?.userCar?.brand?.name ?? '';
   const carModel   = review.order?.car?.model ?? review.order?.userCar?.model?.name ?? '';
   const carStr     = [carBrand, carModel].filter(Boolean).join(' ');
@@ -69,10 +66,9 @@ function ReviewCard({review, index, colors}) {
         </View>
       )}
 
-      {(!!carStr || !!orderNum) && (
+      {!!carStr && (
         <View style={s.orderRow}>
-          {!!carStr   && <Text style={[s.orderMeta, {color: colors.textSecondary}]}>🚗 {carStr}</Text>}
-          {!!orderNum && <Text style={[s.orderMeta, {color: colors.textSecondary}]}>#{orderNum}</Text>}
+          <Text style={[s.orderMeta, {color: colors.textSecondary}]}>🚗 {carStr}</Text>
         </View>
       )}
     </Animated.View>

@@ -4,17 +4,18 @@ import {
   StyleSheet, Switch, Text, TouchableOpacity, View,
 } from 'react-native';
 import {
-  User, Bell, Moon, Globe, HelpCircle, FileText, LogOut, ChevronLeft, Trash2,
+  User, Bell, Moon, Globe, HelpCircle, FileText, LogOut, ChevronLeft, Crown, CreditCard,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAuthStore from '../../../store/authStore';
 import PartnerPersonalInfoScreen from './PartnerPersonalInfoScreen';
+import PlansScreen from './PlansScreen';
+import SubscriptionScreen from './SubscriptionScreen';
 import NotificationsScreen from '../dashboard/NotificationsScreen';
 import SupportScreen from './SupportScreen';
 import TermsScreen from './TermsScreen';
 import LanguageScreen from '../../../shared/components/LanguageScreen';
-import DeleteAccountScreen from '../../../shared/components/DeleteAccountScreen';
 
 function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, loading, colors}) {
   return (
@@ -35,7 +36,7 @@ function NavRow({Icon, iconColor, iconBg, label, sub, onPress, danger, right, lo
   );
 }
 
-function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, managerInitial, onLogout, onDeleteAccount, loggingOut}) {
+function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, onLogout, loggingOut, isSupervisor}) {
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.card} />
@@ -45,20 +46,6 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, m
       </View>
 
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-
-        <TouchableOpacity
-          style={[s.avatarCard, {backgroundColor: colors.card, borderColor: colors.border}]}
-          onPress={() => onNavigate('info')}
-          activeOpacity={0.85}>
-          <View style={[s.avatar, {backgroundColor: colors.primary + '18'}]}>
-            <Text style={[s.avatarText, {color: colors.primary}]}>{managerInitial}</Text>
-          </View>
-          <View style={s.avatarInfo}>
-            <Text style={[s.managerName, {color: colors.textPrimary}]}>{managerName}</Text>
-            <Text style={[s.managerSub, {color: colors.textSecondary}]}>{t('partner.profile.managerRole')}</Text>
-          </View>
-          <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2} />
-        </TouchableOpacity>
 
         <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('partner.profile.accountSettings')}</Text>
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -72,6 +59,23 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, m
             label={t('partner.profile.notifications')} sub={t('partner.profile.notificationsSub')}
             onPress={() => onNavigate('notif')} colors={colors} />
         </View>
+
+        {!isSupervisor && (
+          <>
+            <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('partner.profile.subscription')}</Text>
+            <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <NavRow
+                Icon={Crown} iconColor="#F59E0B" iconBg="#F59E0B18"
+                label={t('partner.profile.plans')} sub={t('partner.profile.plansSub')}
+                onPress={() => onNavigate('plans')} colors={colors} />
+              <View style={[s.divider, {backgroundColor: colors.border}]} />
+              <NavRow
+                Icon={CreditCard} iconColor="#22C55E" iconBg="#22C55E18"
+                label={t('partner.profile.subscriptionLabel')} sub={t('partner.profile.subscriptionLabelSub')}
+                onPress={() => onNavigate('subscription')} colors={colors} />
+            </View>
+          </>
+        )}
 
         <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('partner.profile.preferences')}</Text>
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -116,13 +120,6 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, m
             onPress={onLogout} danger loading={loggingOut} colors={colors} />
         </View>
 
-        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <NavRow
-            Icon={Trash2} iconColor="#EF4444" iconBg="#EF444418"
-            label={t('profile.deleteAccount')} sub={t('profile.deleteAccountSub')}
-            onPress={onDeleteAccount} danger colors={colors} />
-        </View>
-
         <View style={{height: 16}} />
       </ScrollView>
     </View>
@@ -132,10 +129,9 @@ function ProfileMenu({colors, isDark, toggleTheme, onNavigate, t, managerName, m
 export default function PartnerProfileNavigator() {
   const {colors, isDark, toggleTheme} = useTheme();
   const {t} = useI18n();
-  const user   = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
-  const managerName    = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || '—' : '—';
-  const managerInitial = managerName.charAt(0) || 'م';
+  const user = useAuthStore(s => s.user);
+  const isSupervisor = user?.originalRole === 'supervisor';
   const [screen, setScreen] = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -164,11 +160,21 @@ export default function PartnerProfileNavigator() {
   return (
     <View style={s.flex}>
       <View style={[s.flex, screen ? s.hidden : null]}>
-        <ProfileMenu colors={colors} isDark={isDark} toggleTheme={toggleTheme} onNavigate={goTo} t={t} managerName={managerName} managerInitial={managerInitial} onLogout={handleLogout} onDeleteAccount={() => goTo('deleteAccount')} loggingOut={loggingOut} />
+        <ProfileMenu colors={colors} isDark={isDark} toggleTheme={toggleTheme} onNavigate={goTo} t={t} onLogout={handleLogout} loggingOut={loggingOut} isSupervisor={isSupervisor} />
       </View>
       {screen === 'info' && (
         <View style={s.flex}>
           <PartnerPersonalInfoScreen onBack={goBack} />
+        </View>
+      )}
+      {screen === 'plans' && (
+        <View style={s.flex}>
+          <PlansScreen onBack={goBack} />
+        </View>
+      )}
+      {screen === 'subscription' && (
+        <View style={s.flex}>
+          <SubscriptionScreen onBack={goBack} />
         </View>
       )}
       {screen === 'notif' && (
@@ -191,11 +197,6 @@ export default function PartnerProfileNavigator() {
           <LanguageScreen onBack={goBack} />
         </View>
       )}
-      {screen === 'deleteAccount' && (
-        <View style={s.flex}>
-          <DeleteAccountScreen onBack={goBack} />
-        </View>
-      )}
     </View>
   );
 }
@@ -216,16 +217,6 @@ const s = StyleSheet.create({
   content:     {padding: 16, gap: 12},
 
   sectionTitle:{fontSize: 13, fontWeight: '700', paddingHorizontal: 4, marginTop: 4},
-
-  avatarCard:  {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    padding: 16, borderRadius: 18, borderWidth: 1,
-  },
-  avatar:      {width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center'},
-  avatarText:  {fontSize: 22, fontWeight: '900'},
-  avatarInfo:  {flex: 1, gap: 3},
-  managerName: {fontSize: 16, fontWeight: '800'},
-  managerSub:  {fontSize: 12},
 
   card:        {borderRadius: 18, borderWidth: 1, overflow: 'hidden'},
   divider:     {height: 1, marginHorizontal: 16},

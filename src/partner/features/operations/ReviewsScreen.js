@@ -83,27 +83,38 @@ export default function ReviewsScreen({onBack}) {
   const [branches,     setBranches]     = useState([{_id: 'all', name: {ar: 'كل الفروع'}}]);
   const [activeBranch, setActiveBranch] = useState('all');
   const [loading,      setLoading]      = useState(true);
+  const [listLoading,  setListLoading]  = useState(false);
 
+  // Fetch reviews for a given branch from the server (branchId omitted = all branches)
+  const loadReviews = useCallback(async branchId => {
+    const filters = {limit: 100};
+    if (branchId && branchId !== 'all') filters.branchId = branchId;
+    const res = await getReviews(filters);
+    const list = res.success ? (res.data?.data ?? res.data ?? []) : [];
+    setReviews(Array.isArray(list) ? list : []);
+  }, []);
+
+  // Initial load: branches + all-branches reviews
   useEffect(() => {
-    Promise.all([
-      getReviews({limit: 100}),
-      getBranches(),
-    ]).then(([revRes, brRes]) => {
-      if (revRes.success) {
-        const list = revRes.data?.data ?? revRes.data ?? [];
-        setReviews(Array.isArray(list) ? list : []);
-      }
+    Promise.all([loadReviews('all'), getBranches()]).then(([, brRes]) => {
       if (brRes.success) {
         const list = brRes.data?.data ?? brRes.data ?? [];
         setBranches([{_id: 'all', name: {ar: 'كل الفروع'}}, ...(Array.isArray(list) ? list : [])]);
       }
       setLoading(false);
     });
-  }, []);
+  }, [loadReviews]);
 
-  const filtered = activeBranch === 'all'
-    ? reviews
-    : reviews.filter(r => (r.branchId ?? r.branch?._id ?? r.branch) === activeBranch);
+  // Re-fetch from the server whenever the selected branch changes
+  const handleSelectBranch = useCallback(async id => {
+    if (id === activeBranch) return;
+    setActiveBranch(id);
+    setListLoading(true);
+    await loadReviews(id);
+    setListLoading(false);
+  }, [activeBranch, loadReviews]);
+
+  const filtered = reviews;
 
   const renderItem = useCallback(({item}) => {
     if (item.type === 'summary') return <SummaryCard reviews={filtered} colors={colors} />;
@@ -120,7 +131,7 @@ export default function ReviewsScreen({onBack}) {
                   backgroundColor: activeBranch === id ? colors.primary : colors.card,
                   borderColor:     activeBranch === id ? colors.primary : colors.border,
                 }]}
-                onPress={() => setActiveBranch(id)}
+                onPress={() => handleSelectBranch(id)}
                 activeOpacity={0.75}>
                 {id !== 'all' && (
                   <GitBranch size={12} color={activeBranch === id ? '#FFF' : colors.textSecondary} />
@@ -132,21 +143,25 @@ export default function ReviewsScreen({onBack}) {
             );
           })}
         </View>
-        {filtered.length === 0 && (
+        {listLoading ? (
+          <View style={ss.empty}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : filtered.length === 0 ? (
           <View style={ss.empty}>
             <Star size={36} color={colors.border} />
             <Text style={[ss.emptyTxt, {color: colors.textSecondary}]}>لا توجد تقييمات لهذا الفرع</Text>
           </View>
-        )}
+        ) : null}
       </View>
     );
     return <ReviewCard item={item} colors={colors} />;
-  }, [colors, filtered, branches, activeBranch]);
+  }, [colors, filtered, branches, activeBranch, listLoading, handleSelectBranch]);
 
   const data = [
     {id: '__summary', type: 'summary'},
     {id: '__filter',  type: 'filter'},
-    ...filtered.map(r => ({...r, type: 'review', id: r._id ?? r.id})),
+    ...(listLoading ? [] : filtered.map(r => ({...r, type: 'review', id: r._id ?? r.id}))),
   ];
 
   return (

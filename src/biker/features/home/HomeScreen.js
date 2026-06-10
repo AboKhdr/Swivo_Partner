@@ -154,22 +154,28 @@ function BranchPicker({branches, selectedId, onSelect, colors, t}) {
 
 // ─── New Order Card ───────────────────────────────────────────────────────────
 function NewOrderCard({order, colors, t, onPress, onLocationPress}) {
-  const clientName = order.client
-    ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
-    : '';
-  const brand = order.userCar?.brand?.name ?? '';
-  const model = order.userCar?.model?.name ?? '';
-  const plate = order.userCar?.plateNumber ?? '';
-  const address = order.addressSnapshot?.addressText
+  // client — new: client.name  |  legacy: firstName + lastName
+  const clientName = order.client?.name
+    ?? (order.client ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim() : '');
+  // car — new: car.brand/model/plateNumber  |  legacy: userCar.brand.name
+  // brand/model might come as {ar,en} objects from some backends
+  const strVal = v => (!v ? '' : typeof v === 'string' ? v : v.ar ?? v.en ?? '');
+  const brand = strVal(order.car?.brand) || strVal(order.userCar?.brand?.name);
+  const model = strVal(order.car?.model) || strVal(order.userCar?.model?.name);
+  const plate = order.car?.plateNumber ?? order.userCar?.plateNumber ?? '';
+  // address — new: location.addressText  |  legacy: addressSnapshot
+  const address = order.location?.addressText
+    ?? order.addressSnapshot?.addressText
     ?? order.addressSnapshot?.district
     ?? order.branch?.address
     ?? order.address
     ?? '';
+  // service — new: services[0].name  |  legacy: itemsSnapshot[0].nameSnapshot
+  const firstSvc    = order.services?.[0];
   const firstItem   = order.itemsSnapshot?.[0];
-  const serviceName = firstItem?.nameSnapshot?.ar
-    ?? firstItem?.nameSnapshot?.en
-    ?? order.service?.name
-    ?? '';
+  const serviceName = strVal(firstSvc?.name)
+    || strVal(firstItem?.nameSnapshot)
+    || strVal(order.service?.name);
 
   return (
     <View style={[nc.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -284,11 +290,12 @@ export default function HomeScreen() {
     }
 
     if (notifRes.success) {
-      setUnreadCount(
-        notifRes.data?.unreadCount ??
-        notifRes.data?.total ??
-        notifRes.data?.pagination?.total ?? 0,
-      );
+      const list = Array.isArray(notifRes.data)
+        ? notifRes.data
+        : Array.isArray(notifRes.data?.data) ? notifRes.data.data : [];
+      const count = notifRes.data?.unreadCount
+        ?? list.filter(n => !(n.isRead ?? n.read ?? (n.readAt != null))).length;
+      setUnreadCount(count);
     }
 
     const anyFailed = results.some(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.success));
@@ -347,19 +354,15 @@ export default function HomeScreen() {
 
   const handleCloseNotifications = useCallback(() => {
     setShowNotif(false);
-    getNotifications({page: 1, limit: 1}).then(res => {
-      if (res.success) {
-        setUnreadCount(
-          res.data?.unreadCount ??
-          res.data?.total ??
-          res.data?.pagination?.total ?? 0,
-        );
-      }
-    }).catch(() => {});
   }, []);
 
   if (showNotifications) {
-    return <NotificationsScreen onBack={handleCloseNotifications} />;
+    return (
+      <NotificationsScreen
+        onBack={handleCloseNotifications}
+        onUnreadCountChange={setUnreadCount}
+      />
+    );
   }
 
   return (

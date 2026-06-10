@@ -3,12 +3,12 @@ import {
   ActivityIndicator, Image, RefreshControl, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import {Bell, Car, ClipboardList, MapPin, Phone, Settings2, Wallet} from 'lucide-react-native';
+import {Bell, Car, ClipboardList, MapPin, Phone, PlusSquare, Settings2, Wallet} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAuthStore from '../../../store/authStore';
 import useAppStore from '../../../store/appStore';
-import {getDashboardToday, getStaff} from '../../../services/partner';
+import {getDashboardToday, getStaff, getBranchRevenue} from '../../../services/partner';
 import NotificationsScreen from './NotificationsScreen';
 
 // ── Quick Action Tile ─────────────────────────────────────────────────────────
@@ -26,24 +26,35 @@ function QuickAction({Icon, label, colors, onPress}) {
   );
 }
 
+// ── Safe string: handles {ar, en} objects ────────────────────────────────────
+function sv(val, lang) {
+  if (!val) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') return (lang && val[lang]) ?? val.ar ?? val.en ?? '';
+  return String(val);
+}
+
 // ── Order Card ────────────────────────────────────────────────────────────────
-function OrderCard({item, colors, t, onPress}) {
-  const serviceName =
-    item.itemsSnapshot?.[0]?.nameSnapshot?.ar
-    ?? item.itemsSnapshot?.[0]?.nameSnapshot?.en
-    ?? item.items?.[0]?.service?.name?.ar
-    ?? item.items?.[0]?.service?.name?.en
-    ?? item.items?.[0]?.name?.ar
-    ?? item.items?.[0]?.name?.en
-    ?? item.service?.name?.ar
-    ?? item.service?.name?.en
-    ?? (typeof item.service?.name === 'string' ? item.service.name : '')
-    ?? '';
+function OrderCard({item, colors, t, lang, onPress}) {
+  
+  const isPackageOrder = !!item.isPackageOrder
+    || !!item.packageOrderId
+    || !!(item.packageSnapshot ?? item.package ?? item.packageId ?? item.subscription ?? item.subscriptionId)
+    || item.orderSource === 'package'
+    || item.type === 'package'
+    || item.orderType === 'package';
+  const serviceName = isPackageOrder
+    ? (sv(item.packageSnapshot?.name, lang) || sv(item.package?.name, lang) || 'باقة')
+    : (sv(item.serviceName, lang)
+      || sv(item.itemsSnapshot?.[0]?.nameSnapshot, lang)
+      || sv(item.items?.[0]?.service?.name, lang)
+      || sv(item.items?.[0]?.name, lang)
+      || sv(item.service?.name, lang)
+      || '');
   const branchName = item.branch?.name?.ar ?? item.branch?.name?.en ?? item.branch?.name ?? '';
   const location = item.addressSnapshot?.addressText
     ?? item.addressSnapshot?.district
     ?? branchName;
-  const price = item.tenantNetSnapshot ?? item.totalAmount ?? '';
   const timeStr = item.scheduledAt
     ? new Date(item.scheduledAt).toLocaleTimeString('ar-SA', {hour: '2-digit', minute: '2-digit'})
     : '';
@@ -54,14 +65,21 @@ function OrderCard({item, colors, t, onPress}) {
       onPress={() => onPress(item)}
       activeOpacity={0.75}>
       <View style={[s.pendingBadge, {backgroundColor: '#F59E0B18'}]}>
-        <Text style={[s.pendingBadgeText, {color: '#F59E0B'}]}>• {t('partner.dashboard.pending')}</Text>
+        <Text style={[s.pendingBadgeText, {color: '#F59E0B'}]}>{t('partner.dashboard.pending')}</Text>
       </View>
       <View style={s.pendingRow}>
         <View style={[s.carIconBox, {backgroundColor: colors.bg}]}>
           <Car size={22} color={colors.textSecondary} />
         </View>
         <View style={s.pendingInfo}>
-          <Text style={[s.pendingService, {color: colors.textPrimary}]}>{serviceName}</Text>
+          <View style={s.serviceNameRow}>
+            <Text style={[s.pendingService, {color: colors.textPrimary}]}>{serviceName}</Text>
+            {isPackageOrder && (
+              <View style={[s.pkgPill, {backgroundColor: colors.primary + '18'}]}>
+                <Text style={[s.pkgPillTxt, {color: colors.primary}]}>باقة</Text>
+              </View>
+            )}
+          </View>
           {!!location && (
             <View style={s.pendingLocationRow}>
               <MapPin size={12} color={colors.textSecondary} strokeWidth={2} />
@@ -70,7 +88,9 @@ function OrderCard({item, colors, t, onPress}) {
           )}
         </View>
         <View style={s.pendingPriceCol}>
-          {!!price && <Text style={[s.pendingPrice, {color: colors.primary}]}>{price} ﷼</Text>}
+          {isPackageOrder && (
+            <Text style={[s.pkgLabel, {color: colors.primary}]}>عن طريق الباقة</Text>
+          )}
           {!!timeStr && <Text style={[s.pendingTime, {color: colors.textSecondary}]}>{timeStr}</Text>}
         </View>
       </View>
@@ -116,14 +136,65 @@ function BikerCard({item, colors, t}) {
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-export default function DashboardScreen({onOrderPress}) {
-  const {colors} = useTheme();
-  const {t} = useI18n();
-  const user = useAuthStore(s => s.user);
+// ── Branch Revenue Card (supervisor only) ─────────────────────────────────────
+function BranchRevenueCard({data, colors, t, lang}) {
+  const branchName = sv(data.branchName, lang);
+  const rev = data.revenue ?? {};
+  const ord = data.orders ?? {};
+  const cells = [
+    {label: t('partner.dashboard.revCompleted'), value: `${rev.completed ?? 0} ﷼`, color: '#22C55E'},
+    {label: t('partner.dashboard.revToday'),     value: `${rev.today ?? 0} ﷼`,     color: colors.primary},
+    {label: t('partner.dashboard.revPending'),   value: `${rev.pending ?? 0} ﷼`,   color: '#F59E0B'},
+  ];
 
-  const showToast  = useAppStore(s => s.showToast);
-  const requestNav = useAppStore(s => s.requestNav);
+  return (
+    <View style={s.section}>
+      <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>
+        {t('partner.dashboard.branchRevenue')}{branchName ? ` — ${branchName}` : ''}
+      </Text>
+      <View style={[s.revCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+        <View style={s.revRow}>
+          {cells.map((c, i) => (
+            <View key={i} style={s.revCell}>
+              <Text style={[s.revValue, {color: c.color}]}>{c.value}</Text>
+              <Text style={[s.revLabel, {color: colors.textSecondary}]}>{c.label}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={[s.revDivider, {backgroundColor: colors.border}]} />
+        <View style={s.revRow}>
+          <View style={s.revCell}>
+            <Text style={[s.revValueSm, {color: colors.textPrimary}]}>{ord.completed ?? 0}</Text>
+            <Text style={[s.revLabel, {color: colors.textSecondary}]}>{t('partner.dashboard.ordCompleted')}</Text>
+          </View>
+          <View style={s.revCell}>
+            <Text style={[s.revValueSm, {color: colors.textPrimary}]}>{ord.active ?? 0}</Text>
+            <Text style={[s.revLabel, {color: colors.textSecondary}]}>{t('partner.dashboard.ordActive')}</Text>
+          </View>
+          <View style={s.revCell}>
+            <Text style={[s.revValueSm, {color: colors.textPrimary}]}>{ord.today ?? 0}</Text>
+            <Text style={[s.revLabel, {color: colors.textSecondary}]}>{t('partner.dashboard.ordToday')}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
+export default function DashboardScreen() {
+  const {colors} = useTheme();
+  const {t, lang} = useI18n();
+  const user = useAuthStore(s => s.user);
+  const isSupervisor = user?.originalRole === 'supervisor';
+
+  const showToast     = useAppStore(s => s.showToast);
+  const requestNav    = useAppStore(s => s.requestNav);
+
+  const handleOrderPress = useCallback((item) => {
+    const id = item._id ?? item.id;
+    if (id) requestNav('orders', id, 'detail');
+  }, [requestNav]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(false);
   const [refreshing, setRefreshing]     = useState(false);
@@ -132,27 +203,33 @@ export default function DashboardScreen({onOrderPress}) {
   const [stats, setStats]               = useState(null);
   const [pendingOrders, setPendingOrders] = useState([]);
   const [activeBikers, setActiveBikers] = useState([]);
+  const [branchRevenue, setBranchRevenue] = useState(null);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(false); }
     const results = await Promise.allSettled([
       getDashboardToday(),
       getStaff({role: 'BIKER', isOnDuty: true, limit: 10}),
+      ...(isSupervisor ? [getBranchRevenue()] : []),
     ]);
 
-    const [todayRes, bikersRes] = results.map(r =>
+    const [todayRes, bikersRes, revenueRes] = results.map(r =>
       r.status === 'fulfilled' ? r.value : {success: false},
     );
+
+    if (isSupervisor && revenueRes?.success) {
+      setBranchRevenue(revenueRes.data?.data ?? revenueRes.data ?? null);
+    }
 
     if (todayRes.success) {
       const d = todayRes.data?.data ?? todayRes.data ?? {};
       setStats({
-        todayRevenue: d.todayRevenue        ?? 0,
-        pendingCount: d.pendingOrdersCount  ?? 0,
-        activeCount:  d.activeOrdersCount   ?? 0,
-        totalOrders:  d.totalOrdersToday    ?? 0,
+        todayRevenue: d.stats?.todayRevenue  ?? d.todayRevenue  ?? 0,
+        pendingCount: d.stats?.pending       ?? d.pendingOrdersCount  ?? 0,
+        activeCount:  d.stats?.inProgress    ?? d.activeOrdersCount   ?? 0,
+        totalOrders:  d.stats?.total         ?? d.totalOrdersToday    ?? 0,
       });
-      setPendingOrders(d.recentPendingOrders ?? []);
+      setPendingOrders(d.orders ?? d.recentPendingOrders ?? []);
     }
 
     if (bikersRes.success) {
@@ -166,7 +243,7 @@ export default function DashboardScreen({onOrderPress}) {
     }
 
     if (!silent) setLoading(false);
-  }, [showToast]);
+  }, [showToast, isSupervisor]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -249,6 +326,11 @@ export default function DashboardScreen({onOrderPress}) {
             </View>
           </View>
 
+          {/* Branch revenue — supervisor only */}
+          {isSupervisor && branchRevenue && (
+            <BranchRevenueCard data={branchRevenue} colors={colors} t={t} lang={lang} />
+          )}
+
           {/* Quick actions */}
           <View style={s.section}>
             <Text style={[s.sectionTitle, {color: colors.textPrimary}]}>{t('partner.dashboard.quickActions')}</Text>
@@ -265,17 +347,19 @@ export default function DashboardScreen({onOrderPress}) {
                 colors={colors}
                 onPress={() => requestNav('orders')}
               />
+              {!isSupervisor && (
+                <QuickAction
+                  Icon={Wallet}
+                  label={t('partner.dashboard.payouts')}
+                  colors={colors}
+                  onPress={() => requestNav('operations', null, 'payouts')}
+                />
+              )}
               <QuickAction
-                Icon={Wallet}
-                label={t('partner.dashboard.payouts')}
+                Icon={PlusSquare}
+                label={t('partner.dashboard.addons')}
                 colors={colors}
-                onPress={() => requestNav('operations', null, 'payments')}
-              />
-              <QuickAction
-                Icon={Car}
-                label={t('partner.dashboard.services')}
-                colors={colors}
-                onPress={() => requestNav('operations', null, 'services')}
+                onPress={() => requestNav('operations', null, 'addons')}
               />
             </View>
           </View>
@@ -290,7 +374,8 @@ export default function DashboardScreen({onOrderPress}) {
                   item={item}
                   colors={colors}
                   t={t}
-                  onPress={onOrderPress ?? (() => {})}
+                  lang={lang}
+                  onPress={handleOrderPress}
                 />
               ))}
             </View>
@@ -335,6 +420,15 @@ const s = StyleSheet.create({
   heroStatLabel:    {fontSize: 12, color: 'rgba(255,255,255,0.8)'},
   section:          {paddingHorizontal: 16, paddingBottom: 8, marginBottom: 8},
   sectionTitle:     {fontSize: 16, fontWeight: '700', marginBottom: 12},
+
+  revCard:          {borderRadius: 16, borderWidth: 1, padding: 16, gap: 14},
+  revRow:           {flexDirection: 'row', justifyContent: 'space-between'},
+  revCell:          {flex: 1, alignItems: 'center', gap: 4},
+  revValue:         {fontSize: 16, fontWeight: '900'},
+  revValueSm:       {fontSize: 18, fontWeight: '800'},
+  revLabel:         {fontSize: 11, textAlign: 'center'},
+  revDivider:       {height: 1},
+
   quickGrid:        {flexDirection: 'row', flexWrap: 'wrap', gap: 10},
   quickTile:        {width: '47.5%', borderRadius: 14, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 12, alignItems: 'center', gap: 10},
   quickIconCircle:  {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center'},
@@ -349,8 +443,11 @@ const s = StyleSheet.create({
   pendingLocationRow:{flexDirection: 'row', alignItems: 'center', gap: 4},
   pendingLocation:  {fontSize: 12, flex: 1},
   pendingPriceCol:  {alignItems: 'flex-end', gap: 4, minWidth: 60},
-  pendingPrice:     {fontSize: 14, fontWeight: '800'},
   pendingTime:      {fontSize: 11},
+  serviceNameRow:   {flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap'},
+  pkgPill:          {paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8},
+  pkgPillTxt:       {fontSize: 10, fontWeight: '700'},
+  pkgLabel:         {fontSize: 11, fontWeight: '700'},
   bikerCard:        {flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 10, gap: 12},
   bikerAvatar:      {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center'},
   bikerAvatarText:  {fontSize: 16, fontWeight: '800'},

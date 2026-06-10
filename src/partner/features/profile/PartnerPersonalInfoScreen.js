@@ -1,15 +1,14 @@
 import React, {useEffect, useState} from 'react';
 import {
-  ActivityIndicator, Clipboard,
+  ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, StatusBar,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import {ArrowRight, Copy, Check} from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {getMessaging, getToken} from '@react-native-firebase/messaging';
+import {ArrowRight, Trash2} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getPartnerProfile, updatePartnerProfile} from '../../../services/partner';
+import DeleteAccountScreen from '../../../shared/components/DeleteAccountScreen';
 
 function Field({label, value, onChangeText, placeholder, keyboardType, editable = true, colors}) {
   return (
@@ -44,12 +43,10 @@ export default function PartnerPersonalInfoScreen({onBack}) {
   const [email,     setEmail]     = useState('');
   const [loading,   setLoading]   = useState(true);
   const [saving,    setSaving]    = useState(false);
-  const [fcmToken,  setFcmToken]  = useState('');
-  const [copied,    setCopied]    = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      const [res] = await Promise.all([getPartnerProfile()]);
+    getPartnerProfile().then(res => {
       if (res.success) {
         const d = res.data?.data ?? res.data ?? {};
         setFirstName(d.firstName ?? '');
@@ -57,27 +54,9 @@ export default function PartnerPersonalInfoScreen({onBack}) {
         setPhone(d.phoneNumber ?? '');
         setEmail(d.email ?? '');
       }
-
-      // Try cached token first, then fetch live from Firebase
-      let fcm = await AsyncStorage.getItem('fcm_token').catch(() => null);
-      if (!fcm) {
-        try {
-          fcm = await getToken(getMessaging());
-          if (fcm) await AsyncStorage.setItem('fcm_token', fcm).catch(() => {});
-        } catch {}
-      }
-      setFcmToken(fcm ?? '');
       setLoading(false);
-    }
-    load();
+    });
   }, []);
-
-  const handleCopyFcm = () => {
-    if (!fcmToken) return;
-    Clipboard.setString(fcmToken);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleSave = async () => {
     if (saving) return;
@@ -86,6 +65,10 @@ export default function PartnerPersonalInfoScreen({onBack}) {
     setSaving(false);
     onBack();
   };
+
+  if (showDelete) {
+    return <DeleteAccountScreen onBack={() => setShowDelete(false)} />;
+  }
 
   return (
     <KeyboardAvoidingView
@@ -113,29 +96,18 @@ export default function PartnerPersonalInfoScreen({onBack}) {
             <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('partner.personalInfo.myInfo')}</Text>
             <Field label={t('partner.personalInfo.fullName')} value={firstName} onChangeText={setFirstName} placeholder={t('partner.personalInfo.fullName')} colors={colors} />
             <Field label={t('partner.personalInfo.fullName') + ' (2)'} value={lastName} onChangeText={setLastName} placeholder="" colors={colors} />
-            <Field label={t('partner.personalInfo.phone')} value={phone} onChangeText={setPhone} placeholder={t('partner.personalInfo.phone')} keyboardType="phone-pad" editable={false} colors={colors} />
-            <Field label={t('partner.personalInfo.email')} value={email} onChangeText={setEmail} placeholder={t('partner.personalInfo.email')} keyboardType="email-address" editable={false} colors={colors} />
-
-            <View style={s.fieldWrap}>
-              <Text style={[s.fieldLabel, {color: colors.textPrimary}]}>FCM Token</Text>
-              <View style={[s.inputRow, {backgroundColor: colors.bg, borderColor: colors.border}]}>
-                <TextInput
-                  style={[s.input, s.fcmInput, {color: colors.textSecondary}]}
-                  value={fcmToken || '—'}
-                  editable={false}
-                  multiline={false}
-                  numberOfLines={1}
-                  textAlign="left"
-                />
-                <TouchableOpacity onPress={handleCopyFcm} hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-                  {copied
-                    ? <Check size={18} color={colors.primary} strokeWidth={2.5} />
-                    : <Copy size={18} color={colors.textSecondary} strokeWidth={2} />
-                  }
-                </TouchableOpacity>
-              </View>
-            </View>
+            <Field label={t('partner.personalInfo.phone')} value={phone} placeholder={t('partner.personalInfo.phone')} keyboardType="phone-pad" editable={false} colors={colors} />
+            <Field label={t('partner.personalInfo.email')} value={email} placeholder={t('partner.personalInfo.email')} keyboardType="email-address" editable={false} colors={colors} />
           </View>
+
+          <TouchableOpacity
+            style={[s.deleteBtn, {backgroundColor: '#EF444410', borderColor: '#EF444430'}]}
+            onPress={() => setShowDelete(true)}
+            activeOpacity={0.75}>
+            <Trash2 size={18} color="#EF4444" strokeWidth={2} />
+            <Text style={s.deleteBtnText}>{t('profile.deleteAccount')}</Text>
+          </TouchableOpacity>
+
           <View style={{height: 100}} />
         </ScrollView>
       )}
@@ -174,7 +146,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, minHeight: 50,
   },
   input:       {flex: 1, fontSize: 14, paddingVertical: 12, textAlign: 'right'},
-  fcmInput:    {fontSize: 11, textAlign: 'left'},
+
+  deleteBtn:   {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, borderRadius: 14, borderWidth: 1,
+    paddingVertical: 16, marginBottom: 8,
+  },
+  deleteBtnText: {fontSize: 15, fontWeight: '700', color: '#EF4444'},
 
   footer:      {padding: 16, paddingBottom: Platform.OS === 'ios' ? 32 : 16, borderTopWidth: 1},
   saveBtn:     {borderRadius: 14, paddingVertical: 16, alignItems: 'center'},

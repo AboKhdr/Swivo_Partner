@@ -4,67 +4,114 @@ import notifee, {
   AndroidCategory,
 } from '@notifee/react-native';
 import {Platform} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ── Channel IDs ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Channel IDs
+// ─────────────────────────────────────────────────────────────────────────────
+//
+//  CHANNEL_NEW_ORDER   → biker + partner: طلب جديد وارد (نغمة new_order_alert، رنين متكرر كل 8ث)
+//  CHANNEL_UPDATES     → biker + partner: تحديثات الطلب (default)
+//  CHANNEL_ALERTS      → biker: تنبيهات خاصة بالبايكر (default)
+//  CHANNEL_GENERAL     → كل شيء آخر / الطلبات الفائتة (صامت)
 
-export const CHANNEL_INCOMING  = 'incoming_orders_v6';
-export const CHANNEL_NEW_ORDER = 'new_order_v2';
-export const CHANNEL_UPDATES   = 'order_updates';
-export const CHANNEL_ALERTS    = 'biker_alerts';
-export const CHANNEL_GENERAL   = 'general';
+export const CHANNEL_NEW_ORDER = 'new_order_v4';
+export const CHANNEL_INCOMING  = CHANNEL_NEW_ORDER;       // alias — same channel for biker ring
+export const CHANNEL_UPDATES   = 'order_updates_v2';
+export const CHANNEL_ALERTS    = 'biker_alerts_v2';
+export const CHANNEL_GENERAL   = 'general_v2';
 
-// ── Setup all channels once at app launch ────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Setup — call once at app launch (FirebaseContext.bootstrap)
+// ─────────────────────────────────────────────────────────────────────────────
 
-export async function setupNotifeeChannel() {
-  if (Platform.OS !== 'android') return;
-
-  await notifee.createChannel({
-    id:               CHANNEL_INCOMING,
-    name:             'طلبات جديدة (رنين)',
+// Channel definitions — change `sound` or `importance` here and the app will
+// auto-delete + recreate the channel on next launch without touching the ID.
+const CHANNEL_DEFINITIONS = [
+  {
+    id:               CHANNEL_NEW_ORDER,
+    name:             'طلب جديد وارد',
     importance:       AndroidImportance.HIGH,
     visibility:       AndroidVisibility.PUBLIC,
     vibration:        true,
-    vibrationPattern: [600, 400, 600, 400],
-    sound:            'incoming_order',
+    vibrationPattern: [400, 200, 400, 200],
+    sound:            'new_order_alert',
     bypassDnd:        true,
-  });
-
-  await notifee.createChannel({
-    id:               CHANNEL_NEW_ORDER,
-    name:             'New Orders',
-    importance:       AndroidImportance.HIGH,
-    vibration:        true,
-    vibrationPattern: [300, 150, 300, 150, 300],
-    sound:            'default',
-  });
-
-  await notifee.createChannel({
+  },
+  {
     id:               CHANNEL_UPDATES,
-    name:             'Order Updates',
+    name:             'تحديثات الطلبات',
     importance:       AndroidImportance.HIGH,
     vibration:        true,
-    vibrationPattern: [200, 100, 200],
+    vibrationPattern: [200, 100, 200, 100],
     sound:            'default',
-  });
-
-  await notifee.createChannel({
+  },
+  {
     id:               CHANNEL_ALERTS,
-    name:             'Biker Alerts',
+    name:             'تنبيهات البايكر',
     importance:       AndroidImportance.HIGH,
     vibration:        true,
-    vibrationPattern: [200, 100, 200],
+    vibrationPattern: [200, 100, 200, 100],
     sound:            'default',
-  });
-
-  await notifee.createChannel({
+  },
+  {
     id:         CHANNEL_GENERAL,
-    name:       'General',
+    name:       'عام',
     importance: AndroidImportance.DEFAULT,
     sound:      'default',
-  });
+  },
+]
+
+// Recreates a channel only if its sound or importance changed.
+// Android caches channel settings on first creation — the only way to update
+// them is to delete + recreate. We track a hash of (sound + importance) in
+// AsyncStorage so this check runs once per app version, not on every launch.
+async function ensureChannel(def) {
+  const key         = `ch_sig_${def.id}`
+  const vp          = (def.vibrationPattern ?? []).join(',')
+  const sig         = `${def.sound}|${def.importance}|${vp}`
+  const storedSig   = await AsyncStorage.getItem(key).catch(() => null)
+
+  if (storedSig !== sig) {
+    // Settings changed (or first install) — delete old channel and recreate
+    await notifee.deleteChannel(def.id).catch(() => {})
+    await notifee.createChannel(def)
+    await AsyncStorage.setItem(key, sig).catch(() => {})
+  } else {
+    // No change — still call createChannel (no-op if already exists)
+    await notifee.createChannel(def)
+  }
 }
 
-// ── Display a generic notification on the correct channel ────────────────────
+export async function setupNotifeeChannels() {
+  if (Platform.OS !== 'android') return
+  await Promise.all(CHANNEL_DEFINITIONS.map(ensureChannel))
+}
+
+// Backward-compat alias used in FirebaseContext.bootstrap
+export const setupNotifeeChannel = setupNotifeeChannels;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resolveChannel — maps notificationType + role → channelId
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function resolveChannel(notificationType) {
+  switch (notificationType) {
+    case 'new_order':
+      return CHANNEL_NEW_ORDER;
+    case 'order_updates':
+      return CHANNEL_UPDATES;
+    case 'biker_alerts':
+      return CHANNEL_ALERTS;
+    case 'dashboard_notification':
+    default:
+      return CHANNEL_GENERAL;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// displayNotification — generic one-shot notification
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function displayNotification({title, body, notificationType, data = {}}) {
   const channelId = resolveChannel(notificationType);
@@ -76,70 +123,91 @@ export async function displayNotification({title, body, notificationType, data =
     android: {
       channelId,
       smallIcon:   'ic_notification',
+      importance:  AndroidImportance.HIGH,
       pressAction: {id: 'default'},
     },
     ios: {
-      sound: 'default',
+      sound: notificationType === 'new_order' ? 'new_order_alert.aiff' : 'default',
     },
   });
 }
 
-export function resolveChannel(notificationType) {
-  switch (notificationType) {
-    case 'new_order':             return CHANNEL_NEW_ORDER;
-    case 'order_updates':         return CHANNEL_UPDATES;
-    case 'biker_alerts':          return CHANNEL_ALERTS;
-    case 'dashboard_notification':
-    default:                      return CHANNEL_GENERAL;
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// Partner new-order alert — نغمة مميزة مرة واحدة (لا رنين متكرر)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function showNewOrderAlert(order) {
+  const body = [
+    order?.service ?? order?.customerName ?? 'خدمة غسيل',
+    order?.location,
+  ].filter(Boolean).join(' — ');
+
+  await notifee.displayNotification({
+    id:    `new_order_${order?.id ?? Date.now()}`,
+    title: '🔔 طلب جديد!',
+    body,
+    data: {
+      notificationType: 'new_order',
+      orderId:          String(order?.id ?? ''),
+    },
+    android: {
+      channelId:        CHANNEL_NEW_ORDER,
+      smallIcon:        'ic_notification',
+      importance:       AndroidImportance.HIGH,
+      visibility:       AndroidVisibility.PUBLIC,
+      sound:            'new_order_alert',
+      vibrationPattern: [400, 200, 400, 200],
+      autoCancel:       true,
+      pressAction:      {id: 'default', launchActivity: 'default'},
+    },
+    ios: {
+      sound:          'new_order_alert.aiff',
+      critical:       true,
+      criticalVolume: 1.0,
+    },
+  });
 }
 
-// ── Incoming order ring loop (partner → biker) ────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Biker incoming-order ring loop — نغمة تتكرر كل 8ث لمدة 3 دقائق
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Ring duration before converting to a silent "missed order" notification.
-// Matches the WhatsApp-call style: 60s ring → missed call.
-export const RING_MAX_MS = 60_000;
-// Number of ring repeats scheduled from the background handler (kept in sync
-// with index.js so cancellation covers every scheduled trigger).
-export const RING_COUNT  = 8;
+export const RING_MAX_MS = 180_000;
+export const RING_COUNT  = 23;       // 23 × 8s = 184s ≥ 180s
 
 let _ringInterval = null;
 let _ringTimeout  = null;
 
 export async function showIncomingOrderNotification(order) {
-  if (Platform.OS === 'android') {
-    await notifee.createChannel({
-      id:               CHANNEL_INCOMING,
-      name:             'طلبات جديدة (رنين)',
-      importance:       AndroidImportance.HIGH,
-      visibility:       AndroidVisibility.PUBLIC,
-      vibration:        true,
-      vibrationPattern: [600, 400, 600, 400],
-      sound:            'incoming_order',
-      bypassDnd:        true,
-    });
-  }
-
   stopRinging();
 
-  const body = `${order?.service ?? order?.customerName ?? 'خدمة غسيل'} — ${order?.location ?? ''}`;
+  const body = [
+    order?.service ?? order?.customerName ?? 'خدمة غسيل',
+    order?.location,
+  ].filter(Boolean).join(' — ');
+
   let tick = 0;
 
-  const show = async () => {
+  const ring = async () => {
+    // Cancel the other slot first so Android re-triggers the sound
     await notifee.cancelNotification(`incoming_order_${(tick + 1) % 2}`).catch(() => {});
     const id = `incoming_order_${tick % 2}`;
     tick++;
     await notifee.displayNotification({
       id,
-      title: '🚗 طلب جديد وارد!',
+      title:   '🚗 طلب جديد وارد!',
       body,
+      data: {
+        notificationType: 'new_order',
+        orderId:          String(order?.id ?? ''),
+      },
       android: {
         channelId:        CHANNEL_INCOMING,
         importance:       AndroidImportance.HIGH,
         visibility:       AndroidVisibility.PUBLIC,
         category:         AndroidCategory.CALL,
-        sound:            'incoming_order',
-        vibrationPattern: [600, 400, 600, 400],
+        sound:            'new_order_alert',
+        vibrationPattern: [400, 200, 400, 200],
         ongoing:          true,
         autoCancel:       false,
         onlyAlertOnce:    false,
@@ -155,31 +223,21 @@ export async function showIncomingOrderNotification(order) {
     });
   };
 
-  await show();
-  _ringInterval = setInterval(show, 8000);
+  await ring();
+  _ringInterval = setInterval(ring, 8000);
 
-  // Auto-stop after RING_MAX_MS — convert to silent "missed order" notification.
   _ringTimeout = setTimeout(() => {
     convertToMissedNotification(order).catch(() => {});
   }, RING_MAX_MS);
 }
 
 export function stopRinging() {
-  if (_ringInterval) {
-    clearInterval(_ringInterval);
-    _ringInterval = null;
-  }
-  if (_ringTimeout) {
-    clearTimeout(_ringTimeout);
-    _ringTimeout = null;
-  }
+  if (_ringInterval) { clearInterval(_ringInterval); _ringInterval = null; }
+  if (_ringTimeout)  { clearTimeout(_ringTimeout);   _ringTimeout  = null; }
 }
 
 export async function cancelIncomingOrderNotification() {
   stopRinging();
-  // Cancel both displayed and scheduled-trigger ring notifications.
-  // The foreground loop uses incoming_order_0 / _1 (toggled). The background
-  // handler schedules incoming_order_0 .. _(RING_COUNT-1) as TimestampTriggers.
   const cancels = [];
   for (let i = 0; i < Math.max(RING_COUNT, 2); i++) {
     cancels.push(notifee.cancelNotification(`incoming_order_${i}`).catch(() => {}));
@@ -188,8 +246,10 @@ export async function cancelIncomingOrderNotification() {
   await Promise.all(cancels);
 }
 
-// Converts the ringing call into a silent persistent notification — the
-// WhatsApp "missed call" equivalent. Tapping it re-opens the partner app.
+// ─────────────────────────────────────────────────────────────────────────────
+// Missed-order notification — صامتة بعد انتهاء وقت الرنين
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function convertToMissedNotification(order) {
   stopRinging();
   await Promise.all([
@@ -197,17 +257,19 @@ export async function convertToMissedNotification(order) {
     notifee.cancelNotification('incoming_order_1').catch(() => {}),
   ]);
 
-  const id = `missed_order_${order?.id || Date.now()}`;
-  const body = `${order?.service ?? order?.customerName ?? 'خدمة غسيل'} — ${order?.location ?? ''}`;
+  const body = [
+    order?.service ?? order?.customerName ?? 'خدمة غسيل',
+    order?.location,
+  ].filter(Boolean).join(' — ');
 
   await notifee.displayNotification({
-    id,
+    id:    `missed_order_${order?.id ?? Date.now()}`,
     title: '⏰ طلب فائت',
     body,
     data: {
       notificationType: 'order_updates',
-      orderId: String(order?.id || ''),
-      missed: '1',
+      orderId:          String(order?.id ?? ''),
+      missed:           '1',
     },
     android: {
       channelId:   CHANNEL_GENERAL,
@@ -216,8 +278,6 @@ export async function convertToMissedNotification(order) {
       autoCancel:  true,
       pressAction: {id: 'default', launchActivity: 'default'},
     },
-    ios: {
-      sound: 'default',
-    },
+    ios: {sound: 'default'},
   });
 }

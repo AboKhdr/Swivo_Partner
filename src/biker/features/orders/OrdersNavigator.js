@@ -1,14 +1,23 @@
-import React, {useState, useEffect, useCallback} from 'react';
-import {BackHandler, View, StyleSheet} from 'react-native';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
+import {ActivityIndicator, BackHandler, View, StyleSheet} from 'react-native';
 import OrdersScreen from './OrdersScreen';
 import OrderDetailsScreen from './OrderDetailsScreen';
 import OrderMapScreen from './OrderMapScreen';
 import useAppStore from '../../../store/appStore';
+import {useTheme} from '../../../shared/context/ThemeContext';
+import {getOrderById} from '../../../services/orders';
 
-// stack: null | 'detail' | 'map'
 export default function OrdersNavigator() {
+  const {colors}                          = useTheme();
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [screen, setScreen] = useState(null); // 'detail' | 'map'
+  const [screen, setScreen]               = useState(null);
+  const [navLoading, setNavLoading]       = useState(false);
+  const mountedRef                        = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const goToDetail = useCallback(order => {
     setSelectedOrder(order);
@@ -27,6 +36,8 @@ export default function OrdersNavigator() {
 
   const pendingOrderNav      = useAppStore(s => s.pendingOrderNav);
   const clearPendingOrderNav = useAppStore(s => s.clearPendingOrderNav);
+  const pendingNav           = useAppStore(s => s.pendingNav);
+  const clearNav             = useAppStore(s => s.clearNav);
 
   useEffect(() => {
     if (!pendingOrderNav) return;
@@ -34,6 +45,23 @@ export default function OrdersNavigator() {
     if (pendingOrderNav.type === 'detail') goToDetail(pendingOrderNav.order);
     else if (pendingOrderNav.type === 'map') goToMap(pendingOrderNav.order);
   }, [pendingOrderNav, clearPendingOrderNav, goToDetail, goToMap]);
+
+  useEffect(() => {
+    if (pendingNav?.tab !== 'orders' || pendingNav?.screen !== 'detail' || !pendingNav?.orderId) return;
+    const orderId = pendingNav.orderId;
+    clearNav();
+    setNavLoading(true);
+    getOrderById(orderId).then(res => {
+      if (!mountedRef.current) return;
+      if (res.success) {
+        const order = res.data?.data ?? res.data;
+        if (order) goToDetail(order);
+      }
+      setNavLoading(false);
+    }).catch(() => {
+      if (mountedRef.current) setNavLoading(false);
+    });
+  }, [pendingNav, clearNav, goToDetail]);
 
   useEffect(() => {
     if (!screen) return;
@@ -44,9 +72,16 @@ export default function OrdersNavigator() {
     return () => sub.remove();
   }, [screen, goBack]);
 
+  if (navLoading) {
+    return (
+      <View style={s.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={s.root}>
-      {/* List — always mounted, hidden when child screen is open */}
       <View style={[s.screen, screen && s.hidden]}>
         <OrdersScreen onOrderPress={goToDetail} onLocationPress={goToMap} />
       </View>
@@ -67,7 +102,8 @@ export default function OrdersNavigator() {
 }
 
 const s = StyleSheet.create({
-  root: {flex: 1},
+  root:   {flex: 1},
   screen: {flex: 1},
   hidden: {display: 'none'},
+  center: {flex: 1, alignItems: 'center', justifyContent: 'center'},
 });

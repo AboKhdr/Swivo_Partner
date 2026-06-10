@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import {ArrowRight, Plus, Bike, Star, Phone, UserX, PauseCircle, Trash2, X, RefreshCw} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
+import SelectField from '../../../shared/components/SelectField';
 import AddBikerScreen from './AddBikerScreen';
 import BikerDetailsScreen from './BikerDetailsScreen';
-import {getStaff, setStaffStatus, removeStaff, setDutyStatus} from '../../../services/partner';
+import {getStaff, setStaffStatus, removeStaff, setDutyStatus, getBranches} from '../../../services/partner';
 
 function buildOptions(biker) {
   const isDeactivated = biker.status === 'deactivated';
@@ -177,23 +178,49 @@ function BikerCard({item, colors, onOptions}) {
 export default function BikersScreen({onBack}) {
   const {colors} = useTheme();
   const [bikers,       setBikers]       = useState([]);
+  const [branches,     setBranches]     = useState([{_id: 'all', name: {ar: 'كل الفروع'}}]);
+  const [activeBranch, setActiveBranch] = useState('all');
   const [loading,      setLoading]      = useState(true);
   const [sheetBiker,   setSheetBiker]   = useState(null);
   const [showAdd,      setShowAdd]      = useState(false);
   const [editingBiker, setEditingBiker] = useState(null);
   const [detailBiker,  setDetailBiker]  = useState(null);
 
-  const fetchBikers = useCallback(async () => {
+  // Fetch bikers from /tenant/staff, optionally scoped to a branch
+  const fetchBikers = useCallback(async (branchId = activeBranch) => {
     setLoading(true);
-    const res = await getStaff({role: 'BIKER', limit: 100});
+    const filters = {role: 'BIKER', limit: 100};
+    if (branchId && branchId !== 'all') filters.branch = branchId;
+    const res = await getStaff(filters);
     if (res.success) {
       const list = res.data?.data ?? res.data ?? [];
       setBikers(Array.isArray(list) ? list : []);
     }
     setLoading(false);
+  }, [activeBranch]);
+
+  // Initial load: branches + all bikers
+  useEffect(() => {
+    getBranches().then(res => {
+      if (res.success) {
+        const list = res.data?.data ?? res.data ?? [];
+        setBranches([{_id: 'all', name: {ar: 'كل الفروع'}}, ...(Array.isArray(list) ? list : [])]);
+      }
+    });
+    fetchBikers('all');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { fetchBikers(); }, [fetchBikers]);
+  const handleSelectBranch = useCallback(id => {
+    if (id === activeBranch) return;
+    setActiveBranch(id);
+    fetchBikers(id);
+  }, [activeBranch, fetchBikers]);
+
+  const branchOptions = useMemo(() => branches.map(b => ({
+    value: b._id ?? b.id,
+    label: b.name?.ar ?? b.nameAr ?? b.name?.en ?? '',
+  })), [branches]);
 
   const handleOptions = useCallback(item => setDetailBiker(item), []);
 
@@ -247,6 +274,16 @@ export default function BikersScreen({onBack}) {
               <Plus size={20} color="#FFF" />
             </TouchableOpacity>
           </View>
+
+          {branches.length > 1 && (
+            <View style={s.filterRow}>
+              <SelectField
+                options={branchOptions}
+                value={activeBranch}
+                onChange={handleSelectBranch}
+              />
+            </View>
+          )}
 
           {loading
             ? <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
@@ -307,7 +344,9 @@ const s = StyleSheet.create({
   headerTitle: {fontSize: 26, fontWeight: '900'},
   headerSub:   {fontSize: 13},
 
-  list:        {paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, gap: 12},
+  filterRow:   {paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8},
+
+  list:        {paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, gap: 12},
 
   card:        {
     flexDirection:     'row',

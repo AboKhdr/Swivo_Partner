@@ -3,6 +3,9 @@ import {Animated, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {STATUS_MAP, STATUS_COLORS} from '../../../../shared/constants/status';
 import {useTheme} from '../../../../shared/context/ThemeContext';
 
+// Safe string — handles {ar, en} objects from backend
+const sc2 = v => (!v ? '' : typeof v === 'string' ? v : v.ar ?? v.en ?? '');
+
 export default function OrderCard({order, index}) {
   const {colors} = useTheme();
   const st = STATUS_MAP[order.status] ?? {label: order.status, color: colors.textSecondary};
@@ -41,8 +44,8 @@ export default function OrderCard({order, index}) {
             <Text style={[s.badgeText, {color: sc.text}]}>{st.label}</Text>
           </View>
         </View>
-        <Text style={[s.carName, {color: colors.textPrimary}]}>{order.car.brand} {order.car.model}</Text>
-        <Text style={[s.carSub, {color: colors.textSecondary}]}>{order.car.color} · {order.car.plateNumber}</Text>
+        <Text style={[s.carName, {color: colors.textPrimary}]}>{sc2(order.car?.brand) || sc2(order.userCar?.brand?.name)} {sc2(order.car?.model) || sc2(order.userCar?.model?.name)}</Text>
+        <Text style={[s.carSub, {color: colors.textSecondary}]}>{sc2(order.car?.color)}{(order.car?.color && order.car?.plateNumber) ? ' · ' : ''}{order.car?.plateNumber ?? order.userCar?.plateNumber ?? ''}</Text>
         <View style={[s.divider, {backgroundColor: colors.border}]} />
         <View style={s.infoRow}>
           <Text style={s.emoji}>📍</Text>
@@ -52,11 +55,11 @@ export default function OrderCard({order, index}) {
           <Text style={s.emoji}>🕐</Text>
           <Text style={[s.infoText, {color: colors.textSecondary}]}>{order.scheduledAt}</Text>
           <View style={[s.servicePill, {backgroundColor: colors.primary + '18'}]}>
-            <Text style={[s.serviceText, {color: colors.primary}]}>{order.service.name}</Text>
+            <Text style={[s.serviceText, {color: colors.primary}]}>{sc2(order.services?.[0]?.name) || sc2(order.service?.name)}</Text>
           </View>
         </View>
         <View style={[s.footer, {borderTopColor: colors.border}]}>
-          <Text style={[s.client, {color: colors.textSecondary}]}>👤 {order.client.firstName}</Text>
+          <Text style={[s.client, {color: colors.textSecondary}]}>👤 {order.client?.name ?? order.client?.firstName ?? ''}</Text>
           <Text style={[s.earning, {color: colors.success}]}>﷼ {order.bikerEarning.toFixed(0)}</Text>
         </View>
       </TouchableOpacity>

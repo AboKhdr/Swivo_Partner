@@ -51,25 +51,28 @@ export default function OrderMapScreen({order, onBack, onGoToDetail}) {
   const [mapError,   setMapError]   = useState(false);
   const webViewRef = useRef(null);
 
-  // ── data from real shape ──────────────────────────────────────────────
+  // ── data — supports new shape (location.coordinates, car, services) and legacy ──
   const snap        = order.addressSnapshot ?? {};
-  const lat         = snap.lat ?? order.location?.lat ?? 24.7136;
-  const lng         = snap.lng ?? order.location?.lng ?? 46.6753;
-  const addressText = snap.addressText ?? snap.district ?? order.branch?.address ?? '';
+  const coords      = order.location?.coordinates ?? {};
+  const lat         = coords.lat ?? snap.lat ?? order.location?.lat ?? 24.7136;
+  const lng         = coords.lng ?? snap.lng ?? order.location?.lng ?? 46.6753;
+  const addressText = order.location?.addressText ?? snap.addressText ?? snap.district ?? order.branch?.address ?? '';
   const district    = snap.district ?? '';
   const city        = snap.city ?? '';
   const fullAddress = [addressText, district, city].filter(Boolean).join('، ');
 
-  const clientName  = order.client
-    ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim()
-    : '';
-  const clientPhone = order.client?.phoneNumber ?? '';
+  // client — new: client.name  |  legacy: firstName + lastName
+  const clientName  = order.client?.name
+    ?? (order.client ? `${order.client.firstName ?? ''} ${order.client.lastName ?? ''}`.trim() : '');
+  const clientPhone = order.client?.phoneNumber ?? order.client?.phone ?? '';
 
+  // service — new: services[0].name  |  legacy: itemsSnapshot[0].nameSnapshot
+  const strVal      = v => (!v ? '' : typeof v === 'string' ? v : v.ar ?? v.en ?? '');
+  const firstSvc    = order.services?.[0];
   const firstItem   = order.itemsSnapshot?.[0];
-  const serviceName = firstItem?.nameSnapshot?.ar
-    ?? firstItem?.nameSnapshot?.en
-    ?? order.service?.name
-    ?? '';
+  const serviceName = strVal(firstSvc?.name)
+    || strVal(firstItem?.nameSnapshot)
+    || strVal(order.service?.name);
 
   const scheduledAt = order.scheduledAt
     ? new Date(order.scheduledAt).toLocaleString('ar-SA', {
@@ -84,7 +87,6 @@ export default function OrderMapScreen({order, onBack, onGoToDetail}) {
 
   const openWhatsApp = () => {
     if (!clientPhone) return;
-    // إزالة + والمسافات للحصول على رقم دولي نظيف
     const clean = clientPhone.replace(/[\s+\-()]/g, '');
     Linking.openURL(`https://wa.me/${clean}`).catch(() => {});
   };

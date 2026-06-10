@@ -1,4 +1,5 @@
 import api from './api';
+import useAuthStore from '../store/authStore';
 
 // ── FCM Token ────────────────────────────────────────────────────────────────
 
@@ -12,16 +13,29 @@ export async function unregisterFCMToken(fcmToken) {
 }
 
 // ── Notification List ────────────────────────────────────────────────────────
+//
+// The notification endpoints are role-scoped on the backend:
+//   biker  → /biker/notification
+//   admin  → /dashboard/notification (partner)
+// Use the role-specific module (services/biker.js or services/partner.js) when
+// you need the typed accessor. These generic helpers dispatch by the current
+// auth role and return the same response shape: { data: [...], pagination }.
 
-export async function getNotifications(page = 1) {
-  return api.get(`/notifications?page=${page}`);
-  // Response: { items[], unreadCount, hasMore }
+function scope() {
+  const role = useAuthStore.getState().role;
+  return role === 'biker' ? '/biker/notification' : '/dashboard/notification';
+}
+
+export async function getNotifications(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return api.get(`${scope()}${qs ? `?${qs}` : ''}`);
+  // Response: { data: [...], pagination: { hasNextPage, total, ... } }
 }
 
 export async function markAsRead(id) {
-  return api.patch(`/notifications/${id}/read`);
+  return api.put(`${scope()}/read/${id}`);
 }
 
 export async function markAllAsRead() {
-  return api.patch('/notifications/read-all');
+  return api.put(`${scope()}/read-all`);
 }

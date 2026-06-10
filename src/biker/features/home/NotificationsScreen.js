@@ -3,11 +3,11 @@ import {
   ActivityIndicator, FlatList, Platform, RefreshControl,
   StatusBar, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
-import {ChevronLeft, Droplets, Bell, Sparkles, CheckCircle, AlertCircle} from 'lucide-react-native';
+import {ChevronLeft, Droplets, Bell, Sparkles, CheckCircle, AlertCircle, CheckCheck} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
-import useAuthStore from '../../../store/authStore';
-import {getNotifications, markNotificationRead, markAllNotificationsRead} from '../../../services/biker';
+import {getNotifications, markAllNotificationsRead} from '../../../services/biker';
+import {handleNavigate} from '../../../shared/context/FirebaseContext';
 
 // type: 0=order 1=promo 2=system 3=reminder 4=voucher 5=gift
 function NotifIcon({type}) {
@@ -22,39 +22,12 @@ const ic = StyleSheet.create({
   wrap: {width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0},
 });
 
-function NotifRow({item, userId, onPress, colors}) {
-  const isRead = Array.isArray(item.readBy) && item.readBy.includes(userId);
-  const timeStr = item.createdAt
-    ? new Date(item.createdAt).toLocaleString('ar-SA', {
-        year: 'numeric', month: 'long', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
-    : '';
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-  return (
-    <TouchableOpacity
-      style={[r.row, !isRead && {backgroundColor: colors.primary + '08'}]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.7}>
-      <NotifIcon type={item.type} />
-      <View style={r.text}>
-        <Text style={[r.title, {color: colors.textPrimary}]} numberOfLines={2}>{item.title}</Text>
-        {!!item.body && <Text style={[r.body, {color: colors.textSecondary}]} numberOfLines={2}>{item.body}</Text>}
-        <Text style={[r.time, {color: colors.textSecondary}]}>{timeStr}</Text>
-      </View>
-      {!isRead && <View style={[r.dot, {backgroundColor: colors.primary}]} />}
-    </TouchableOpacity>
-  );
+function resolveText(item, lang, field) {
+  const lc = item.localizedContent ?? {};
+  return lc[lang]?.[field] ?? lc.ar?.[field] ?? lc.en?.[field] ?? item[field] ?? '';
 }
-
-const r = StyleSheet.create({
-  row:  {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12},
-  text: {flex: 1, gap: 3},
-  title:{fontSize: 13, fontWeight: '600'},
-  body: {fontSize: 12},
-  time: {fontSize: 11},
-  dot:  {width: 8, height: 8, borderRadius: 4, flexShrink: 0},
-});
 
 function formatDateLabel(dateStr, lang) {
   if (!dateStr || dateStr === 'unknown') return '';
@@ -71,37 +44,93 @@ function formatDateLabel(dateStr, lang) {
 function groupByDate(items) {
   const groups = {};
   items.forEach(n => {
-    const date = n.createdAt ? new Date(n.createdAt).toISOString().split('T')[0] : 'unknown';
+    const ts = n.sentAt ?? n.scheduledAt ?? n.createdAt;
+    const date = ts ? new Date(ts).toISOString().split('T')[0] : 'unknown';
     if (!groups[date]) groups[date] = [];
     groups[date].push(n);
   });
-  return Object.entries(groups).map(([date, data]) => ({date, data}));
+  // Sort dates descending (newest first)
+  return Object.entries(groups)
+    .sort(([a], [b]) => (a < b ? 1 : -1))
+    .map(([date, data]) => ({date, data}));
 }
 
-export default function NotificationsScreen({onBack}) {
+// ── NotifRow ──────────────────────────────────────────────────────────────────
+
+function NotifRow({item, lang, onPress, colors}) {
+  const isRead = item.isRead ?? item.read ?? (item.readAt != null) ?? false;
+  const title   = resolveText(item, lang, 'title');
+  const body    = resolveText(item, lang, 'body');
+  const ts      = item.sentAt ?? item.scheduledAt ?? item.createdAt;
+  const timeStr = ts
+    ? new Date(ts).toLocaleString('ar-SA', {
+        hour: '2-digit', minute: '2-digit',
+      })
+    : '';
+
+  return (
+    <TouchableOpacity
+      style={[r.row, !isRead && {backgroundColor: colors.primary + '0D', borderRightWidth: 3, borderRightColor: colors.primary}]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.7}>
+      <NotifIcon type={item.type} />
+      <View style={r.text}>
+        {!!title && (
+          <Text style={[r.title, {color: colors.textPrimary, fontWeight: isRead ? '600' : '800'}]} numberOfLines={2}>{title}</Text>
+        )}
+        {!!body && (
+          <Text style={[r.body, {color: isRead ? colors.textSecondary : colors.textPrimary + 'CC'}]} numberOfLines={2}>{body}</Text>
+        )}
+        {!!timeStr && (
+          <Text style={[r.time, {color: isRead ? colors.textSecondary : colors.primary + 'AA'}]}>{timeStr}</Text>
+        )}
+      </View>
+      {!isRead && <View style={[r.dot, {backgroundColor: colors.primary}]} />}
+    </TouchableOpacity>
+  );
+}
+
+const r = StyleSheet.create({
+  row:  {flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 12},
+  text: {flex: 1, gap: 3},
+  title:{fontSize: 13, fontWeight: '600'},
+  body: {fontSize: 12},
+  time: {fontSize: 11},
+  dot:  {width: 9, height: 9, borderRadius: 5, flexShrink: 0},
+});
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
+
+export default function NotificationsScreen({onBack, onUnreadCountChange}) {
   const {colors, isDark} = useTheme();
-  const {t, lang} = useI18n();
-  const user = useAuthStore(s => s.user);
-  const userId = user?._id ?? null;
+  const {t, lang}        = useI18n();
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(true);
   const [refreshing, setRefreshing]       = useState(false);
   const [loadingMoreUI, setLoadingMoreUI] = useState(false);
-  const [hasMore, setHasMore]             = useState(true);
+  const [hasMore, setHasMore]             = useState(false);
   const pageRef                           = useRef(1);
   const loadingMoreRef                    = useRef(false);
 
   const fetchNotifications = useCallback(async (page, replace) => {
     const res = await getNotifications({page, limit: 20});
     if (res.success) {
-      const data = res.data?.data ?? [];
+      // Backend: { success, data: [...], pagination: { hasNextPage, ... } }
+      const list = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.data) ? res.data.data : [];
+
       if (replace) {
-        setNotifications(data);
+        setNotifications(list);
       } else {
-        setNotifications(prev => [...prev, ...data]);
+        setNotifications(prev => [...prev, ...list]);
       }
-      setHasMore(res.data?.pagination?.hasNextPage ?? false);
+
+      setHasMore(
+        res.data?.pagination?.hasNextPage ??
+        (Array.isArray(res.data) ? false : false),
+      );
       pageRef.current = page;
     }
   }, []);
@@ -125,26 +154,30 @@ export default function NotificationsScreen({onBack}) {
     setLoadingMoreUI(false);
   }, [hasMore, fetchNotifications]);
 
-  const handlePress = useCallback(async (item) => {
-    const isRead = Array.isArray(item.readBy) && item.readBy.includes(userId);
-    if (!isRead) {
-      await markNotificationRead(item._id);
-      setNotifications(prev =>
-        prev.map(n => n._id === item._id ? {...n, readBy: [...(n.readBy ?? []), userId]} : n)
-      );
-    }
-  }, [userId]);
+  const handlePress = useCallback((item) => {
+    handleNavigate({
+      ...(item.data ?? {}),
+      _itemType: item.type,
+      action: item.data?.action ?? '',
+    });
+    onBack?.();
+  }, [onBack]);
+
+  const [markingAll, setMarkingAll] = useState(false);
+
+  const unreadCount = notifications.filter(n => !(n.isRead ?? n.read ?? (n.readAt != null))).length;
+
+  useEffect(() => {
+    if (!loading) onUnreadCountChange?.(unreadCount);
+  }, [unreadCount, loading, onUnreadCountChange]);
 
   const handleMarkAllRead = useCallback(async () => {
-    await markAllNotificationsRead();
-    setNotifications(prev =>
-      prev.map(n => ({...n, readBy: Array.isArray(n.readBy) && n.readBy.includes(userId) ? n.readBy : [...(n.readBy ?? []), userId]}))
-    );
-  }, [userId]);
-
-  const unreadCount = notifications.filter(
-    n => !(Array.isArray(n.readBy) && n.readBy.includes(userId))
-  ).length;
+    if (markingAll) return;
+    setMarkingAll(true);
+    await markAllNotificationsRead().catch(() => {});
+    setNotifications(prev => prev.map(n => ({...n, isRead: true})));
+    setMarkingAll(false);
+  }, [markingAll]);
 
   const groups = groupByDate(notifications);
 
@@ -155,14 +188,14 @@ export default function NotificationsScreen({onBack}) {
       </Text>
       <View style={[s.groupCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
         {group.data.map((item, i) => (
-          <View key={item._id}>
-            <NotifRow item={item} userId={userId} onPress={handlePress} colors={colors} />
+          <View key={item._id ?? item.id ?? String(i)}>
+            <NotifRow item={item} lang={lang} onPress={handlePress} colors={colors} />
             {i < group.data.length - 1 && <View style={[s.divider, {backgroundColor: colors.border}]} />}
           </View>
         ))}
       </View>
     </View>
-  ), [colors, handlePress, userId, lang]);
+  ), [colors, handlePress, lang]);
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -183,13 +216,23 @@ export default function NotificationsScreen({onBack}) {
             </View>
           )}
         </View>
-        <TouchableOpacity
-          style={s.readAllBtn}
-          onPress={handleMarkAllRead}
-          disabled={unreadCount === 0}
-          hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
-          <Bell size={18} color={unreadCount > 0 ? colors.primary : colors.textSecondary} strokeWidth={2} />
-        </TouchableOpacity>
+        {unreadCount > 0 ? (
+          <TouchableOpacity
+            style={[s.readAllBtn, s.readAllBtnActive, {borderColor: colors.primary + '40'}]}
+            onPress={handleMarkAllRead}
+            disabled={markingAll}
+            hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+            {markingAll
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <>
+                  <CheckCheck size={15} color={colors.primary} strokeWidth={2.5} />
+                  <Text style={[s.readAllTxt, {color: colors.primary}]}>{t('notifications.markAllRead')}</Text>
+                </>
+            }
+          </TouchableOpacity>
+        ) : (
+          <View style={s.readAllBtn} />
+        )}
       </View>
 
       {loading ? (
@@ -208,7 +251,12 @@ export default function NotificationsScreen({onBack}) {
           onEndReached={onLoadMore}
           onEndReachedThreshold={0.3}
           ListEmptyComponent={
-            <Text style={[s.empty, {color: colors.textSecondary}]}>{t('notifications.empty')}</Text>
+            <View style={s.emptyWrap}>
+              <View style={[s.emptyIcon, {backgroundColor: colors.primary + '10'}]}>
+                <Bell size={36} color={colors.primary} />
+              </View>
+              <Text style={[s.emptyTitle, {color: colors.textPrimary}]}>{t('notifications.empty')}</Text>
+            </View>
           }
           ListFooterComponent={
             loadingMoreUI
@@ -230,13 +278,17 @@ const s = StyleSheet.create({
   headerTitle: {fontSize: 18, fontWeight: '800'},
   badge:       {minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4},
   badgeText:   {color: '#fff', fontSize: 10, fontWeight: '800'},
-  readAllBtn:  {width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center'},
+  readAllBtn:     {width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center'},
+  readAllBtnActive:{flexDirection: 'row', width: 'auto', paddingHorizontal: 10, borderWidth: 1, gap: 4},
+  readAllTxt:     {fontSize: 11, fontWeight: '700'},
   scroll:      {flex: 1},
-  content:     {padding: 16, gap: 12},
+  content:     {padding: 16, gap: 12, paddingBottom: 40},
   group:       {gap: 8},
   dateLabel:   {fontSize: 13, fontWeight: '700', paddingHorizontal: 4},
   groupCard:   {borderRadius: 18, borderWidth: 1, overflow: 'hidden'},
   divider:     {height: 1, marginHorizontal: 16},
-  empty:       {textAlign: 'center', marginTop: 48, fontSize: 14},
+  emptyWrap:   {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 80},
+  emptyIcon:   {width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center'},
+  emptyTitle:  {fontSize: 14, textAlign: 'center'},
   footerLoader:{paddingVertical: 16},
 });

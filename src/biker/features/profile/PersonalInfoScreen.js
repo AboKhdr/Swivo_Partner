@@ -41,9 +41,24 @@ function Field({label, value, onChangeText, placeholder, keyboardType, editable 
   );
 }
 
+// Resolve a branch name that may be a plain string or an {ar, en} object,
+// from any of the shapes the profile endpoint might return.
+function resolveBranchName(p, lang) {
+  const raw = p.branchName
+    ?? p.branch?.name
+    ?? p.branch
+    ?? p.branchId?.name
+    ?? p.branchId
+    ?? '';
+  if (!raw) return '';
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object') return (lang && raw[lang]) || raw.ar || raw.en || '';
+  return String(raw);
+}
+
 export default function PersonalInfoScreen({onBack}) {
   const {colors, isDark} = useTheme();
-  const {t, isRTL} = useI18n();
+  const {t, isRTL, lang} = useI18n();
   const updateUser = useAuthStore(s => s.updateUser);
 
   const [firstName,   setFirstName]   = useState('');
@@ -68,11 +83,11 @@ export default function PersonalInfoScreen({onBack}) {
       setLastName(p.lastName ?? '');
       setEmail(p.email ?? '');
       setPhoneNumber(p.phoneNumber ?? p.phone ?? '');
-      setBranchName(p.branchName ?? p.branch?.name ?? '');
+      setBranchName(resolveBranchName(p, lang));
       setImageUrl(p.image ?? p.imageUrl ?? null);
     }
     setLoading(false);
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     loadProfile();
@@ -210,19 +225,17 @@ export default function PersonalInfoScreen({onBack}) {
           />
         </View>
 
-        {/* Work area — read only */}
-        {!!branchName && (
-          <View style={s.section}>
-            <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('personalInfo.workArea')}</Text>
-            <Field
-              label={t('personalInfo.workArea')}
-              value={branchName}
-              editable={false}
-              Icon={MapPin}
-              colors={colors} isRTL={isRTL}
-            />
-          </View>
-        )}
+        {/* Work area / branch — read only */}
+        <View style={s.section}>
+          <Text style={[s.sectionTitle, {color: colors.textSecondary}]}>{t('personalInfo.workArea')}</Text>
+          <Field
+            label={t('personalInfo.branch')}
+            value={branchName || t('personalInfo.notSet')}
+            editable={false}
+            Icon={MapPin}
+            colors={colors} isRTL={isRTL}
+          />
+        </View>
 
         {!!error && <Text style={[s.error, {color: '#EF4444'}]}>{error}</Text>}
 

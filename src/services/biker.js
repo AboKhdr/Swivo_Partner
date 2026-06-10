@@ -84,4 +84,18 @@ export async function getReasons(type) {
   // Response: { success, reasons: [{ _id, name, type }] }
 }
 
+// ── Client Transactions ───────────────────────────────────────────────────────
+
+export async function getClientTransactions() {
+  return api.get('/biker/transactions');
+  // Response: { user_id, balance, transactions: [{ _id, amount, entryType, type, description, reference, createdAt }] }
+}
+
+// ── Tenant Gallery (client-side view) ────────────────────────────────────────
+
+export async function getTenantGallery(tenantId) {
+  return api.get(`/client/tenant/${tenantId}/gallery`);
+  // Response: { data: [{ _id, url, caption, order, createdAt }], meta: { total } }
+}
+
 // ── Terms / Support moved to services/shared.js (used by both biker and partner)

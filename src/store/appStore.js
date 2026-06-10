@@ -13,12 +13,17 @@ const useAppStore = create((set, get) => ({
 
   // ── Toast / error banners ──────────────────────────────────────────────
   toasts: [],
-  showToast: (message, type = 'error') => {
+  showToast: (message, type = 'error', duration = 3500) => {
     const id = Date.now();
     set(s => ({toasts: [...s.toasts, {id, message, type}]}));
     setTimeout(() => {
       set(s => ({toasts: s.toasts.filter(t => t.id !== id)}));
-    }, 3500);
+    }, duration);
+  },
+  // Order toast — stays until user dismisses (no auto-hide), carries order data
+  showOrderToast: (order) => {
+    const id = Date.now();
+    set(s => ({toasts: [...s.toasts, {id, type: 'order', order}]}));
   },
   dismissToast: (id) => set(s => ({toasts: s.toasts.filter(t => t.id !== id)})),
 
@@ -46,6 +51,11 @@ const useAppStore = create((set, get) => ({
   pendingOrderNav: null,  // { type: 'detail' | 'map', order: object } | null
   setPendingOrderNav: (nav) => set({pendingOrderNav: nav}),
   clearPendingOrderNav: () => set({pendingOrderNav: null}),
+
+  // ── Order refresh signal — tells OrderDetailsScreen to reload ──────────
+  // Incremented when a foreground notification requires a refresh (e.g. photo_skip_decision)
+  orderRefreshSignal: 0,
+  triggerOrderRefresh: () => set(s => ({orderRefreshSignal: s.orderRefreshSignal + 1})),
 }));
 
 export default useAppStore;

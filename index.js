@@ -20,17 +20,19 @@ import App from './App';
 import {name as appName} from './app.json';
 import {
   CHANNEL_INCOMING,
+  CHANNEL_NEW_ORDER,
   CHANNEL_GENERAL,
   resolveChannel,
+  setupNotifeeChannels,
 } from './src/services/notificationChannel';
 import {launchIncomingOrder} from './src/services/fullScreenIntent';
 
-// Ring loop config — matches RING_MAX_MS (60s) in notificationChannel.js
-// 8 × 8s = 64s ensures the ring covers the full 60s window even with small
-// delays between scheduled alarms firing.
+// Ring loop config — matches RING_MAX_MS (180s = 3 min) in notificationChannel.js
+// 23 × 8s = 184s ensures the ring covers the full 180s window even with small
+// delays between scheduled alarms firing. The ring tone file is 8s long.
 const RING_INTERVAL_MS = 8000;
-const RING_COUNT       = 8;
-const MISSED_DELAY_MS  = 60_000;   // Show "missed" notification at 60s
+const RING_COUNT       = 23;
+const MISSED_DELAY_MS  = 180_000;  // Show "missed" notification at 3 minutes
 
 // Schedules a ringing loop of `RING_COUNT` notifications (one immediate + repeats
 // every RING_INTERVAL_MS) plus a final "missed order" notification at MISSED_DELAY_MS.
@@ -38,7 +40,7 @@ const MISSED_DELAY_MS  = 60_000;   // Show "missed" notification at 60s
 async function displayOrderNotification(order) {
   await notifee.createChannel({
     id:               CHANNEL_INCOMING,
-    name:             'طلبات جديدة',
+    name:             'طلبات جديدة — رنين البايكر',
     importance:       AndroidImportance.HIGH,
     visibility:       AndroidVisibility.PUBLIC,
     vibration:        true,
@@ -46,6 +48,7 @@ async function displayOrderNotification(order) {
     sound:            'incoming_order',
     bypassDnd:        true,
   });
+  await setupNotifeeChannels();
 
   const baseBody = `${order?.service ?? order?.customerName ?? 'خدمة غسيل'} — ${order?.location ?? ''}`;
   const baseAndroid = {
@@ -142,11 +145,7 @@ async function displayGenericNotification(remoteMessage) {
   const notificationType = data?.notificationType ?? 'general';
   const channelId = resolveChannel(notificationType);
 
-  await notifee.createChannel({
-    id:         channelId,
-    name:       channelId,
-    importance: AndroidImportance.HIGH,
-  });
+  await setupNotifeeChannels();
 
   await notifee.displayNotification({
     title,
@@ -165,33 +164,100 @@ async function displayGenericNotification(remoteMessage) {
 
 notifee.onBackgroundEvent(async ({type, detail}) => {
   if (type !== EventType.PRESS) return;
-  const id = detail?.notification?.id ?? '';
-  // User tapped any ringing notification — cancel the whole ring loop
-  if (id.startsWith('incoming_order_')) {
+
+  const notifId = detail?.notification?.id ?? '';
+  const data    = detail?.notification?.data ?? {};
+
+  // ── Biker: ضغط على إشعار الرنين → إلغاء الرنين + فتح IncomingOrderScreen ──
+  if (notifId.startsWith('incoming_order_')) {
     await cancelPendingRingTriggers();
+    // IncomingOrderScreen يُفتح تلقائياً عبر pending_incoming_order في FirebaseContext
+    return;
+  }
+
+  // ── Biker/Partner: ضغط على أي إشعار آخر → navigate لتفاصيل الطلب ──────────
+  // نحفظ الـ navigation intent في AsyncStorage لأن FirebaseContext لم يُشغَّل بعد
+  const orderId          = data.orderId || data.order_id || data.id || '';
+  const notificationType = data.notificationType || data.type || '';
+
+  if (orderId && (notificationType === 'order_updates' || notificationType === 'new_order' || notificationType === 'biker_alerts')) {
+    await AsyncStorage.setItem(
+      'pending_notification_nav',
+      JSON.stringify({notificationType, orderId, action: data.action ?? '', status: data.status ?? '', decision: data.decision ?? ''}),
+    ).catch(() => {});
   }
 });
+
+// Partner: one-shot alert with new_order_alert sound (no looping)
+async function displayPartnerNewOrderNotification(order) {
+  // Create the channel explicitly first (Android must register it before we can
+  // use it in the same background task — setupNotifeeChannels runs after).
+  await notifee.createChannel({
+    id:               CHANNEL_NEW_ORDER,
+    name:             'طلبات جديدة — تنبيه المغسلة',
+    importance:       AndroidImportance.HIGH,
+    visibility:       AndroidVisibility.PUBLIC,
+    vibration:        true,
+    sound:            'new_order_alert',
+    bypassDnd:        true,
+  });
+  await setupNotifeeChannels();
+
+  const body = [
+    order?.service ?? order?.customerName ?? 'خدمة غسيل',
+    order?.location,
+  ].filter(Boolean).join(' — ');
+
+  await notifee.displayNotification({
+    id:    `new_order_${order?.id ?? Date.now()}`,
+    title: '🔔 طلب جديد!',
+    body,
+    data: {
+      notificationType: 'new_order',
+      orderId:          String(order?.id ?? ''),
+    },
+    android: {
+      channelId:        CHANNEL_NEW_ORDER,
+      smallIcon:        'ic_notification',
+      importance:       AndroidImportance.HIGH,
+      visibility:       AndroidVisibility.PUBLIC,
+      sound:            'new_order_alert',
+      vibrationPattern: [400, 200, 400, 200, 400],
+      autoCancel:       true,
+      pressAction:      {id: 'default', launchActivity: 'default'},
+    },
+    ios: {
+      sound:          'new_order_alert.aiff',
+      critical:       true,
+      criticalVolume: 1.0,
+    },
+  });
+}
 
 setBackgroundMessageHandler(getMessaging(), async remoteMessage => {
   const {data} = remoteMessage;
 
   if (data?.type === 'NEW_ORDER' && data?.order) {
-    await AsyncStorage.setItem('pending_incoming_order', data.order).catch(() => {});
-
     let parsedOrder = null;
     try { parsedOrder = JSON.parse(data.order); } catch {}
 
-    // 1) Schedule the ringing notification loop (provides sound + fallback
-    //    heads-up if the system blocks the activity launch).
-    if (parsedOrder) await displayOrderNotification(parsedOrder);
+    // قرأ الـ role من AsyncStorage لنحدد بايكر أم partner
+    const role = await AsyncStorage.getItem('user_role').catch(() => null);
+    const isBiker = role === 'biker';
 
-    // 2) Bring the IncomingOrderActivity to the foreground over the lock
-    //    screen — WhatsApp-style. Requires USE_FULL_SCREEN_INTENT to be
-    //    granted (prompted in FirebaseContext.ensureFullScreenPermission).
-    await launchIncomingOrder(
-      parsedOrder?.id ?? '',
-      data.order,
-    ).catch(() => {});
+    await AsyncStorage.setItem('pending_incoming_order', data.order).catch(() => {});
+
+    if (isBiker) {
+      // بايكر: رنين متكرر + فتح الشاشة فوق شاشة القفل
+      if (parsedOrder) await displayOrderNotification(parsedOrder);
+      await launchIncomingOrder(
+        parsedOrder?.id ?? '',
+        data.order,
+      ).catch(() => {});
+    } else {
+      // partner: نغمة تنبيه واحدة فقط — لا رنين
+      if (parsedOrder) await displayPartnerNewOrderNotification(parsedOrder);
+    }
     return;
   }
 

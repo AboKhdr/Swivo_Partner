@@ -3,6 +3,7 @@ import {BackHandler, StyleSheet, View} from 'react-native';
 import ProfileScreen from './ProfileScreen';
 import PersonalInfoScreen from './PersonalInfoScreen';
 import WalletScreen from './WalletScreen';
+import TransactionsScreen from './TransactionsScreen';
 import LanguageScreen from '../../../shared/components/LanguageScreen';
 import DeleteAccountScreen from '../../../shared/components/DeleteAccountScreen';
 import SupportScreen from './SupportScreen';
@@ -37,6 +38,11 @@ export default function ProfileNavigator() {
       {screen === 'wallet' && (
         <View style={s.screen}>
           <WalletScreen onBack={goBack} />
+        </View>
+      )}
+      {screen === 'transactions' && (
+        <View style={s.screen}>
+          <TransactionsScreen onBack={goBack} />
         </View>
       )}
       {screen === 'language' && (

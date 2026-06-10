@@ -16,8 +16,9 @@ import useAppStore from '../../store/appStore';
 import useAuthStore from '../../store/authStore';
 import {registerFCMToken} from '../../services/notifications';
 import {
-  setupNotifeeChannel,
+  setupNotifeeChannels,
   showIncomingOrderNotification,
+  showNewOrderAlert,
   cancelIncomingOrderNotification,
   displayNotification,
 } from '../../services/notificationChannel';
@@ -39,7 +40,7 @@ const FirebaseContext = createContext(null);
 async function bootstrap() {
   try {
     await notifee.requestPermission();
-    await setupNotifeeChannel();
+    await setupNotifeeChannels();
 
     if (Platform.OS === 'ios') {
       const authStatus = await requestPermission(getMessaging());
@@ -81,34 +82,60 @@ async function ensureFullScreenPermission(t) {
 
 // ── navigation helper ────────────────────────────────────────────────────────
 // Dispatches to appStore.requestNav — navigators watch pendingNav and switch tabs
+//
+// Backend may send orderId under different keys depending on the event type.
+// We normalise here so every caller gets a consistent orderId string.
 
-function handleNavigate(data = {}) {
-  const {notificationType, orderId} = data;
-  const requestNav = useAppStore.getState().requestNav;
-
-  switch (notificationType) {
-    case 'new_order':
-      requestNav('orders');
-      break;
-    case 'order_updates':
-      requestNav('orders', orderId);
-      break;
-    case 'biker_alerts':
-      requestNav(orderId ? 'orders' : 'notifications', orderId);
-      break;
-    case 'dashboard_notification':
-    default:
-      requestNav('notifications');
-      break;
-  }
+function extractOrderId(data = {}) {
+  return (
+    data.orderId   ||   // our own notifications
+    data.order_id  ||   // backend snake_case variant
+    data.id        ||
+    null
+  );
 }
 
-// ── Provider ─────────────────────────────────────────────────────────────────
+export function handleNavigate(data = {}) {
+  const action    = data.action ?? '';
+  const status    = data.status ?? '';
+  const itemType  = data._itemType;          // numeric type from root notification object
+  const orderId   = extractOrderId(data);
+
+  const requestNav = useAppStore.getState().requestNav;
+  const showToast  = useAppStore.getState().showToast;
+
+  // type === 2 (System) + PHOTO_SKIP_REQUESTED → skip-review page (partner)
+  if (itemType === 2 || action === 'photo_skip_review') {
+    requestNav('operations', orderId, 'skipReview');
+    return;
+  }
+
+  if (action === 'photo_skip_decision') {
+    const decision = (data.decision ?? '').toUpperCase();
+    if (decision === 'APPROVED') {
+      showToast('تم قبول تخطي الصورة — يمكنك إنهاء الطلب', 'success');
+    } else if (decision === 'REJECTED') {
+      showToast('تم رفض تخطي الصورة — يرجى رفع الصور', 'error');
+    }
+    if (orderId) requestNav('orders', orderId, 'detail');
+    return;
+  }
+
+  // type === 0 (Order) or any notification with an orderId → order details
+  if (orderId) {
+    if (status === 'CANCELLED') showToast('تم إلغاء الطلب من قبل العميل', 'error');
+    requestNav('orders', orderId, 'detail');
+    return;
+  }
+
+  requestNav('notifications', null, null);
+}
+
 
 export function FirebaseProvider({children}) {
-  const {role}                                  = useAuthStore();
-  const {setIncomingOrder, setUnreadCount}      = useAppStore();
-  const {t}                                     = useI18n();
+  const {role}                                               = useAuthStore();
+  const {setUnreadCount, triggerOrderRefresh, showOrderToast} = useAppStore();
+  const {t}                                                  = useI18n();
 
   // ── 1. bootstrap + token refresh ──────────────────────────────────────────
   useEffect(() => {
@@ -126,32 +153,54 @@ export function FirebaseProvider({children}) {
   useEffect(() => {
     const unsub = onMessage(getMessaging(), async remoteMessage => {
       const {data, notification} = remoteMessage;
+      const showToast = useAppStore.getState().showToast;
       setUnreadCount(useAppStore.getState().unreadCount + 1);
 
+      // NEW_ORDER — show persistent order toast (replaces popup)
       if (data?.type === 'NEW_ORDER' && data?.order) {
         try {
           const parsed = JSON.parse(data.order);
-          setIncomingOrder(parsed);
-          await showIncomingOrderNotification(parsed);
+          showOrderToast(parsed);
+          if (role === 'biker') {
+            await showIncomingOrderNotification(parsed);
+          } else {
+            await showNewOrderAlert(parsed);
+          }
         } catch {}
         return;
       }
 
-      // Backend sends data-only messages — title/body are in data, not notification
+      const action = data?.action ?? '';
+
+      // photo_skip_decision — refresh OrderDetailsScreen immediately + toast
+      if (action === 'photo_skip_decision') {
+        const decision = (data?.decision ?? '').toUpperCase();
+        if (decision === 'APPROVED') {
+          showToast('تم قبول تخطي الصورة — يمكنك إنهاء الطلب', 'success', 4000);
+        } else if (decision === 'REJECTED') {
+          showToast('تم رفض تخطي الصورة — يرجى رفع الصور', 'error', 4000);
+        }
+        triggerOrderRefresh();
+        return;
+      }
+
+      // All other foreground notifications — show system notification banner + toast
       const notificationType = data?.notificationType ?? 'general';
       const title = data?.title || notification?.title;
       const body  = data?.body  || notification?.body || '';
+      const toastMsg = [title, body].filter(Boolean).join(' — ');
+      if (toastMsg) showToast(toastMsg, 'info', 4000);
       if (title) {
         await displayNotification({
           title,
           body,
           notificationType,
-          data: data ?? {},
+          data:  data ?? {},
         });
       }
     });
     return () => unsub();
-  }, [setIncomingOrder, setUnreadCount]);
+  }, [role, setUnreadCount, triggerOrderRefresh]);
 
   // ── 3. Background tap + quit tap + pending recovery ───────────────────────
   useEffect(() => {
@@ -159,8 +208,10 @@ export function FirebaseProvider({children}) {
       const {data} = remoteMessage;
       if (data?.type === 'NEW_ORDER' && data?.order) {
         try {
-          setIncomingOrder(JSON.parse(data.order));
           cancelIncomingOrderNotification().catch(() => {});
+          const parsed = JSON.parse(data.order);
+          const orderId = parsed._id ?? parsed.id;
+          if (orderId) useAppStore.getState().requestNav('orders', orderId, 'detail');
         } catch {}
         return;
       }
@@ -171,27 +222,39 @@ export function FirebaseProvider({children}) {
       if (!remoteMessage) return;
       const {data} = remoteMessage;
       if (data?.type === 'NEW_ORDER' && data?.order) {
-        try { setIncomingOrder(JSON.parse(data.order)); } catch {}
+        try {
+          const parsed = JSON.parse(data.order);
+          const orderId = parsed._id ?? parsed.id;
+          if (orderId) setTimeout(() => useAppStore.getState().requestNav('orders', orderId, 'detail'), 600);
+        } catch {}
         return;
       }
       handleNavigate(data ?? {});
     });
 
-    // طلب معلق من حالة background
+    // ── طلب رنين معلق من background (بايكر) ────────────────────────────────
     AsyncStorage.getItem('pending_incoming_order').then(raw => {
       if (!raw) return;
       AsyncStorage.removeItem('pending_incoming_order').catch(() => {});
       try {
         const parsed = JSON.parse(raw);
-        // Cancel scheduled background ring triggers — the foreground modal
-        // takes over with its own in-process ring loop.
         cancelIncomingOrderNotification().catch(() => {});
-        setIncomingOrder(parsed);
+        showOrderToast(parsed);
+      } catch {}
+    });
+
+    // ── navigation intent محفوظة من background tap (notifee.onBackgroundEvent) ─
+    AsyncStorage.getItem('pending_notification_nav').then(raw => {
+      if (!raw) return;
+      AsyncStorage.removeItem('pending_notification_nav').catch(() => {});
+      try {
+        const navData = JSON.parse(raw);
+        setTimeout(() => handleNavigate(navData), 600);
       } catch {}
     });
 
     return () => unsubOpened();
-  }, [setIncomingOrder]);
+  }, [showOrderToast]);
 
   // ── 4. Notifee foreground tap ─────────────────────────────────────────────
   useEffect(() => {

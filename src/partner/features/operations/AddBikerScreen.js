@@ -54,15 +54,19 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
     ?? initialData?.userId?.branchId
     ?? '';
 
-  const existingName = initialData?.userId
-    ? `${initialData.userId.firstName ?? ''} ${initialData.userId.lastName ?? ''}`.trim()
-    : initialData?.name ?? '';
+  const existingFirstName = initialData?.userId?.firstName
+    ?? (initialData?.name ? initialData.name.trim().split(' ')[0] : '')
+    ?? '';
+  const existingLastName = initialData?.userId?.lastName
+    ?? (initialData?.name ? initialData.name.trim().split(' ').slice(1).join(' ') : '')
+    ?? '';
 
   const existingPhone = initialData?.userId?.phoneNumber ?? initialData?.phone ?? '';
 
-  const [photo,    setPhoto]    = useState(null);
-  const [name,     setName]     = useState(existingName);
-  const [phone,    setPhone]    = useState(existingPhone);
+  const [photo,     setPhoto]     = useState(null);
+  const [firstName, setFirstName] = useState(existingFirstName);
+  const [lastName,  setLastName]  = useState(existingLastName);
+  const [phone,     setPhone]     = useState(existingPhone);
   const [branch,   setBranch]   = useState(existingBranchId);
   const [days,     setDays]     = useState(DEFAULT_DAYS);
   const [branches, setBranches] = useState([]);
@@ -88,7 +92,7 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
 
   const canSave = isEdit
     ? !!branch
-    : name.trim().length > 0 && phone.trim().length > 0 && !!branch;
+    : firstName.trim().length > 0 && phone.trim().length > 0 && !!branch;
 
   const handleSave = async () => {
     if (!canSave || saving) return;
@@ -102,8 +106,8 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
     } else {
       res = await addStaff({
         phoneNumber: phone.trim(),
-        firstName:   name.trim().split(' ')[0] ?? name.trim(),
-        lastName:    name.trim().split(' ').slice(1).join(' ') || undefined,
+        firstName:   firstName.trim(),
+        lastName:    lastName.trim(),
         branchId:    branch,
         role,
       });
@@ -150,7 +154,7 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
         {isEdit ? (
           <View style={[s.readonlyCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
             <Text style={[s.readonlyLabel, {color: colors.textSecondary}]}>الاسم</Text>
-            <Text style={[s.readonlyValue, {color: colors.textPrimary}]}>{name || '—'}</Text>
+            <Text style={[s.readonlyValue, {color: colors.textPrimary}]}>{`${firstName} ${lastName}`.trim() || '—'}</Text>
             <View style={[s.cardSep, {backgroundColor: colors.border}]} />
             <Text style={[s.readonlyLabel, {color: colors.textSecondary}]}>رقم الجوال</Text>
             <Text style={[s.readonlyValue, {color: colors.textPrimary}]}>{phone || '—'}</Text>
@@ -159,9 +163,17 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
           <View style={[s.card, {backgroundColor: colors.card}]}>
             <InputRow
               icon={User}
-              placeholder="الاسم الكامل"
-              value={name}
-              onChangeText={setName}
+              placeholder="الاسم الأول"
+              value={firstName}
+              onChangeText={setFirstName}
+              colors={colors}
+            />
+            <View style={[s.cardSep, {backgroundColor: colors.border}]} />
+            <InputRow
+              icon={User}
+              placeholder="اسم العائلة"
+              value={lastName}
+              onChangeText={setLastName}
               colors={colors}
             />
             <View style={[s.cardSep, {backgroundColor: colors.border}]} />

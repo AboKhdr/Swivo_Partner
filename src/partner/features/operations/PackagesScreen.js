@@ -1,43 +1,17 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, Image, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
-import {ArrowRight, Plus, Pencil, Camera} from 'lucide-react-native';
+import {ActivityIndicator, FlatList, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
+import {ArrowRight, Plus, Pencil} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getPackages, togglePackage} from '../../../services/partner';
 import AddPackageScreen from './AddPackageScreen';
 
-function PackageBanner({image, colors, hint, onChangeImage}) {
-  return (
-    <View style={s.bannerBox}>
-      {image
-        ? <Image source={{uri: image}} style={s.bannerImg} resizeMode="cover" />
-        : (
-          <View style={[s.bannerEmpty, {backgroundColor: colors.primary + '10'}]}>
-            <View style={[s.bannerIcon, {backgroundColor: colors.primary + '20'}]}>
-              <Camera size={22} color={colors.primary} />
-            </View>
-            <Text style={[s.bannerHint, {color: colors.textSecondary}]}>{hint}</Text>
-          </View>
-        )
-      }
-      <TouchableOpacity
-        style={[s.cameraBtn, {backgroundColor: colors.card}]}
-        onPress={onChangeImage}
-        activeOpacity={0.8}>
-        <Camera size={14} color={colors.primary} />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function PackageCard({item, colors, hint, onEdit, onToggle}) {
-  const [banner, setBanner] = useState(item.banner ?? null);
+function PackageCard({item, colors, onEdit, onToggle}) {
   const nameAr   = item.name?.ar ?? item.name?.en ?? item.nameAr ?? '';
   const services = item.services?.map(sv => sv.name?.ar ?? sv.name?.en ?? sv) ?? [];
 
   return (
     <View style={[s.card, {backgroundColor: colors.card}]}>
-      <PackageBanner image={banner} colors={colors} hint={hint} onChangeImage={() => setBanner(null)} />
       <View style={s.cardBody}>
         <View style={s.cardTop}>
           <Text style={[s.nameAr, {color: colors.textPrimary}]}>{nameAr}</Text>
@@ -93,8 +67,8 @@ export default function PackagesScreen({onBack}) {
   }, [fetchPackages]);
 
   const renderItem   = useCallback(({item}) => (
-    <PackageCard item={item} colors={colors} hint={t('partner.packages.addPhoto')} onEdit={handleEdit} onToggle={handleToggle} />
-  ), [colors, t, handleEdit, handleToggle]);
+    <PackageCard item={item} colors={colors} onEdit={handleEdit} onToggle={handleToggle} />
+  ), [colors, handleEdit, handleToggle]);
   const keyExtractor = useCallback(item => item._id ?? item.id, []);
 
   const showList = !showAdd && !editingPackage;
@@ -164,13 +138,6 @@ const s = StyleSheet.create({
   list:        {paddingHorizontal: 16, paddingBottom: 32, gap: 16},
 
   card:        {borderRadius: 20, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: {width: 0, height: 2}},
-
-  bannerBox:   {height: 140, position: 'relative'},
-  bannerImg:   {width: '100%', height: '100%'},
-  bannerEmpty: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8},
-  bannerIcon:  {width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center'},
-  bannerHint:  {fontSize: 12, fontWeight: '500'},
-  cameraBtn:   {position: 'absolute', top: 10, left: 10, width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: {width: 0, height: 1}},
 
   cardBody:    {padding: 14, gap: 8},
   cardTop:     {flexDirection: 'row', alignItems: 'center'},

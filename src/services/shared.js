@@ -9,6 +9,6 @@ export async function getTerms() {
 
 // ── Support ──────────────────────────────────────────────────────────────────
 
-export async function sendSupportMessage(message) {
-  return api.post('/support', {message});
+export async function sendSupportMessage(subject, message, priority = 'NORMAL') {
+  return api.post('/support', {subject, message, priority});
 }
