@@ -252,29 +252,26 @@ describe('Notifee — Channel Setup (Android)', () => {
     notifee.createChannel.mockClear();
   });
 
-  it('creates all 5 channels on Android', async () => {
+  it('creates all 4 channels on Android', async () => {
     await setupNotifeeChannel();
-    expect(notifee.createChannel).toHaveBeenCalledTimes(5);
+    expect(notifee.createChannel).toHaveBeenCalledTimes(4);
   });
 
-  it('creates the incoming-order channel with HIGH importance + bypassDnd', async () => {
+  it('creates the incoming/new-order channel with HIGH importance + bypassDnd', async () => {
     await setupNotifeeChannel();
     expect(notifee.createChannel).toHaveBeenCalledWith(expect.objectContaining({
       id:         CHANNEL_INCOMING,
       importance: 4,                  // AndroidImportance.HIGH
       visibility: 1,                  // AndroidVisibility.PUBLIC
       vibration:  true,
-      sound:      'incoming_order',
+      sound:      'new_order_alert',
       bypassDnd:  true,
     }));
   });
 
-  it('creates the new-order channel with default sound', async () => {
-    await setupNotifeeChannel();
-    expect(notifee.createChannel).toHaveBeenCalledWith(expect.objectContaining({
-      id:    CHANNEL_NEW_ORDER,
-      sound: 'default',
-    }));
+  it('aliases the incoming-order channel to the new-order channel', () => {
+    // The biker ring loop and the partner new-order alert share one channel.
+    expect(CHANNEL_INCOMING).toBe(CHANNEL_NEW_ORDER);
   });
 
   it('creates the order-updates channel with HIGH importance', async () => {
@@ -398,7 +395,7 @@ describe('Notifee — Incoming Order Ring Loop', () => {
       android: expect.objectContaining({
         channelId:        CHANNEL_INCOMING,
         category:         'call',
-        sound:            'incoming_order',
+        sound:            'new_order_alert',
         fullScreenAction: {id: 'default', launchActivity: 'default'},
       }),
     }));

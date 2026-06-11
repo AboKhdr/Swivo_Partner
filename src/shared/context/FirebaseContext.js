@@ -18,7 +18,6 @@ import {registerFCMToken} from '../../services/notifications';
 import {
   setupNotifeeChannels,
   showIncomingOrderNotification,
-  showNewOrderAlert,
   cancelIncomingOrderNotification,
   displayNotification,
 } from '../../services/notificationChannel';
@@ -161,11 +160,8 @@ export function FirebaseProvider({children}) {
         try {
           const parsed = JSON.parse(data.order);
           showOrderToast(parsed);
-          if (role === 'biker') {
-            await showIncomingOrderNotification(parsed);
-          } else {
-            await showNewOrderAlert(parsed);
-          }
+          // طلب جديد: نغمة رنين مميزة متواصلة للطرفين (بايكر + شريك)
+          await showIncomingOrderNotification(parsed);
         } catch {}
         return;
       }

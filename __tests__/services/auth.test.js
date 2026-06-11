@@ -86,6 +86,7 @@ describe('verifyOTP', () => {
       phoneNumber: '0512345678',
       prefix: '966',
       otp: '123456',
+      fcmToken: 'mock-fcm-token',
     });
   });
 

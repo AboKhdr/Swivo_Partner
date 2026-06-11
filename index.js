@@ -188,7 +188,8 @@ notifee.onBackgroundEvent(async ({type, detail}) => {
   }
 });
 
-// Partner: one-shot alert with new_order_alert sound (no looping)
+// Partner: نغمة رنين مميزة متواصلة (تتكرر كل 8ث حتى 3 دقائق) — مثل المكالمة.
+// تُلغى عبر cancelIncomingOrderNotification() من شاشة IncomingOrderScreen عند القبول/الرفض/انتهاء الوقت.
 async function displayPartnerNewOrderNotification(order) {
   // Create the channel explicitly first (Android must register it before we can
   // use it in the same background task — setupNotifeeChannels runs after).
@@ -198,6 +199,7 @@ async function displayPartnerNewOrderNotification(order) {
     importance:       AndroidImportance.HIGH,
     visibility:       AndroidVisibility.PUBLIC,
     vibration:        true,
+    vibrationPattern: [400, 200, 400, 200, 400],
     sound:            'new_order_alert',
     bypassDnd:        true,
   });
@@ -208,30 +210,82 @@ async function displayPartnerNewOrderNotification(order) {
     order?.location,
   ].filter(Boolean).join(' — ');
 
+  const baseAndroid = {
+    channelId:        CHANNEL_NEW_ORDER,
+    smallIcon:        'ic_notification',
+    importance:       AndroidImportance.HIGH,
+    visibility:       AndroidVisibility.PUBLIC,
+    category:         AndroidCategory.CALL,
+    sound:            'new_order_alert',
+    vibrationPattern: [400, 200, 400, 200, 400],
+    ongoing:          true,
+    autoCancel:       false,
+    onlyAlertOnce:    false,
+    lightUpScreen:    true,
+    pressAction:      {id: 'default', launchActivity: 'default'},
+    fullScreenAction: {id: 'default', launchActivity: 'default'},
+  };
+  const baseIos = {sound: 'new_order_alert.aiff', critical: true, criticalVolume: 1.0};
+  const data = {orderId: String(order?.id ?? ''), notificationType: 'new_order'};
+
+  // ألغِ أي رنين متبقٍّ من طلب سابق (نفس معرّفات البايكر ليعمل الإلغاء الموحّد)
+  for (let i = 0; i < RING_COUNT; i++) {
+    await notifee.cancelTriggerNotification(`incoming_order_${i}`).catch(() => {});
+    await notifee.cancelNotification(`incoming_order_${i}`).catch(() => {});
+  }
+
+  // أول رنّة — فوراً
   await notifee.displayNotification({
-    id:    `new_order_${order?.id ?? Date.now()}`,
+    id: 'incoming_order_0',
     title: '🔔 طلب جديد!',
     body,
-    data: {
-      notificationType: 'new_order',
-      orderId:          String(order?.id ?? ''),
-    },
-    android: {
-      channelId:        CHANNEL_NEW_ORDER,
-      smallIcon:        'ic_notification',
-      importance:       AndroidImportance.HIGH,
-      visibility:       AndroidVisibility.PUBLIC,
-      sound:            'new_order_alert',
-      vibrationPattern: [400, 200, 400, 200, 400],
-      autoCancel:       true,
-      pressAction:      {id: 'default', launchActivity: 'default'},
-    },
-    ios: {
-      sound:          'new_order_alert.aiff',
-      critical:       true,
-      criticalVolume: 1.0,
-    },
+    data,
+    android: baseAndroid,
+    ios: baseIos,
   });
+
+  // الرنّات التالية — مجدولة عبر TimestampTrigger لأن مهمة Headless JS تنتهي سريعاً
+  const now = Date.now();
+  for (let i = 1; i < RING_COUNT; i++) {
+    await notifee.createTriggerNotification(
+      {
+        id: `incoming_order_${i}`,
+        title: '🔔 طلب جديد!',
+        body,
+        data,
+        android: baseAndroid,
+        ios: baseIos,
+      },
+      {
+        type: TriggerType.TIMESTAMP,
+        timestamp: now + i * RING_INTERVAL_MS,
+        alarmManager: {type: AlarmType.SET_AND_ALLOW_WHILE_IDLE},
+      },
+    ).catch(() => {});
+  }
+
+  // إشعار "طلب فائت" صامت بعد 3 دقائق (مكافئ المكالمة الفائتة)
+  await notifee.createTriggerNotification(
+    {
+      id:    `missed_order_${order?.id || now}`,
+      title: '⏰ طلب فائت',
+      body,
+      data:  {orderId: String(order?.id || ''), notificationType: 'order_updates', missed: '1'},
+      android: {
+        channelId:   CHANNEL_GENERAL,
+        smallIcon:   'ic_notification',
+        importance:  AndroidImportance.DEFAULT,
+        autoCancel:  true,
+        pressAction: {id: 'default', launchActivity: 'default'},
+      },
+      ios: {sound: 'default'},
+    },
+    {
+      type:      TriggerType.TIMESTAMP,
+      timestamp: now + MISSED_DELAY_MS,
+      alarmManager: {type: AlarmType.SET_AND_ALLOW_WHILE_IDLE},
+    },
+  ).catch(() => {});
 }
 
 setBackgroundMessageHandler(getMessaging(), async remoteMessage => {

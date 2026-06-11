@@ -140,13 +140,16 @@ describe('setSession', () => {
     expect(registerFCMToken).toHaveBeenCalledWith('fcm-device-token', 'biker');
   });
 
-  it('does not register FCM token when fcm_token is absent', async () => {
+  it('falls back to getToken() and registers when fcm_token is absent from storage', async () => {
+    // Safety net: setSession resolves the FCM token from the messaging SDK
+    // (global mock → 'mock-fcm-token') when it is not yet cached in storage,
+    // guaranteeing this device is registered on a first login.
     AsyncStorage.getItem.mockResolvedValue(null);
 
     await useAuthStore.getState().setSession('tok', MOCK_USER);
     await new Promise(r => setTimeout(r, 10));
 
-    expect(registerFCMToken).not.toHaveBeenCalled();
+    expect(registerFCMToken).toHaveBeenCalledWith('mock-fcm-token', 'biker');
   });
 
   it('sets role:admin when user.role is not "biker"', async () => {

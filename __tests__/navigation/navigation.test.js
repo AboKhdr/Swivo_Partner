@@ -103,6 +103,7 @@ jest.mock('lucide-react-native', () => {
     Star:          () => <View />,
     User:          () => <View />,
     Settings:      () => <View />,
+    Wallet:        () => <View />,
   };
 });
 
@@ -431,89 +432,27 @@ describe('PartnerNavigator', () => {
     });
   });
 
-  describe('Badge count', () => {
-    it('no badge when unreadCount = 0', () => {
-      mockAppStore.unreadCount = 0;
+  // NOTE: The unread-count tab badge and the in-app incoming-order overlay were
+  // refactored OUT of PartnerNavigator. Unread count is now tracked in
+  // FirebaseContext (and surfaced on the notifications screen); incoming orders
+  // are handled by the FCM full-screen-intent flow routed through
+  // FirebaseContext (see index.js), not embedded in the navigator. These tests
+  // assert that contract: the navigator stays lean and owns neither concern.
+  describe('Unread badge (moved out)', () => {
+    it('does not render an unread tab badge even when unreadCount is high', () => {
+      mockAppStore.unreadCount = 15;
       let inst;
       act(() => { inst = create(<PartnerNavigator />); });
       expect(JSON.stringify(inst.toJSON())).not.toContain('"9+"');
     });
-
-    it('shows "3" when unreadCount = 3', () => {
-      mockAppStore.unreadCount = 3;
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      expect(JSON.stringify(inst.toJSON())).toContain('"3"');
-    });
-
-    it('shows "9+" when unreadCount = 15', () => {
-      mockAppStore.unreadCount = 15;
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      expect(JSON.stringify(inst.toJSON())).toContain('"9+"');
-    });
-
-    it('shows "9" (not "9+") at boundary value 9', () => {
-      mockAppStore.unreadCount = 9;
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      const s = JSON.stringify(inst.toJSON());
-      expect(s).toContain('"9"');
-      expect(s).not.toContain('"9+"');
-    });
-
-    it('shows "9+" at exactly 10', () => {
-      mockAppStore.unreadCount = 10;
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      expect(JSON.stringify(inst.toJSON())).toContain('"9+"');
-    });
-
-    it('handles very large unreadCount gracefully', () => {
-      mockAppStore.unreadCount = 9999;
-      let inst;
-      expect(() => act(() => { inst = create(<PartnerNavigator />); })).not.toThrow();
-      expect(JSON.stringify(inst.toJSON())).toContain('"9+"');
-    });
   });
 
-  describe('Incoming order overlay', () => {
-    it('does not render IncomingOrderScreen when incomingOrder = null', () => {
-      mockAppStore.incomingOrder = null;
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      expect(exists(inst.toJSON(), 'screen-IncomingOrderScreen')).toBe(false);
-    });
-
-    it('renders IncomingOrderScreen when incomingOrder is set', () => {
+  describe('Incoming order overlay (moved out)', () => {
+    it('never embeds IncomingOrderScreen, even when incomingOrder is set', () => {
       mockAppStore.incomingOrder = {id: 'order-99', status: 'PENDING_PARTNER'};
       let inst;
       act(() => { inst = create(<PartnerNavigator />); });
-      expect(exists(inst.toJSON(), 'screen-IncomingOrderScreen')).toBe(true);
-    });
-
-    it('passes order.id to IncomingOrderScreen', () => {
-      mockAppStore.incomingOrder = {id: 'order-99'};
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      const node = findOne(inst.toJSON(), 'incoming-order-id');
-      expect(node?.children).toContain('order-99');
-    });
-
-    it('calls clearIncomingOrder on accept', () => {
-      mockAppStore.incomingOrder = {id: 'order-99'};
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      press(inst, 'incoming-accept');
-      expect(mockAppStore.clearIncomingOrder).toHaveBeenCalled();
-    });
-
-    it('calls clearIncomingOrder on reject', () => {
-      mockAppStore.incomingOrder = {id: 'order-99'};
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      press(inst, 'incoming-reject');
-      expect(mockAppStore.clearIncomingOrder).toHaveBeenCalled();
+      expect(exists(inst.toJSON(), 'screen-IncomingOrderScreen')).toBe(false);
     });
   });
 
@@ -983,21 +922,7 @@ describe('Navigation edge cases', () => {
     });
   });
 
-  describe('IncomingOrder overlay accept/reject cycle', () => {
-    it('accept calls clearIncomingOrder', () => {
-      mockAppStore.incomingOrder = {id: 'o1'};
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      press(inst, 'incoming-accept');
-      expect(mockAppStore.clearIncomingOrder).toHaveBeenCalled();
-    });
-
-    it('reject calls clearIncomingOrder', () => {
-      mockAppStore.incomingOrder = {id: 'o1'};
-      let inst;
-      act(() => { inst = create(<PartnerNavigator />); });
-      press(inst, 'incoming-reject');
-      expect(mockAppStore.clearIncomingOrder).toHaveBeenCalled();
-    });
-  });
+  // IncomingOrder accept/reject is no longer owned by PartnerNavigator — the
+  // overlay moved to the FCM full-screen-intent flow (see the "moved out" tests
+  // under PartnerNavigator above).
 });

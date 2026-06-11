@@ -568,30 +568,30 @@ describe('getSkipRequests', () => {
 });
 
 describe('approveSkipRequest', () => {
-  it('POSTs APPROVED decision', async () => {
+  it('POSTs APPROVED decision with phase', async () => {
     mockPost.mockResolvedValue(OK());
-    await approveSkipRequest('o1');
+    await approveSkipRequest('o1', 'before');
     expect(mockPost).toHaveBeenCalledWith(
       '/tenant/orders/o1/review-photo-skip',
-      {decision: 'APPROVED'},
+      {phase: 'before', decision: 'APPROVED'},
     );
   });
 
-  it('includes reviewNote when provided', async () => {
+  it('passes the phase through to the request body', async () => {
     mockPost.mockResolvedValue(OK());
-    await approveSkipRequest('o1', 'Looks fine');
+    await approveSkipRequest('o1', 'after');
     const body = mockPost.mock.calls[0][1];
-    expect(body.reviewNote).toBe('Looks fine');
+    expect(body.phase).toBe('after');
   });
 });
 
 describe('rejectSkipRequest', () => {
-  it('POSTs REJECTED decision', async () => {
+  it('POSTs REJECTED decision with phase and reviewNote', async () => {
     mockPost.mockResolvedValue(OK());
-    await rejectSkipRequest('o1', 'Photo required');
+    await rejectSkipRequest('o1', 'after', 'Photo required');
     expect(mockPost).toHaveBeenCalledWith(
       '/tenant/orders/o1/review-photo-skip',
-      {decision: 'REJECTED', reviewNote: 'Photo required'},
+      {phase: 'after', decision: 'REJECTED', reviewNote: 'Photo required'},
     );
   });
 });
@@ -702,6 +702,7 @@ describe('sendSupportMessage', () => {
     expect(mockPost).toHaveBeenCalledWith('/dashboard/support', {
       subject: 'Bug',
       message: 'The app crashes',
+      priority: 'NORMAL',
     });
   });
 

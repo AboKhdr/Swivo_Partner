@@ -207,12 +207,12 @@ describe('unreadCount', () => {
 describe('navigation', () => {
   it('requestNav sets pendingNav with tab and orderId', () => {
     useAppStore.getState().requestNav('orders', 'o123');
-    expect(useAppStore.getState().pendingNav).toEqual({tab: 'orders', orderId: 'o123'});
+    expect(useAppStore.getState().pendingNav).toEqual({tab: 'orders', orderId: 'o123', screen: null});
   });
 
   it('requestNav sets orderId to null when not provided', () => {
     useAppStore.getState().requestNav('home');
-    expect(useAppStore.getState().pendingNav).toEqual({tab: 'home', orderId: null});
+    expect(useAppStore.getState().pendingNav).toEqual({tab: 'home', orderId: null, screen: null});
   });
 
   it('clearNav sets pendingNav to null', () => {
