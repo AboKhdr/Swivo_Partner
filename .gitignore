@@ -54,6 +54,10 @@ yarn-error.log
 
 # Bundle artifact
 *.jsbundle
+# Pre-built JS bundles must NEVER be committed — in a debug build they get baked
+# into the APK and shadow Metro, so the app silently serves stale JS.
+android/app/src/main/assets/index.android.bundle
+**/assets/index.android.bundle
 
 # Ruby / CocoaPods
 **/Pods/
