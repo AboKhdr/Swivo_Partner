@@ -112,7 +112,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
   useEffect(() => {
     if (!visible) return;
     if (secondsLeft <= 0) {
-      cancelIncomingOrderNotification().catch(() => {});
+      cancelIncomingOrderNotification(order?._id ?? order?.id).catch(() => {});
       onReject({reason: 'AUTO_TIMEOUT'});
       return;
     }
@@ -123,7 +123,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
   const handleAccept = useCallback(async () => {
     if (busy) return;
     setBusy(true);
-    cancelIncomingOrderNotification().catch(() => {});
+    cancelIncomingOrderNotification(order?._id ?? order?.id).catch(() => {});
     try {
       await onAccept(order);
     } finally {
@@ -135,7 +135,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
     if (busy || !selectedCode) return;
     const note = selectedCode === 'OTHER' ? otherNote.trim() : '';
     setBusy(true);
-    cancelIncomingOrderNotification().catch(() => {});
+    cancelIncomingOrderNotification(order?._id ?? order?.id).catch(() => {});
     try {
       await onReject({reason: selectedCode, note: note || undefined});
     } finally {

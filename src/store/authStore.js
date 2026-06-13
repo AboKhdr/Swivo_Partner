@@ -41,8 +41,9 @@ const useAuthStore = create((set, get) => ({
   // (passed in the request body), so no separate /notifications/register
   // call is needed here.
   setSession: async (token, user) => {
-    // backend may return 'client' or 'admin' for partners — normalise to 'admin'
-    const appRole = user.role === 'biker' ? 'biker' : 'admin';
+    // backend may return 'client' or 'admin' for partners — normalise to 'admin'.
+    // Mirror hydrate(): a missing role stays null (never silently becomes 'admin').
+    const appRole = user.role === 'biker' ? 'biker' : user.role ? 'admin' : null;
     const normUser = {...user, role: appRole, originalRole: user.role};
     await Promise.all([
       api.saveToken(token),

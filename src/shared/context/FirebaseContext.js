@@ -153,18 +153,24 @@ export function FirebaseProvider({children}) {
     const unsub = onMessage(getMessaging(), async remoteMessage => {
       const {data, notification} = remoteMessage;
       const showToast = useAppStore.getState().showToast;
-      setUnreadCount(useAppStore.getState().unreadCount + 1);
 
-      // NEW_ORDER — show persistent order toast (replaces popup)
+      // NEW_ORDER — ring + show appropriate UI per role.
+      // No unread bump here: the modal (partner) / order toast (biker) IS the UI;
+      // it isn't a "message to read", and nothing decrements it afterwards.
       if (data?.type === 'NEW_ORDER' && data?.order) {
         try {
           const parsed = JSON.parse(data.order);
-          showOrderToast(parsed);
-          // طلب جديد: نغمة رنين مميزة متواصلة للطرفين (بايكر + شريك)
           await showIncomingOrderNotification(parsed);
+          if (role === 'biker') {
+            showOrderToast(parsed);
+          } else if (role === 'admin') {
+            useAppStore.getState().setIncomingOrder(parsed);
+          }
         } catch {}
         return;
       }
+
+      setUnreadCount(useAppStore.getState().unreadCount + 1);
 
       const action = data?.action ?? '';
 
@@ -204,10 +210,16 @@ export function FirebaseProvider({children}) {
       const {data} = remoteMessage;
       if (data?.type === 'NEW_ORDER' && data?.order) {
         try {
-          cancelIncomingOrderNotification().catch(() => {});
           const parsed = JSON.parse(data.order);
           const orderId = parsed._id ?? parsed.id;
-          if (orderId) useAppStore.getState().requestNav('orders', orderId, 'detail');
+          // Pass orderId so the matching missed_order trigger is also cancelled.
+          cancelIncomingOrderNotification(orderId).catch(() => {});
+          if (useAuthStore.getState().role === 'admin') {
+            // partner: re-open the accept/reject modal instead of jumping to detail
+            useAppStore.getState().setIncomingOrder(parsed);
+          } else if (orderId) {
+            useAppStore.getState().requestNav('orders', orderId, 'detail');
+          }
         } catch {}
         return;
       }
@@ -234,8 +246,14 @@ export function FirebaseProvider({children}) {
       AsyncStorage.removeItem('pending_incoming_order').catch(() => {});
       try {
         const parsed = JSON.parse(raw);
-        cancelIncomingOrderNotification().catch(() => {});
-        showOrderToast(parsed);
+        const orderId = parsed._id ?? parsed.id;
+        cancelIncomingOrderNotification(orderId).catch(() => {});
+        // partner: re-open the accept/reject modal; biker: persistent order toast
+        if (useAuthStore.getState().role === 'admin') {
+          useAppStore.getState().setIncomingOrder(parsed);
+        } else {
+          showOrderToast(parsed);
+        }
       } catch {}
     });
 
@@ -256,8 +274,10 @@ export function FirebaseProvider({children}) {
   useEffect(() => {
     const unsub = notifee.onForegroundEvent(({type, detail}) => {
       if (type !== EventType.PRESS) return;
-      cancelIncomingOrderNotification().catch(() => {});
       const data = detail?.notification?.data ?? {};
+      const orderId = data.orderId || data.order_id || data.id || null;
+      // Pass orderId so the matching missed_order trigger is also cancelled.
+      cancelIncomingOrderNotification(orderId).catch(() => {});
       if (data.notificationType) handleNavigate(data);
     });
     return () => unsub();

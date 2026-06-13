@@ -8,8 +8,10 @@ import OrdersNavigator from '../features/orders/OrdersNavigator';
 import OperationsNavigator from '../features/operations/OperationsNavigator';
 import PaymentsScreen from '../features/operations/PaymentsScreen';
 import PartnerProfileNavigator from '../features/profile/PartnerProfileNavigator';
+import IncomingOrderScreen from '../features/orders/IncomingOrderScreen';
 import useAppStore from '../../store/appStore';
 import useAuthStore from '../../store/authStore';
+import {acceptOrder, rejectOrder} from '../../services/partner';
 
 // Notification tab keys → partner tab keys
 const NAV_TAB_MAP = {
@@ -38,8 +40,29 @@ export default function PartnerNavigator() {
   const [history, setHistory]     = useState(['dashboard']);
   const [mounted, setMounted]     = useState({dashboard: true});
 
-  const pendingNav = useAppStore(s => s.pendingNav);
-  const clearNav   = useAppStore(s => s.clearNav);
+  const pendingNav      = useAppStore(s => s.pendingNav);
+  const clearNav        = useAppStore(s => s.clearNav);
+  const incomingOrder   = useAppStore(s => s.incomingOrder);
+  const clearIncoming   = useAppStore(s => s.clearIncomingOrder);
+
+  const handleIncomingAccept = useCallback(async (order) => {
+    const id = order?._id ?? order?.id;
+    if (id) await acceptOrder(id).catch(() => {});
+    clearIncoming();
+    if (id) useAppStore.getState().requestNav('orders', id, 'detail');
+  }, [clearIncoming]);
+
+  const handleIncomingReject = useCallback(async ({reason, note}) => {
+    // AUTO_TIMEOUT is NOT a backend reject code (rejectReasons whitelist). The
+    // server times the order out on its own side, so on timeout we only dismiss
+    // locally — sending it would 400 and desync local vs. backend order state.
+    if (reason !== 'AUTO_TIMEOUT') {
+      const current = useAppStore.getState().incomingOrder;
+      const id = current?._id ?? current?.id;
+      if (id) await rejectOrder(id, reason, note).catch(() => {});
+    }
+    clearIncoming();
+  }, [clearIncoming]);
 
   const handleTabPress = useCallback((key) => {
     if (key === activeTab) return;
@@ -88,6 +111,12 @@ export default function PartnerNavigator() {
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
+      <IncomingOrderScreen
+        visible={!!incomingOrder}
+        order={incomingOrder}
+        onAccept={handleIncomingAccept}
+        onReject={handleIncomingReject}
+      />
       <View style={s.screen}>
         {tabs.map(({key, Screen}) =>
           mounted[key] ? (
