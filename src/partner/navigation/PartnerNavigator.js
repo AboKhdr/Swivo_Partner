@@ -34,7 +34,7 @@ export default function PartnerNavigator() {
   const user = useAuthStore(s => s.user);
   const isSupervisor = user?.originalRole === 'supervisor';
 
-  const tabs = isSupervisor ? TAB_KEYS.filter(tab => tab.key !== 'wallet') : TAB_KEYS;
+  const tabs = TAB_KEYS;
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [history, setHistory]     = useState(['dashboard']);
