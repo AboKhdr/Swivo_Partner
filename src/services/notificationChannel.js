@@ -98,12 +98,19 @@ export const setupNotifeeChannel = setupNotifeeChannels;
 export function resolveChannel(notificationType) {
   switch (notificationType) {
     case 'new_order':
+    case 'new_shop_order':
       return CHANNEL_NEW_ORDER;
     case 'order_updates':
       return CHANNEL_UPDATES;
     case 'biker_alerts':
       return CHANNEL_ALERTS;
+    // These intentionally use the general channel (no dedicated sound/priority).
+    // Listed explicitly so it's clear they were considered, not forgotten.
     case 'dashboard_notification':
+    case 'gift':
+    case 'wallet_topup':
+    case 'subscription_activated':
+    case 'gallery_deletion_request':
     default:
       return CHANNEL_GENERAL;
   }
@@ -127,7 +134,7 @@ export async function displayNotification({title, body, notificationType, data =
       pressAction: {id: 'default'},
     },
     ios: {
-      sound: notificationType === 'new_order' ? 'new_order_alert.aiff' : 'default',
+      sound: notificationType === 'new_order' ? 'new_order_alert.mp3' : 'default',
     },
   });
 }
@@ -161,7 +168,7 @@ export async function showNewOrderAlert(order) {
       pressAction:      {id: 'default', launchActivity: 'default'},
     },
     ios: {
-      sound:          'new_order_alert.aiff',
+      sound:          'new_order_alert.mp3',
       critical:       true,
       criticalVolume: 1.0,
     },

@@ -142,8 +142,8 @@ export default function OtpScreen({phone, prefix, onBack}) {
     setResendSec(RESEND_DELAY);
     inputRefs.current[0]?.focus();
     setActiveIdx(0);
-    await resendOTP(phone);
-  }, [resendSec, phone]);
+    await resendOTP({phone, prefix});
+  }, [resendSec, phone, prefix]);
 
   const filled = digits.filter(Boolean).length;
 

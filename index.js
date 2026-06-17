@@ -6,6 +6,7 @@ import {AppRegistry} from 'react-native';
 import {
   getMessaging,
   setBackgroundMessageHandler,
+  onMessage,
 } from '@react-native-firebase/messaging';
 import notifee, {
   AndroidImportance,
@@ -45,7 +46,7 @@ async function displayOrderNotification(order) {
     visibility:       AndroidVisibility.PUBLIC,
     vibration:        true,
     vibrationPattern: [600, 400, 600, 400],
-    sound:            'incoming_order',
+    sound:            'new_order_alert',
     bypassDnd:        true,
   });
   await setupNotifeeChannels();
@@ -56,7 +57,7 @@ async function displayOrderNotification(order) {
     importance:       AndroidImportance.HIGH,
     visibility:       AndroidVisibility.PUBLIC,
     category:         AndroidCategory.CALL,
-    sound:            'incoming_order',
+    sound:            'new_order_alert',
     vibrationPattern: [600, 400, 600, 400],
     ongoing:          true,
     autoCancel:       false,
@@ -137,15 +138,30 @@ async function cancelPendingRingTriggers() {
 
 async function displayGenericNotification(remoteMessage) {
   const {data, notification} = remoteMessage;
-  // Backend sends data-only messages — title/body are in data, not notification
-  const title = data?.title || notification?.title;
-  const body  = data?.body  || notification?.body  || '';
-  if (!title) return;
+  // Backend sends data-only messages — title/body are in data, not notification.
+  // Fall back across common key spellings the backend might use.
+  const title =
+    data?.title || data?.notificationTitle || notification?.title || 'تمام';
+  const body =
+    data?.body || data?.message || data?.notificationBody || notification?.body || '';
 
-  const notificationType = data?.notificationType ?? 'general';
-  const channelId = resolveChannel(notificationType);
+  const notificationType = data?.notificationType ?? data?.type ?? 'general';
+  // Honor an explicit channel from the backend (data.androidChannelId), falling
+  // back to type-based resolution. The backend now sends true data-only messages
+  // and carries the resolved channel here.
+  const channelId = data?.androidChannelId || resolveChannel(notificationType);
 
-  await setupNotifeeChannels();
+  // In the background/headless task the channel may not exist yet — create the
+  // exact channel we're about to use *before* displaying, instead of relying on
+  // setupNotifeeChannels() (which reads AsyncStorage and can be flaky here).
+  await notifee.createChannel({
+    id:         channelId,
+    name:       'الإشعارات',
+    importance: AndroidImportance.HIGH,
+    visibility: AndroidVisibility.PUBLIC,
+    sound:      'default',
+  }).catch(() => {});
+  await setupNotifeeChannels().catch(() => {});
 
   await notifee.displayNotification({
     title,
@@ -154,6 +170,8 @@ async function displayGenericNotification(remoteMessage) {
     android: {
       channelId,
       smallIcon:   'ic_notification',
+      importance:  AndroidImportance.HIGH,
+      visibility:  AndroidVisibility.PUBLIC,
       pressAction: {id: 'default'},
     },
     ios: {
@@ -208,9 +226,13 @@ async function displayPartnerNewOrderNotification(order) {
     order?.location,
   ].filter(Boolean).join(' — ');
 
+  const orderNo = order?.orderNumber ?? order?.number ?? order?.orderNo
+    ?? (order?.id ? String(order.id).slice(-6).toUpperCase() : '');
+  const title = orderNo ? `🔔 طلب جديد #${orderNo}` : '🔔 طلب جديد!';
+
   await notifee.displayNotification({
     id:    `new_order_${order?.id ?? Date.now()}`,
-    title: '🔔 طلب جديد!',
+    title,
     body,
     data: {
       notificationType: 'new_order',
@@ -227,15 +249,54 @@ async function displayPartnerNewOrderNotification(order) {
       pressAction:      {id: 'default', launchActivity: 'default'},
     },
     ios: {
-      sound:          'new_order_alert.aiff',
+      sound:          'new_order_alert.mp3',
       critical:       true,
       criticalVolume: 1.0,
     },
   });
 }
 
+// ─── Handler for Foreground messages (when app is open) ───────────────────────
+onMessage(getMessaging(), async remoteMessage => {
+  console.log('TAMAM_FG', JSON.stringify({
+    data: remoteMessage?.data ?? null,
+    notification: remoteMessage?.notification ?? null,
+  }));
+
+  const {data} = remoteMessage;
+
+  if (data?.type === 'NEW_ORDER' && data?.order) {
+    let parsedOrder = null;
+    try { parsedOrder = JSON.parse(data.order); } catch {}
+
+    const role = await AsyncStorage.getItem('user_role').catch(() => null);
+    const isBiker = role === 'biker';
+
+    await AsyncStorage.setItem('pending_incoming_order', data.order).catch(() => {});
+
+    if (isBiker) {
+      if (parsedOrder) await displayOrderNotification(parsedOrder);
+      await launchIncomingOrder(parsedOrder?.id ?? '', data.order).catch(() => {});
+    } else {
+      if (parsedOrder) await displayPartnerNewOrderNotification(parsedOrder);
+    }
+    return;
+  }
+
+  await displayGenericNotification(remoteMessage);
+});
+
+// ─── Handler for Background/Closed messages ──────────────────────────────────
 setBackgroundMessageHandler(getMessaging(), async remoteMessage => {
   const {data} = remoteMessage;
+
+  // TEMP DIAGNOSTIC — يطبع الرسالة الكاملة في logcat لفحص أسماء الحقول الفعلية.
+  // افحصها بـ:  adb logcat -s ReactNativeJS | grep TAMAM_BG
+  // احذفه بعد تأكيد بنية الـ payload.
+  console.log('TAMAM_BG', JSON.stringify({
+    data: remoteMessage?.data ?? null,
+    notification: remoteMessage?.notification ?? null,
+  }));
 
   if (data?.type === 'NEW_ORDER' && data?.order) {
     let parsedOrder = null;

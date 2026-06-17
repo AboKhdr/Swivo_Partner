@@ -65,7 +65,13 @@ function resolveOrderFields(order, lang) {
 
   const price = order.totalAmount ?? order.price ?? order.bikerEarning ?? null;
 
-  return {clientName, clientPhone, location, serviceName, carDisplay, carColor, plate, price};
+  const orderNumber = order.orderNumber
+    ?? order.number
+    ?? order.orderNo
+    ?? (order._id ? String(order._id).slice(-6).toUpperCase() : '')
+    ?? (order.id ? String(order.id).slice(-6).toUpperCase() : '');
+
+  return {clientName, clientPhone, location, serviceName, carDisplay, carColor, plate, price, orderNumber};
 }
 
 export default function IncomingOrderScreen({visible, order, onAccept, onReject}) {
@@ -148,7 +154,7 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
   const timeLabel = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')} ${t('partner.incoming.timer')}`;
   const canConfirm = selectedCode && (selectedCode !== 'OTHER' || otherNote.trim().length > 0);
 
-  const {clientName, clientPhone, location, serviceName, carDisplay, carColor, plate, price} =
+  const {clientName, clientPhone, location, serviceName, carDisplay, carColor, plate, price, orderNumber} =
     resolveOrderFields(order, lang);
 
   return (
@@ -165,6 +171,12 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
             <Animated.Text style={[s.mainTitle, {transform: [{scale: pulseAnim}]}]}>
               {t('partner.incoming.title')}
             </Animated.Text>
+            {!!orderNumber && (
+              <View style={s.orderNoBadge}>
+                <Hash size={13} color="#FFF" strokeWidth={2.5} />
+                <Text style={s.orderNoTxt}>{orderNumber}</Text>
+              </View>
+            )}
             <Text style={s.timerSub}>{timeLabel}</Text>
           </View>
 
@@ -350,6 +362,8 @@ const s = StyleSheet.create({
   liveDot:      {width: 7, height: 7, borderRadius: 4, backgroundColor: '#FFF'},
   liveTxt:      {color: '#FFF', fontSize: 12, fontWeight: '700'},
   mainTitle:    {color: '#FFF', fontSize: 28, fontWeight: '900'},
+  orderNoBadge: {flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 50, marginTop: 2},
+  orderNoTxt:   {color: '#FFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.5},
   timerSub:     {color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '500'},
 
   body:         {},

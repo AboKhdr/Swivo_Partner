@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import {
   ChevronLeft, Star, User, Wallet, ArrowLeftRight,
-  Moon, Globe, Headphones, FileText, LogOut, Trash2,
+  Moon, Globe, Headphones, FileText, LogOut,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
@@ -117,10 +117,6 @@ export default function ProfileScreen({onNavigate}) {
 
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
           <NavRow Icon={LogOut} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.logout')} sub={t('profile.logoutSub')} onPress={handleLogout} danger loading={loggingOut} colors={colors} />
-        </View>
-
-        <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <NavRow Icon={Trash2} iconColor="#EF4444" iconBg="#EF444418" label={t('profile.deleteAccount')} sub={t('profile.deleteAccountSub')} onPress={() => onNavigate('deleteAccount')} danger colors={colors} />
         </View>
 
         <View style={{height: 16}} />

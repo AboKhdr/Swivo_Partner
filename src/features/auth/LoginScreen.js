@@ -139,10 +139,6 @@ export default function LoginScreen() {
               </View>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity style={s.guestBtn} activeOpacity={0.7}>
-            <Text style={[s.guestText, {color: colors.textSecondary}]}>{t('auth.browseGuest')}</Text>
-          </TouchableOpacity>
         </Animated.View>
 
       </ScrollView>
@@ -179,6 +175,4 @@ const s = StyleSheet.create({
   btnInner:    {flexDirection: 'row', alignItems: 'center', gap: 8},
   btnChevron:  {color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: '300'},
   btnText:     {color: '#fff', fontSize: 17, fontWeight: '700'},
-  guestBtn:    {marginTop: 14, alignItems: 'center', paddingVertical: 10},
-  guestText:   {fontSize: 14, fontWeight: '600'},
 });

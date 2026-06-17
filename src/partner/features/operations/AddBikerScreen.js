@@ -116,7 +116,8 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
     setSaving(false);
 
     if (res.success) {
-      onSaved?.();
+      onSaved?.();   // refresh the list
+      onBack?.();    // go one step back to the list on success (200)
     } else {
       setError(res.error ?? 'حدث خطأ، حاول مجدداً');
     }
