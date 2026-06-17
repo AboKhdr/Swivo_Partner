@@ -97,7 +97,11 @@ function extractOrderId(data = {}) {
 export function handleNavigate(data = {}) {
   const action    = data.action ?? '';
   const status    = data.status ?? '';
-  const itemType  = data._itemType;          // numeric type from root notification object
+  // _itemType is NOT sent by the backend push payload — it's injected locally
+  // by the in-app inbox (NotificationsScreen) from the saved Notification.type
+  // when a row is tapped, so type-2 (System/photo-skip) rows route correctly
+  // even when `action` wasn't persisted on the row's data.
+  const itemType  = data._itemType;
   const orderId   = extractOrderId(data);
 
   const requestNav = useAppStore.getState().requestNav;

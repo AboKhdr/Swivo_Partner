@@ -10,7 +10,7 @@ import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import StatusTracker from '../../../shared/components/StatusTracker';
 import GalleryStrip from '../../../shared/components/GalleryStrip';
-import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, cancelOrder, getOrderById} from '../../../services/orders';
+import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, getOrderById} from '../../../services/orders';
 import {SKIP_REASONS} from '../../../shared/constants/skipReasons';
 import useAppStore from '../../../store/appStore';
 
@@ -126,11 +126,9 @@ export default function OrderDetailsScreen({order, onBack}) {
   const [dataLoading, setDataLoading] = useState(true);
   const [currentStatus, setCurrentStatus] = useState(order.status);
   const [actionLoading, setActionLoading] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [uploadPhase, setUploadPhase] = useState('before'); // 'before' | 'after'
   const [photos, setPhotos]           = useState([]);
-  const [cancelReason, setCancelReason] = useState('');
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [skipCode, setSkipCode]   = useState('');
   const [skipNote, setSkipNote]   = useState('');
@@ -190,10 +188,6 @@ export default function OrderDetailsScreen({order, onBack}) {
     : '';
 
   const ACTION_NEXT       = isOnshop ? ACTION_NEXT_ONSHOP : ACTION_NEXT_MOBILE;
-  // بايكر يستطيع الإلغاء حتى يبدأ الغسيل
-  const canCancel = currentStatus === 'ASSIGNED'
-    || currentStatus === 'ON_THE_WAY'
-    || currentStatus === 'ARRIVED';
   const actionNextStatus  = ACTION_NEXT[currentStatus] ?? null;
   const action            = actionNextStatus
     ? {label: t(`orderDetails.actions.${currentStatus}`), nextStatus: actionNextStatus}
@@ -303,14 +297,6 @@ export default function OrderDetailsScreen({order, onBack}) {
         }
       }
     }
-  };
-
-  const handleCancel = async () => {
-    setShowCancelModal(false);
-    setActionLoading(true);
-    await cancelOrder(orderId, cancelReason.trim());
-    setCurrentStatus('CANCELLED');
-    setActionLoading(false);
   };
 
   // ── Extra services (beyond first) ────────────────────────────────────────
@@ -572,38 +558,9 @@ export default function OrderDetailsScreen({order, onBack}) {
             </View>
           )}
 
-          <View style={{height: canCancel ? 88 : 24}} />
+          <View style={{height: currentStatus === 'COMPLETED' ? 88 : 24}} />
         </ScrollView>
       )}
-
-      {/* Cancel modal */}
-      <Modal visible={showCancelModal} transparent animationType="fade" onRequestClose={() => setShowCancelModal(false)}>
-        <View style={ms.overlay}>
-          <View style={[ms.box, {backgroundColor: colors.card}]}>
-            <Text style={ms.warningIcon}>⚠️</Text>
-            <Text style={[ms.boxTitle, {color: colors.textPrimary}]}>{t('orderDetails.cancel.button')}</Text>
-            <Text style={[ms.boxBody, {color: colors.textSecondary}]}>{t('orderDetails.cancel.confirm')}</Text>
-            <TextInput
-              style={[ms.reasonInput, {borderColor: colors.border, color: colors.textPrimary}]}
-              placeholder={t('orderDetails.cancel.reason')}
-              placeholderTextColor={colors.textSecondary}
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              textAlign="right"
-            />
-            <View style={ms.btnRow}>
-              <TouchableOpacity
-                style={[ms.secondaryBtn, {backgroundColor: colors.bg, borderColor: colors.border}]}
-                onPress={() => setShowCancelModal(false)}>
-                <Text style={[ms.secondaryBtnText, {color: colors.textPrimary}]}>{t('orderDetails.cancel.back')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={ms.dangerBtn} onPress={handleCancel}>
-                <Text style={ms.dangerBtnText}>{t('orderDetails.cancel.yes')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Photo upload sheet */}
       <Modal visible={showImageUpload} transparent animationType="slide" onRequestClose={() => setShowImageUpload(false)}>
@@ -740,25 +697,15 @@ export default function OrderDetailsScreen({order, onBack}) {
         t={t}
       />
 
-      {/* Fixed bottom bar — cancel or back-to-list */}
-      {!dataLoading && (canCancel || currentStatus === 'COMPLETED') && (
+      {/* Fixed bottom bar — back-to-list (only after completion) */}
+      {!dataLoading && currentStatus === 'COMPLETED' && (
         <View style={[s.bottomBar, {backgroundColor: colors.card, borderTopColor: colors.border}]}>
-          {currentStatus === 'COMPLETED' ? (
-            <TouchableOpacity
-              style={[s.bottomPrimaryBtn, {backgroundColor: colors.primary}]}
-              onPress={onBack}
-              activeOpacity={0.85}>
-              <Text style={s.bottomPrimaryText}>{t('orderDetails.backToOrders')}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[s.bottomCancelBtn, {borderColor: '#EF4444' + '60'}]}
-              onPress={() => setShowCancelModal(true)}
-              disabled={actionLoading}
-              activeOpacity={0.75}>
-              <Text style={[s.bottomCancelText, {color: '#EF4444'}]}>{t('orderDetails.cancel.button')}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[s.bottomPrimaryBtn, {backgroundColor: colors.primary}]}
+            onPress={onBack}
+            activeOpacity={0.85}>
+            <Text style={s.bottomPrimaryText}>{t('orderDetails.backToOrders')}</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>

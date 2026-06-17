@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {ArrowRight, ShoppingBag} from 'lucide-react-native';
+import {ArrowRight, Bell, ShoppingBag} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {getNotifications, markAllNotificationsRead} from '../../../services/partner';
 import {handleNavigate} from '../../../shared/context/FirebaseContext';

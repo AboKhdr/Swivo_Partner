@@ -213,6 +213,8 @@ const cm = StyleSheet.create({
 export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
   const {colors} = useTheme();
   const staffId = biker._id ?? biker.id;
+  // الطلبات مربوطة بمعرّف المستخدم/البايكر (userId._id) وليس بمعرّف سجل الـ staff
+  const bikerUserId = biker.userId?._id ?? biker.userId ?? biker.bikerId ?? staffId;
 
   const [details,    setDetails]    = useState(null);
   const [orders,     setOrders]     = useState([]);
@@ -226,7 +228,7 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
     if (!silent) setLoading(true);
     const [detRes, ordRes] = await Promise.all([
       getStaffById(staffId),
-      getOrders({bikerId: staffId, limit: 20, page: 1}),
+      getOrders({bikerId: bikerUserId, limit: 20, page: 1}),
     ]);
     if (detRes.success) {
       const d = detRes.data?.data ?? detRes.data ?? {};
@@ -239,7 +241,7 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
       setPage(1);
     }
     if (!silent) setLoading(false);
-  }, [staffId]);
+  }, [staffId, bikerUserId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -252,7 +254,7 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
   const onEndReached = useCallback(() => {
     if (!hasNext || loadingMore) return;
     setLoadingMore(true);
-    getOrders({bikerId: staffId, limit: 20, page: page + 1}).then(res => {
+    getOrders({bikerId: bikerUserId, limit: 20, page: page + 1}).then(res => {
       if (res.success) {
         const list = res.data?.data ?? res.data ?? [];
         setOrders(prev => [...prev, ...list]);
@@ -261,7 +263,7 @@ export default function BikerDetailsScreen({biker, onBack, onOpenActions}) {
       }
       setLoadingMore(false);
     });
-  }, [hasNext, loadingMore, staffId, page]);
+  }, [hasNext, loadingMore, bikerUserId, page]);
 
   const data      = details ?? biker;
   const name      = data.userId
