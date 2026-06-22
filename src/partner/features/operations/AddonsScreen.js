@@ -14,6 +14,7 @@ import {ArrowRight, ChevronDown, Check, Pencil, Plus, Trash2} from 'lucide-react
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getAdditionalServices, deleteAdditionalService, getCategoryServices} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import AddAddonScreen from './AddAddonScreen';
 
 function AddonCard({item, colors, t, serviceMap, onEdit, onDelete}) {
@@ -47,8 +48,9 @@ function AddonCard({item, colors, t, serviceMap, onEdit, onDelete}) {
             </Text>
           </View>
         )}
-        <View style={[s.priceBadge, {backgroundColor: colors.primary + '15'}]}>
-          <Text style={[s.priceTxt, {color: colors.primary}]}>﷼ {item.price}</Text>
+        <View style={[s.priceBadge, s.priceRow, {backgroundColor: colors.primary + '15'}]}>
+          <RiyalIcon size={13} color={colors.primary} />
+          <Text style={[s.priceTxt, {color: colors.primary}]}>{item.price}</Text>
         </View>
       </View>
       <View style={s.actions}>
@@ -331,6 +333,7 @@ const s = StyleSheet.create({
   svcLabel:     {fontSize: 11, fontWeight: '600'},
   svcName:      {fontSize: 12, fontWeight: '700', flexShrink: 1},
   priceBadge:   {alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginTop: 4},
+  priceRow:     {flexDirection: 'row', alignItems: 'center', gap: 3},
   priceTxt:     {fontSize: 13, fontWeight: '800'},
   actions:      {flexDirection: 'row', gap: 8},
   iconBtn:      {width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center'},

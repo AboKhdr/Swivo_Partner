@@ -98,12 +98,19 @@ export const setupNotifeeChannel = setupNotifeeChannels;
 export function resolveChannel(notificationType) {
   switch (notificationType) {
     case 'new_order':
+    case 'new_shop_order':
       return CHANNEL_NEW_ORDER;
     case 'order_updates':
       return CHANNEL_UPDATES;
     case 'biker_alerts':
       return CHANNEL_ALERTS;
+    // These intentionally use the general channel (no dedicated sound/priority).
+    // Listed explicitly so it's clear they were considered, not forgotten.
     case 'dashboard_notification':
+    case 'gift':
+    case 'wallet_topup':
+    case 'subscription_activated':
+    case 'gallery_deletion_request':
     default:
       return CHANNEL_GENERAL;
   }
@@ -122,18 +129,54 @@ export async function displayNotification({title, body, notificationType, data =
     data,
     android: {
       channelId,
-      smallIcon:   'ic_notification',
+      smallIcon:   'ic_launcher',
       importance:  AndroidImportance.HIGH,
       pressAction: {id: 'default'},
     },
     ios: {
-      sound: notificationType === 'new_order' ? 'new_order_alert.aiff' : 'default',
+      sound: notificationType === 'new_order' ? 'new_order_alert.mp3' : 'default',
     },
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Incoming-order ring loop (biker + partner) — نغمة تتكرر كل 8ث لمدة 3 دقائق
+// Partner new-order alert — نغمة مميزة مرة واحدة (لا رنين متكرر)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function showNewOrderAlert(order) {
+  const body = [
+    order?.service ?? order?.customerName ?? 'خدمة غسيل',
+    order?.location,
+  ].filter(Boolean).join(' — ');
+
+  await notifee.displayNotification({
+    id:    `new_order_${order?.id ?? Date.now()}`,
+    title: '🔔 طلب جديد!',
+    body,
+    data: {
+      notificationType: 'new_order',
+      orderId:          String(order?.id ?? ''),
+    },
+    android: {
+      channelId:        CHANNEL_NEW_ORDER,
+      smallIcon:        'ic_launcher',
+      importance:       AndroidImportance.HIGH,
+      visibility:       AndroidVisibility.PUBLIC,
+      sound:            'new_order_alert',
+      vibrationPattern: [400, 200, 400, 200],
+      autoCancel:       true,
+      pressAction:      {id: 'default', launchActivity: 'default'},
+    },
+    ios: {
+      sound:          'new_order_alert.mp3',
+      critical:       true,
+      criticalVolume: 1.0,
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Biker incoming-order ring loop — نغمة تتكرر كل 8ث لمدة 3 دقائق
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RING_MAX_MS = 180_000;
@@ -180,7 +223,7 @@ export async function showIncomingOrderNotification(order) {
         fullScreenAction: {id: 'default', launchActivity: 'default'},
       },
       ios: {
-        sound:          'new_order_alert.aiff',
+        sound:          'default',
         critical:       true,
         criticalVolume: 1.0,
       },
@@ -200,16 +243,12 @@ export function stopRinging() {
   if (_ringTimeout)  { clearTimeout(_ringTimeout);   _ringTimeout  = null; }
 }
 
-export async function cancelIncomingOrderNotification(orderId) {
+export async function cancelIncomingOrderNotification() {
   stopRinging();
   const cancels = [];
   for (let i = 0; i < Math.max(RING_COUNT, 2); i++) {
     cancels.push(notifee.cancelNotification(`incoming_order_${i}`).catch(() => {}));
     cancels.push(notifee.cancelTriggerNotification(`incoming_order_${i}`).catch(() => {}));
-  }
-  if (orderId) {
-    cancels.push(notifee.cancelTriggerNotification(`missed_order_${orderId}`).catch(() => {}));
-    cancels.push(notifee.cancelNotification(`missed_order_${orderId}`).catch(() => {}));
   }
   await Promise.all(cancels);
 }
@@ -241,7 +280,7 @@ export async function convertToMissedNotification(order) {
     },
     android: {
       channelId:   CHANNEL_GENERAL,
-      smallIcon:   'ic_notification',
+      smallIcon:   'ic_launcher',
       importance:  AndroidImportance.DEFAULT,
       autoCancel:  true,
       pressAction: {id: 'default', launchActivity: 'default'},

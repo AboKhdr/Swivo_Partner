@@ -11,6 +11,7 @@ import {ArrowRight, Package, Car, CalendarDays, CheckCircle, XCircle, Clock, Has
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getPackageSubscriptions} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 // status: 1=active, 2=expired, 0=cancelled  (adjust if backend uses other values)
 const FILTER_TABS = ['all', '1', '2', '0'];
@@ -83,7 +84,10 @@ function SubscriptionCard({item, colors, t}) {
         <View style={[s.sizeChip, {backgroundColor: colors.primary + '18'}]}>
           <Text style={[s.sizeText, {color: colors.primary}]}>{carSize}</Text>
         </View>
-        <Text style={[s.price, {color: colors.textPrimary}]}>{price} {t('currency')}</Text>
+        <View style={s.priceRow}>
+          <Text style={[s.price, {color: colors.textPrimary}]}>{price}</Text>
+          <RiyalIcon size={13} color={colors.textPrimary} />
+        </View>
       </View>
 
       {/* Car */}
@@ -270,6 +274,7 @@ const s = StyleSheet.create({
   pkgName:       {flex: 1, fontSize: 13, fontWeight: '700'},
   sizeChip:      {paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8},
   sizeText:      {fontSize: 12, fontWeight: '800'},
+  priceRow:      {flexDirection: 'row', alignItems: 'center', gap: 3},
   price:         {fontSize: 13, fontWeight: '700'},
   carText:       {fontSize: 12},
 

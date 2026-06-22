@@ -15,6 +15,7 @@ import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {cancelIncomingOrderNotification, RING_MAX_MS} from '../../../services/notificationChannel';
 import {REJECT_REASONS} from '../../../shared/constants/rejectReasons';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 const TIMEOUT_SECONDS = Math.floor(RING_MAX_MS / 1000);
 
@@ -257,7 +258,10 @@ export default function IncomingOrderScreen({visible, order, onAccept, onReject}
                 </View>
                 <View style={s.cardInfo}>
                   <Text style={[s.cardLabel, {color: colors.textSecondary}]}>{t('partner.incoming.cost')}</Text>
-                  <Text style={[s.priceValue, {color: colors.textPrimary}]}>﷼ {price}</Text>
+                  <View style={s.priceRow}>
+                    <RiyalIcon size={21} color={colors.textPrimary} />
+                    <Text style={[s.priceValue, {color: colors.textPrimary}]}>{price}</Text>
+                  </View>
                 </View>
               </View>
             )}
@@ -378,6 +382,7 @@ const s = StyleSheet.create({
   locationRow:  {flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 2},
   avatar:       {width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center'},
   priceValue:   {fontSize: 22, fontWeight: '900'},
+  priceRow:     {flexDirection: 'row', alignItems: 'center', gap: 3},
 
   twoCol:       {flexDirection: 'row', gap: 10},
   halfCard:     {flex: 1, padding: 14, borderRadius: 16, borderWidth: 1, gap: 6, alignItems: 'center'},

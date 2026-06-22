@@ -6,6 +6,7 @@ import {AppRegistry} from 'react-native';
 import {
   getMessaging,
   setBackgroundMessageHandler,
+  onMessage,
 } from '@react-native-firebase/messaging';
 import notifee, {
   AndroidImportance,
@@ -24,7 +25,6 @@ import {
   CHANNEL_GENERAL,
   resolveChannel,
   setupNotifeeChannels,
-  stopRinging,
 } from './src/services/notificationChannel';
 import {launchIncomingOrder} from './src/services/fullScreenIntent';
 
@@ -51,9 +51,6 @@ async function displayOrderNotification(order) {
   });
   await setupNotifeeChannels();
 
-  // Orders use Mongo `_id` as primary key; fall back to `id`. Must match the key
-  // FirebaseContext/IncomingOrderScreen use, or missed_order cancellation breaks.
-  const oid = order?._id ?? order?.id;
   const baseBody = `${order?.service ?? order?.customerName ?? 'خدمة غسيل'} — ${order?.location ?? ''}`;
   const baseAndroid = {
     channelId:        CHANNEL_INCOMING,
@@ -82,7 +79,7 @@ async function displayOrderNotification(order) {
     id:    'incoming_order_0',
     title: '🚗 طلب جديد وارد!',
     body:  baseBody,
-    data:  {orderId: String(oid || ''), notificationType: 'new_order'},
+    data:  {orderId: String(order?.id || ''), notificationType: 'new_order'},
     android: baseAndroid,
     ios:    baseIos,
   });
@@ -95,7 +92,7 @@ async function displayOrderNotification(order) {
         id:    `incoming_order_${i}`,
         title: '🚗 طلب جديد وارد!',
         body:  baseBody,
-        data:  {orderId: String(oid || ''), notificationType: 'new_order'},
+        data:  {orderId: String(order?.id || ''), notificationType: 'new_order'},
         android: baseAndroid,
         ios:    baseIos,
       },
@@ -110,13 +107,13 @@ async function displayOrderNotification(order) {
   // Silent "missed order" notification at 60s — WhatsApp missed-call equivalent
   await notifee.createTriggerNotification(
     {
-      id:    `missed_order_${oid || now}`,
+      id:    `missed_order_${order?.id || now}`,
       title: '⏰ طلب فائت',
       body:  baseBody,
-      data:  {orderId: String(oid || ''), notificationType: 'order_updates', missed: '1'},
+      data:  {orderId: String(order?.id || ''), notificationType: 'order_updates', missed: '1'},
       android: {
         channelId:   CHANNEL_GENERAL,
-        smallIcon:   'ic_notification',
+        smallIcon:   'ic_launcher',
         importance:  AndroidImportance.DEFAULT,
         autoCancel:  true,
         pressAction: {id: 'default', launchActivity: 'default'},
@@ -141,15 +138,30 @@ async function cancelPendingRingTriggers() {
 
 async function displayGenericNotification(remoteMessage) {
   const {data, notification} = remoteMessage;
-  // Backend sends data-only messages — title/body are in data, not notification
-  const title = data?.title || notification?.title;
-  const body  = data?.body  || notification?.body  || '';
-  if (!title) return;
+  // Backend sends data-only messages — title/body are in data, not notification.
+  // Fall back across common key spellings the backend might use.
+  const title =
+    data?.title || data?.notificationTitle || notification?.title || 'تمام';
+  const body =
+    data?.body || data?.message || data?.notificationBody || notification?.body || '';
 
-  const notificationType = data?.notificationType ?? 'general';
-  const channelId = resolveChannel(notificationType);
+  const notificationType = data?.notificationType ?? data?.type ?? 'general';
+  // Honor an explicit channel from the backend (data.androidChannelId), falling
+  // back to type-based resolution. The backend now sends true data-only messages
+  // and carries the resolved channel here.
+  const channelId = data?.androidChannelId || resolveChannel(notificationType);
 
-  await setupNotifeeChannels();
+  // In the background/headless task the channel may not exist yet — create the
+  // exact channel we're about to use *before* displaying, instead of relying on
+  // setupNotifeeChannels() (which reads AsyncStorage and can be flaky here).
+  await notifee.createChannel({
+    id:         channelId,
+    name:       'الإشعارات',
+    importance: AndroidImportance.HIGH,
+    visibility: AndroidVisibility.PUBLIC,
+    sound:      'default',
+  }).catch(() => {});
+  await setupNotifeeChannels().catch(() => {});
 
   await notifee.displayNotification({
     title,
@@ -157,7 +169,9 @@ async function displayGenericNotification(remoteMessage) {
     data:  data ?? {},
     android: {
       channelId,
-      smallIcon:   'ic_notification',
+      smallIcon:   'ic_launcher',
+      importance:  AndroidImportance.HIGH,
+      visibility:  AndroidVisibility.PUBLIC,
       pressAction: {id: 'default'},
     },
     ios: {
@@ -172,15 +186,9 @@ notifee.onBackgroundEvent(async ({type, detail}) => {
   const notifId = detail?.notification?.id ?? '';
   const data    = detail?.notification?.data ?? {};
 
-  // ── Biker/Partner: ضغط على إشعار الرنين → إلغاء كل الرنين + missed_order ──
+  // ── Biker: ضغط على إشعار الرنين → إلغاء الرنين + فتح IncomingOrderScreen ──
   if (notifId.startsWith('incoming_order_')) {
-    stopRinging();
     await cancelPendingRingTriggers();
-    const orderId = data.orderId || data.order_id || data.id || '';
-    if (orderId) {
-      await notifee.cancelTriggerNotification(`missed_order_${orderId}`).catch(() => {});
-      await notifee.cancelNotification(`missed_order_${orderId}`).catch(() => {});
-    }
     // IncomingOrderScreen يُفتح تلقائياً عبر pending_incoming_order في FirebaseContext
     return;
   }
@@ -198,9 +206,19 @@ notifee.onBackgroundEvent(async ({type, detail}) => {
   }
 });
 
-// Partner: نغمة رنين مميزة متواصلة (تتكرر كل 8ث حتى 3 دقائق) — مثل المكالمة.
-// تُلغى عبر cancelIncomingOrderNotification() من شاشة IncomingOrderScreen عند القبول/الرفض/انتهاء الوقت.
+// Partner: one-shot alert with new_order_alert sound (no looping)
 async function displayPartnerNewOrderNotification(order) {
+  // Create the channel explicitly first (Android must register it before we can
+  // use it in the same background task — setupNotifeeChannels runs after).
+  await notifee.createChannel({
+    id:               CHANNEL_NEW_ORDER,
+    name:             'طلبات جديدة — تنبيه المغسلة',
+    importance:       AndroidImportance.HIGH,
+    visibility:       AndroidVisibility.PUBLIC,
+    vibration:        true,
+    sound:            'new_order_alert',
+    bypassDnd:        true,
+  });
   await setupNotifeeChannels();
 
   const body = [
@@ -208,89 +226,77 @@ async function displayPartnerNewOrderNotification(order) {
     order?.location,
   ].filter(Boolean).join(' — ');
 
-  const baseAndroid = {
-    channelId:        CHANNEL_NEW_ORDER,
-    smallIcon:        'ic_notification',
-    importance:       AndroidImportance.HIGH,
-    visibility:       AndroidVisibility.PUBLIC,
-    category:         AndroidCategory.CALL,
-    sound:            'new_order_alert',
-    vibrationPattern: [400, 200, 400, 200, 400],
-    ongoing:          true,
-    autoCancel:       false,
-    onlyAlertOnce:    false,
-    lightUpScreen:    true,
-    pressAction:      {id: 'default', launchActivity: 'default'},
-    fullScreenAction: {id: 'default', launchActivity: 'default'},
-  };
-  const baseIos = {sound: 'new_order_alert.aiff', critical: true, criticalVolume: 1.0};
-  // Orders use Mongo `_id` as primary key; fall back to `id`. Must match the key
-  // FirebaseContext/IncomingOrderScreen use, or missed_order cancellation breaks.
-  const oid = order?._id ?? order?.id;
-  const data = {orderId: String(oid ?? ''), notificationType: 'new_order'};
+  const orderNo = order?.orderNumber ?? order?.number ?? order?.orderNo
+    ?? (order?.id ? String(order.id).slice(-6).toUpperCase() : '');
+  const title = orderNo ? `🔔 طلب جديد #${orderNo}` : '🔔 طلب جديد!';
 
-  // ألغِ أي رنين متبقٍّ من طلب سابق (نفس معرّفات البايكر ليعمل الإلغاء الموحّد)
-  for (let i = 0; i < RING_COUNT; i++) {
-    await notifee.cancelTriggerNotification(`incoming_order_${i}`).catch(() => {});
-    await notifee.cancelNotification(`incoming_order_${i}`).catch(() => {});
-  }
-
-  // أول رنّة — فوراً
   await notifee.displayNotification({
-    id: 'incoming_order_0',
-    title: '🔔 طلب جديد!',
+    id:    `new_order_${order?.id ?? Date.now()}`,
+    title,
     body,
-    data,
-    android: baseAndroid,
-    ios: baseIos,
+    data: {
+      notificationType: 'new_order',
+      orderId:          String(order?.id ?? ''),
+    },
+    android: {
+      channelId:        CHANNEL_NEW_ORDER,
+      smallIcon:        'ic_launcher',
+      importance:       AndroidImportance.HIGH,
+      visibility:       AndroidVisibility.PUBLIC,
+      sound:            'new_order_alert',
+      vibrationPattern: [400, 200, 400, 200],
+      autoCancel:       true,
+      pressAction:      {id: 'default', launchActivity: 'default'},
+    },
+    ios: {
+      sound:          'new_order_alert.mp3',
+      critical:       true,
+      criticalVolume: 1.0,
+    },
   });
-
-  // الرنّات التالية — مجدولة عبر TimestampTrigger لأن مهمة Headless JS تنتهي سريعاً
-  const now = Date.now();
-  for (let i = 1; i < RING_COUNT; i++) {
-    await notifee.createTriggerNotification(
-      {
-        id: `incoming_order_${i}`,
-        title: '🔔 طلب جديد!',
-        body,
-        data,
-        android: baseAndroid,
-        ios: baseIos,
-      },
-      {
-        type: TriggerType.TIMESTAMP,
-        timestamp: now + i * RING_INTERVAL_MS,
-        alarmManager: {type: AlarmType.SET_AND_ALLOW_WHILE_IDLE},
-      },
-    ).catch(() => {});
-  }
-
-  // إشعار "طلب فائت" صامت بعد 3 دقائق (مكافئ المكالمة الفائتة)
-  await notifee.createTriggerNotification(
-    {
-      id:    `missed_order_${oid || now}`,
-      title: '⏰ طلب فائت',
-      body,
-      data:  {orderId: String(oid || ''), notificationType: 'order_updates', missed: '1'},
-      android: {
-        channelId:   CHANNEL_GENERAL,
-        smallIcon:   'ic_notification',
-        importance:  AndroidImportance.DEFAULT,
-        autoCancel:  true,
-        pressAction: {id: 'default', launchActivity: 'default'},
-      },
-      ios: {sound: 'default'},
-    },
-    {
-      type:      TriggerType.TIMESTAMP,
-      timestamp: now + MISSED_DELAY_MS,
-      alarmManager: {type: AlarmType.SET_AND_ALLOW_WHILE_IDLE},
-    },
-  ).catch(() => {});
 }
 
+// ─── Handler for Foreground messages (when app is open) ───────────────────────
+onMessage(getMessaging(), async remoteMessage => {
+  console.log('TAMAM_FG', JSON.stringify({
+    data: remoteMessage?.data ?? null,
+    notification: remoteMessage?.notification ?? null,
+  }));
+
+  const {data} = remoteMessage;
+
+  if (data?.type === 'NEW_ORDER' && data?.order) {
+    let parsedOrder = null;
+    try { parsedOrder = JSON.parse(data.order); } catch {}
+
+    const role = await AsyncStorage.getItem('user_role').catch(() => null);
+    const isBiker = role === 'biker';
+
+    await AsyncStorage.setItem('pending_incoming_order', data.order).catch(() => {});
+
+    if (isBiker) {
+      if (parsedOrder) await displayOrderNotification(parsedOrder);
+      await launchIncomingOrder(parsedOrder?.id ?? '', data.order).catch(() => {});
+    } else {
+      if (parsedOrder) await displayPartnerNewOrderNotification(parsedOrder);
+    }
+    return;
+  }
+
+  await displayGenericNotification(remoteMessage);
+});
+
+// ─── Handler for Background/Closed messages ──────────────────────────────────
 setBackgroundMessageHandler(getMessaging(), async remoteMessage => {
   const {data} = remoteMessage;
+
+  // TEMP DIAGNOSTIC — يطبع الرسالة الكاملة في logcat لفحص أسماء الحقول الفعلية.
+  // افحصها بـ:  adb logcat -s ReactNativeJS | grep TAMAM_BG
+  // احذفه بعد تأكيد بنية الـ payload.
+  console.log('TAMAM_BG', JSON.stringify({
+    data: remoteMessage?.data ?? null,
+    notification: remoteMessage?.notification ?? null,
+  }));
 
   if (data?.type === 'NEW_ORDER' && data?.order) {
     let parsedOrder = null;

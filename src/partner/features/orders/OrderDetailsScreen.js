@@ -7,6 +7,7 @@ import {
   Modal,
   PermissionsAndroid,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -36,6 +37,7 @@ import {launchCamera} from 'react-native-image-picker';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getOrderById, acceptOrder, rejectOrder, startOnshopOrder, completeOnshopOrder} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import AssignBikerScreen from './AssignBikerScreen';
 import RejectOrderModal from './RejectOrderModal';
 import useAppStore from '../../../store/appStore';
@@ -135,6 +137,7 @@ export default function OrderDetailsScreen({order, onBack}) {
 
   const [orderData,    setOrderData]    = useState(order ?? null);
   const [loading,      setLoading]      = useState(!order);
+  const [refreshing,   setRefreshing]   = useState(false);
   const [status,       setStatus]       = useState(order?.status ?? 'PENDING_PARTNER');
   const [showAssign,   setShowAssign]   = useState(false);
   const [showReject,   setShowReject]   = useState(false);
@@ -155,19 +158,29 @@ export default function OrderDetailsScreen({order, onBack}) {
   const activeStepMap  = isOnshop ? STATUS_ACTIVE_STEPS_ONSHOP : STATUS_ACTIVE_STEPS_MOBILE;
   const activeStep     = activeStepMap[status] ?? 0;
 
+  // Fetch full order details (reused by initial load and pull-to-refresh)
+  const fetchOrder = useCallback(async () => {
+    if (!orderId) return;
+    const res = await getOrderById(orderId);
+    if (res.success) {
+      const fresh = res.data?.data ?? res.data;
+      setOrderData(fresh);
+      setStatus(prev => fresh?.status ?? prev);
+    }
+  }, [orderId]);
+
   // Load full order details from API if only a summary was passed
   useEffect(() => {
     if (!orderId) return;
     setLoading(true);
-    getOrderById(orderId).then(res => {
-      if (res.success) {
-        const fresh = res.data?.data ?? res.data;
-        setOrderData(fresh);
-        setStatus(prev => fresh?.status ?? prev);
-      }
-      setLoading(false);
-    });
-  }, [orderId]);
+    fetchOrder().finally(() => setLoading(false));
+  }, [orderId, fetchOrder]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOrder();
+    setRefreshing(false);
+  }, [fetchOrder]);
 
   // Re-fetch when a foreground notification signals a refresh (e.g. photo_skip_decision)
   const orderRefreshSignal = useAppStore(s => s.orderRefreshSignal);
@@ -469,7 +482,13 @@ export default function OrderDetailsScreen({order, onBack}) {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+      <ScrollView
+        style={s.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
+        }>
 
         {/* Service / Package card */}
         <View style={[s.card, {backgroundColor: colors.card, borderColor: colors.border}]}>
@@ -517,7 +536,10 @@ export default function OrderDetailsScreen({order, onBack}) {
                       <Text style={[s.addonQty, {color: colors.textSecondary}]}>x{aQty}</Text>
                     )}
                     {aPrice != null && (
-                      <Text style={[s.addonPrice, {color: colors.primary}]}>{aPrice} ﷼</Text>
+                      <View style={s.priceRow}>
+                        <Text style={[s.addonPrice, {color: colors.primary}]}>{aPrice}</Text>
+                        <RiyalIcon size={13} color={colors.primary} />
+                      </View>
                     )}
                   </View>
                 );
@@ -656,7 +678,14 @@ export default function OrderDetailsScreen({order, onBack}) {
                 </>
               ) : (
                 <>
-                  <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price ? `${price} ${t('partnerOrders.details.currency')}` : '—'}</Text>
+                  {price ? (
+                    <View style={s.priceRow}>
+                      <Text style={[s.payAmount, {color: colors.textPrimary}]}>{price}</Text>
+                      <RiyalIcon size={19} color={colors.textPrimary} />
+                    </View>
+                  ) : (
+                    <Text style={[s.payAmount, {color: colors.textPrimary}]}>—</Text>
+                  )}
                   <Text style={[s.cardSub, {color: colors.textSecondary}]}>{t('partnerOrders.details.paidVia')}</Text>
                 </>
               )}
@@ -779,6 +808,7 @@ const s = StyleSheet.create({
   addonName:       {flex: 1, fontSize: 13, fontWeight: '600'},
   addonQty:        {fontSize: 12, fontWeight: '600'},
   addonPrice:      {fontSize: 13, fontWeight: '800'},
+  priceRow:        {flexDirection: 'row', alignItems: 'center', gap: 3},
   pkgPayBadge:     {flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start'},
   pkgPayTxt:       {fontSize: 14, fontWeight: '700'},
   avatar:          {width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center'},

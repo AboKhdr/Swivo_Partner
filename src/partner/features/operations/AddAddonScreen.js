@@ -14,6 +14,7 @@ import {ArrowRight} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import SelectField from '../../../shared/components/SelectField';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 // import ImagePickerField from '../../../shared/components/ImagePickerField'; // TODO: re-enable when image is supported
 import {
   getCategoryServices,
@@ -182,7 +183,7 @@ export default function AddAddonScreen({onBack, onSaved, initialData}) {
 
         <Text style={[s.label, {color: colors.textPrimary}]}>{t('partner.addons.price')}</Text>
         <View style={[s.priceBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
-          <Text style={[s.currency, {color: colors.textSecondary}]}>﷼</Text>
+          <RiyalIcon size={15} color={colors.textSecondary} />
           <TextInput
             style={[s.priceInput, {color: colors.textPrimary}]}
             placeholder="0"

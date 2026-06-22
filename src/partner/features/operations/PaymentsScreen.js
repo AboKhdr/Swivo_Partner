@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {getTransactions, getTenantWallet} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 
 const DATE_FILTERS = [
@@ -197,9 +198,12 @@ function TxDetailModal({item, colors, onClose}) {
 
           {/* Amount hero */}
           <View style={dm.hero}>
-            <Text style={[dm.heroAmount, {color: amountColor}]}>
-              {isIn ? '+' : '-'}{Number(item.amount ?? 0).toFixed(2)} ﷼
-            </Text>
+            <View style={dm.amountRow}>
+              <Text style={[dm.heroAmount, {color: amountColor}]}>
+                {isIn ? '+' : '-'}{Number(item.amount ?? 0).toFixed(2)}
+              </Text>
+              <RiyalIcon size={30} color={amountColor} />
+            </View>
             <View style={[dm.heroBadge, {backgroundColor: statusColor + '22'}]}>
               <Text style={[dm.heroBadgeTxt, {color: statusColor}]}>{statusLabel}</Text>
             </View>
@@ -233,6 +237,7 @@ const dm = StyleSheet.create({
   card:         {borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 36, paddingHorizontal: 20},
   handle:       {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20},
   hero:         {flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 6},
+  amountRow:    {flexDirection: 'row', alignItems: 'center', gap: 4},
   heroAmount:   {fontSize: 32, fontWeight: '900'},
   heroBadge:    {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10},
   heroBadgeTxt: {fontSize: 13, fontWeight: '700'},
@@ -281,9 +286,12 @@ function PaymentCard({item, colors, onPress}) {
         </View>
       </View>
 
-      <Text style={[pc.amount, {color: isIn ? colors.success : colors.danger}]}>
-        {isIn ? '+' : '-'}{Number(item.amount ?? 0).toFixed(2)} ﷼
-      </Text>
+      <View style={pc.amountRow}>
+        <Text style={[pc.amount, {color: isIn ? colors.success : colors.danger}]}>
+          {isIn ? '+' : '-'}{Number(item.amount ?? 0).toFixed(2)}
+        </Text>
+        <RiyalIcon size={15} color={isIn ? colors.success : colors.danger} />
+      </View>
     </TouchableOpacity>
   );
 }
@@ -297,6 +305,7 @@ const pc = StyleSheet.create({
   method:      {fontSize: 12, flexShrink: 1},
   statusBadge: {paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6},
   statusTxt:   {fontSize: 11, fontWeight: '700'},
+  amountRow:   {flexDirection: 'row', alignItems: 'center', gap: 3},
   amount:      {fontSize: 15, fontWeight: '800'},
 });
 
@@ -442,7 +451,7 @@ export default function PaymentsScreen({onBack}) {
 
           <View style={s.balanceAmountRow}>
             <Text style={s.balanceVal}>{Number(balance).toLocaleString()}</Text>
-            <Text style={s.balanceCurrency}>﷼</Text>
+            <RiyalIcon size={36} color="rgba(255,255,255,0.9)" style={s.balanceCurrency} />
           </View>
 
           {isLocked && (
@@ -456,7 +465,10 @@ export default function PaymentsScreen({onBack}) {
         <View style={[s.summaryCard, {backgroundColor: colors.success + '12'}]}>
           <TrendingUp size={18} color={colors.success} />
           <View style={s.summaryText}>
-            <Text style={[s.summaryVal, {color: colors.success}]}>{totalIn.toLocaleString()} ﷼</Text>
+            <View style={s.summaryValRow}>
+              <Text style={[s.summaryVal, {color: colors.success}]}>{totalIn.toLocaleString()}</Text>
+              <RiyalIcon size={13} color={colors.success} />
+            </View>
             <Text style={[s.summaryLbl, {color: colors.textSecondary}]}>إجمالي الوارد</Text>
           </View>
         </View>
@@ -464,7 +476,10 @@ export default function PaymentsScreen({onBack}) {
         <View style={[s.summaryCard, {backgroundColor: colors.danger + '12'}]}>
           <TrendingDown size={18} color={colors.danger} />
           <View style={s.summaryText}>
-            <Text style={[s.summaryVal, {color: colors.danger}]}>{totalOut.toLocaleString()} ﷼</Text>
+            <View style={s.summaryValRow}>
+              <Text style={[s.summaryVal, {color: colors.danger}]}>{totalOut.toLocaleString()}</Text>
+              <RiyalIcon size={13} color={colors.danger} />
+            </View>
             <Text style={[s.summaryLbl, {color: colors.textSecondary}]}>إجمالي الصادر</Text>
           </View>
         </View>
@@ -472,7 +487,10 @@ export default function PaymentsScreen({onBack}) {
         <View style={[s.summaryCard, {backgroundColor: colors.primary + '12'}]}>
           <Wallet size={18} color={colors.primary} />
           <View style={s.summaryText}>
-            <Text style={[s.summaryVal, {color: colors.primary}]}>{net.toLocaleString()} ﷼</Text>
+            <View style={s.summaryValRow}>
+              <Text style={[s.summaryVal, {color: colors.primary}]}>{net.toLocaleString()}</Text>
+              <RiyalIcon size={13} color={colors.primary} />
+            </View>
             <Text style={[s.summaryLbl, {color: colors.textSecondary}]}>الصافي</Text>
           </View>
         </View>
@@ -542,6 +560,7 @@ const s = StyleSheet.create({
   summaryRow:  {flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 8},
   summaryCard: {flex: 1, borderRadius: 14, padding: 10, gap: 6},
   summaryText: {gap: 2},
+  summaryValRow:{flexDirection: 'row', alignItems: 'center', gap: 3},
   summaryVal:  {fontSize: 13, fontWeight: '900'},
   summaryLbl:  {fontSize: 10},
 

@@ -135,7 +135,7 @@ const sh = StyleSheet.create({
 
 // ── MemberCard ────────────────────────────────────────────────────────────────
 
-function MemberCard({item, colors, tripsLabel, isBiker, onOptions, onDutyToggle}) {
+function MemberCard({item, colors, tripsLabel, isBiker, onOptions, onEdit, onDutyToggle}) {
   const name   = memberName(item);
   const phone  = item.userId?.phoneNumber ?? item.phone ?? '';
   const trips  = item.activeOrdersCount ?? 0;
@@ -146,8 +146,8 @@ function MemberCard({item, colors, tripsLabel, isBiker, onOptions, onDutyToggle}
   return (
     <TouchableOpacity
       style={[s.card, {backgroundColor: colors.card}]}
-      onPress={() => isBiker ? onOptions(item) : null}
-      activeOpacity={isBiker ? 0.85 : 1}>
+      onPress={() => isBiker ? onOptions(item) : onEdit(item)}
+      activeOpacity={0.85}>
 
       <TouchableOpacity
         style={[s.phoneBtn, {backgroundColor: colors.bg}]}
@@ -295,6 +295,10 @@ export default function StaffScreen({onBack}) {
     }
   }, [setCurrentList, showToast]);
 
+  const handleEditManager = useCallback(member => {
+    setAddTarget({role: 'MANAGER', initialData: member});
+  }, []);
+
   const handleSaved = useCallback(() => {
     setAddTarget(null);
     fetchStaff();
@@ -310,9 +314,10 @@ export default function StaffScreen({onBack}) {
       tripsLabel={tripsLabel}
       isBiker={isBiker}
       onOptions={isBiker ? setSheetMember : () => null}
+      onEdit={handleEditManager}
       onDutyToggle={handleDutyToggle}
     />
-  ), [colors, tripsLabel, isBiker, handleDutyToggle]);
+  ), [colors, tripsLabel, isBiker, handleDutyToggle, handleEditManager]);
 
   const keyExtractor = useCallback(item => item._id ?? item.id, []);
 

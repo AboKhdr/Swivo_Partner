@@ -9,6 +9,7 @@ import {
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getPlans} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 const BILLING = [
   {key: 'monthly',   labelKey: 'partner.plans.monthly'},
@@ -120,7 +121,7 @@ function PlanCard({item, billing, colors, isRTL, t}) {
           <View style={s.priceRow}>
             <Text style={[s.priceVal, {color: colors.textPrimary}]}>{priceVal.toLocaleString()}</Text>
             <View style={s.priceMeta}>
-              <Text style={[s.priceCurrency, {color: colors.textPrimary}]}>{t('partner.plans.currency')}</Text>
+              <RiyalIcon size={15} color={colors.textPrimary} style={s.priceCurrencyIcon} />
               <Text style={[s.pricePer, {color: colors.textSecondary}]}>
                 {billing === 'yearly' ? t('partner.plans.perYear') : t('partner.plans.perMonth')}
               </Text>
@@ -284,7 +285,7 @@ const s = StyleSheet.create({
   priceRow: {flexDirection: 'row', alignItems: 'flex-end', gap: 8},
   priceVal: {fontSize: 38, fontWeight: '900', lineHeight: 42},
   priceMeta: {gap: 2, marginBottom: 5},
-  priceCurrency: {fontSize: 15, fontWeight: '800'},
+  priceCurrencyIcon: {marginBottom: 1},
   pricePer: {fontSize: 12, fontWeight: '500'},
   unlimitedRow: {flexDirection: 'row', alignItems: 'center', gap: 10},
   unlimitedTxt: {fontSize: 22, fontWeight: '900'},

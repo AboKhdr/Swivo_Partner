@@ -2,6 +2,7 @@ import React, {useRef, useEffect, useCallback} from 'react';
 import {Animated, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {STATUS_MAP, STATUS_COLORS} from '../../../../shared/constants/status';
 import {useTheme} from '../../../../shared/context/ThemeContext';
+import RiyalIcon from '../../../../shared/components/RiyalIcon';
 
 // Safe string — handles {ar, en} objects from backend
 const sc2 = v => (!v ? '' : typeof v === 'string' ? v : v.ar ?? v.en ?? '');
@@ -60,7 +61,10 @@ export default function OrderCard({order, index}) {
         </View>
         <View style={[s.footer, {borderTopColor: colors.border}]}>
           <Text style={[s.client, {color: colors.textSecondary}]}>👤 {order.client?.name ?? order.client?.firstName ?? ''}</Text>
-          <Text style={[s.earning, {color: colors.success}]}>﷼ {order.bikerEarning.toFixed(0)}</Text>
+          <View style={s.earningRow}>
+            <RiyalIcon size={14} color={colors.success} />
+            <Text style={[s.earning, {color: colors.success}]}>{order.bikerEarning.toFixed(0)}</Text>
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -90,5 +94,6 @@ const s = StyleSheet.create({
   serviceText: {fontSize: 11, fontWeight: '600'},
   footer: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1},
   client: {fontSize: 11},
+  earningRow: {flexDirection: 'row', alignItems: 'center', gap: 4},
   earning: {fontSize: 14, fontWeight: '800'},
 });

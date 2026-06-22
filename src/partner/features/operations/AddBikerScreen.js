@@ -13,7 +13,13 @@ import {ArrowRight, User, Phone, Clock} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import SelectField from '../../../shared/components/SelectField';
 import ImagePickerField from '../../../shared/components/ImagePickerField';
-import {getBranches, addStaff, updateStaff} from '../../../services/partner';
+import {getBranches, addStaff, updateStaff, getStaffById} from '../../../services/partner';
+
+// branchId may be a string id or a populated object ({_id, name}); normalise to id.
+function branchToId(b) {
+  if (!b) return '';
+  return typeof b === 'object' ? (b._id ?? b.id ?? '') : b;
+}
 
 const DAYS = [
   {key: 'sat', label: 'السبت'},
@@ -50,9 +56,9 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
   const {colors} = useTheme();
   const isEdit = !!(initialData?._id ?? initialData?.id);
 
-  const existingBranchId = initialData?.branchId
-    ?? initialData?.userId?.branchId
-    ?? '';
+  const existingBranchId = branchToId(
+    initialData?.branchId ?? initialData?.userId?.branchId ?? initialData?.branch,
+  );
 
   const existingFirstName = initialData?.userId?.firstName
     ?? (initialData?.name ? initialData.name.trim().split(' ')[0] : '')
@@ -86,6 +92,27 @@ export default function AddBikerScreen({onBack, onSaved, initialData, role = 'BI
       }
     });
   }, []);
+
+  // In edit mode, load the full record so the current branch (and name/phone) are accurate
+  // even if the list item passed in didn't carry branchId.
+  useEffect(() => {
+    if (!isEdit) return;
+    const id = initialData._id ?? initialData.id;
+    let cancelled = false;
+    getStaffById(id).then(res => {
+      if (cancelled || !res.success) return;
+      const full = res.data?.data ?? res.data;
+      if (!full) return;
+      const bid = branchToId(full.branchId ?? full.userId?.branchId ?? full.branch);
+      if (bid) setBranch(bid);
+      if (full.userId?.firstName) setFirstName(full.userId.firstName);
+      if (full.userId?.lastName)  setLastName(full.userId.lastName);
+      const ph = full.userId?.phoneNumber ?? full.phone;
+      if (ph) setPhone(ph);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit]);
 
   const toggleDay = key =>
     setDays(prev => ({...prev, [key]: {...prev[key], enabled: !prev[key].enabled}}));

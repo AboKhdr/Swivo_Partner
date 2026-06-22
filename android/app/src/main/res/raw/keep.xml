@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  shrinkResources يحذف الموارد التي لا يراها R8 مُستخدَمة من كود Java/Kotlin.
+  أيقونة الإشعار وصوته مُشار إليهما فقط من سلاسل JS (notifee)، لذا نحفظهما هنا
+  صراحةً حتى لا يحذفهما R8 في نسخة release — وإلا فشل عرض الإشعار وقت التشغيل.
+-->
+<resources
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/new_order_alert,@drawable/ic_notification,@mipmap/ic_launcher,@mipmap/ic_launcher_round,@color/notification_color" />

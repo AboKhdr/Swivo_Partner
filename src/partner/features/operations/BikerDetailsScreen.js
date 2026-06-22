@@ -13,6 +13,7 @@ import {
 import {ArrowRight, Bike, Star, Phone, ShoppingBag, CheckCircle, Percent, DollarSign, ChevronDown} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {getStaffById, getOrders, updateStaff} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 const STATUS_COLORS = {
   PENDING_PARTNER: '#F59E0B',
@@ -72,7 +73,12 @@ function OrderRow({item, colors}) {
         {!!serviceName && <Text style={[d.orderService, {color: colors.textPrimary}]}>{serviceName}</Text>}
       </View>
       <View style={d.orderRight}>
-        {!!price && <Text style={[d.orderPrice, {color: colors.textPrimary}]}>{price} ﷼</Text>}
+        {!!price && (
+          <View style={d.priceRow}>
+            <Text style={[d.orderPrice, {color: colors.textPrimary}]}>{price}</Text>
+            <RiyalIcon size={15} color={colors.textPrimary} />
+          </View>
+        )}
         <View style={[d.statusBadge, {backgroundColor: color + '18'}]}>
           <Text style={[d.statusTxt, {color}]}>• {statusLabel}</Text>
         </View>
@@ -112,9 +118,10 @@ function CommissionSection({staffId, initialType, initialPercent, initialFixed, 
     }
   }, [staffId, type, percent, fixed]);
 
+  const showFixedRiyal = type !== 'percentage' && !!fixed;
   const displayVal = type === 'percentage'
     ? (percent ? `${percent}%` : '—')
-    : (fixed   ? `${fixed} ﷼` : '—');
+    : (fixed   ? String(fixed) : '—');
 
   return (
     <View style={[cm.card, {backgroundColor: colors.card}]}>
@@ -128,7 +135,10 @@ function CommissionSection({staffId, initialType, initialPercent, initialFixed, 
         </View>
         <View style={cm.headerText}>
           <Text style={[cm.headerLabel, {color: colors.textPrimary}]}>العمولة</Text>
-          <Text style={[cm.headerVal, {color: colors.textSecondary}]}>{displayVal}</Text>
+          <View style={cm.headerValRow}>
+            <Text style={[cm.headerVal, {color: colors.textSecondary}]}>{displayVal}</Text>
+            {showFixedRiyal && <RiyalIcon size={12} color={colors.textSecondary} />}
+          </View>
         </View>
         <ChevronDown
           size={18}
@@ -171,9 +181,11 @@ function CommissionSection({staffId, initialType, initialPercent, initialFixed, 
               placeholder={type === 'percentage' ? 'مثال: 15' : 'مثال: 20'}
               placeholderTextColor={colors.textSecondary}
             />
-            <Text style={[cm.inputSuffix, {color: colors.textSecondary}]}>
-              {type === 'percentage' ? '%' : '﷼'}
-            </Text>
+            {type === 'percentage' ? (
+              <Text style={[cm.inputSuffix, {color: colors.textSecondary}]}>%</Text>
+            ) : (
+              <RiyalIcon size={18} color={colors.textSecondary} style={cm.inputSuffixIcon} />
+            )}
           </View>
 
           <TouchableOpacity
@@ -198,6 +210,7 @@ const cm = StyleSheet.create({
   iconBox:     {width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center'},
   headerText:  {flex: 1, gap: 2},
   headerLabel: {fontSize: 14, fontWeight: '700'},
+  headerValRow:{flexDirection: 'row', alignItems: 'center', gap: 3},
   headerVal:   {fontSize: 12},
   body:        {borderTopWidth: 1, padding: 16, gap: 12},
   toggle:      {flexDirection: 'row', borderRadius: 12, padding: 4, gap: 4},
@@ -206,6 +219,7 @@ const cm = StyleSheet.create({
   inputRow:    {flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 4},
   input:       {flex: 1, fontSize: 20, fontWeight: '800', paddingVertical: 10},
   inputSuffix: {fontSize: 18, fontWeight: '600', paddingHorizontal: 4},
+  inputSuffixIcon: {marginHorizontal: 4},
   saveBtn:     {paddingVertical: 14, borderRadius: 14, alignItems: 'center'},
   saveTxt:     {color: '#FFF', fontSize: 15, fontWeight: '700'},
 });
@@ -401,6 +415,7 @@ const d = StyleSheet.create({
   orderNum:     {fontSize: 12, fontWeight: '700'},
   orderService: {fontSize: 14, fontWeight: '700'},
   orderRight:   {alignItems: 'flex-end', gap: 6},
+  priceRow:     {flexDirection: 'row', alignItems: 'center', gap: 3},
   orderPrice:   {fontSize: 15, fontWeight: '800'},
   statusBadge:  {paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20},
   statusTxt:    {fontSize: 11, fontWeight: '700'},

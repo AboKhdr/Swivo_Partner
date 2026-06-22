@@ -7,6 +7,7 @@ import {ChevronRight, MapPin, Car, User, Droplets, ChevronUp, ChevronDown, Spark
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getOrders} from '../../../services/orders';
+import useAppStore from '../../../store/appStore';
 
 const FILTER_KEYS = [
   {key: 'today',    labelKey: 'orders.today'},
@@ -235,6 +236,14 @@ export default function OrdersScreen({onOrderPress, onLocationPress}) {
   useEffect(() => {
     fetchOrders(filter, 1, true);
   }, [filter, fetchOrders]);
+
+  // Re-fetch when the navigator signals a refresh (e.g. returning from order details).
+  const orderRefreshSignal = useAppStore(s => s.orderRefreshSignal);
+  useEffect(() => {
+    if (orderRefreshSignal === 0) return;
+    fetchOrders(filter, 1, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderRefreshSignal]);
 
   const flatData = useMemo(() => {
     const rows = [];

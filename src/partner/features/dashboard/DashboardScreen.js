@@ -9,6 +9,7 @@ import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAuthStore from '../../../store/authStore';
 import useAppStore from '../../../store/appStore';
 import {getDashboardToday, getStaff, getBranchRevenue} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import NotificationsScreen from './NotificationsScreen';
 
 // ── Quick Action Tile ─────────────────────────────────────────────────────────
@@ -147,7 +148,10 @@ function BranchRevenueCard({data, colors, t, lang}) {
       <Text style={s.heroRevenueLabel}>
         {t('partner.dashboard.branchRevenue')}{branchName ? ` — ${branchName}` : ''}
       </Text>
-      <Text style={s.heroRevenue}>{rev.today ?? 0} ﷼</Text>
+      <View style={s.heroRevenueRow}>
+        <Text style={s.heroRevenue}>{rev.today ?? 0}</Text>
+        <RiyalIcon size={28} color="#fff" />
+      </View>
       <View style={s.heroStats}>
         <View style={s.heroStatItem}>
           <Text style={s.heroStatValue}>{ord.completed ?? 0}</Text>
@@ -295,7 +299,10 @@ export default function DashboardScreen() {
           {!isSupervisor && (
           <View style={[s.heroCard, {backgroundColor: colors.primary}]}>
             <Text style={s.heroRevenueLabel}>{t('partner.dashboard.revenue')}</Text>
-            <Text style={s.heroRevenue}>{stats?.todayRevenue ?? 0} ﷼</Text>
+            <View style={s.heroRevenueRow}>
+              <Text style={s.heroRevenue}>{stats?.todayRevenue ?? 0}</Text>
+              <RiyalIcon size={28} color="#fff" />
+            </View>
             <View style={s.heroStats}>
               <View style={s.heroStatItem}>
                 <Text style={s.heroStatValue}>{stats?.pendingCount ?? 0}</Text>
@@ -398,7 +405,8 @@ const s = StyleSheet.create({
   heroGreeting:     {fontSize: 14, fontWeight: '500'},
   heroCard:         {marginHorizontal: 16, marginBottom: 20, borderRadius: 20, padding: 20, gap: 4},
   heroRevenueLabel: {fontSize: 12, color: 'rgba(255,255,255,0.75)', marginBottom: 2},
-  heroRevenue:      {fontSize: 30, color: '#fff', fontWeight: '900', marginBottom: 18},
+  heroRevenueRow:   {flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 18},
+  heroRevenue:      {fontSize: 30, color: '#fff', fontWeight: '900'},
   heroStats:        {flexDirection: 'row', justifyContent: 'space-between', gap: 10},
   heroStatItem:     {flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 14, paddingVertical: 12, gap: 4},
   heroStatValue:    {fontSize: 17, color: '#fff', fontWeight: '800'},
