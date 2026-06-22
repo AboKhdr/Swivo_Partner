@@ -13,6 +13,7 @@ import {ArrowRight} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import ImagePickerField from '../../../shared/components/ImagePickerField';
 import SelectField from '../../../shared/components/SelectField';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import {createService, updateService} from '../../../services/partner';
 
 const SERVICE_TYPES = [
@@ -195,7 +196,7 @@ export default function AddServiceScreen({onBack, onSaved, initialData, categori
                   <Text style={[s.sizeLabel, {color: colors.primary}]}>{sz.label}</Text>
                 </View>
                 <View style={[s.priceInput, {backgroundColor: colors.bg, borderColor: colors.border}]}>
-                  <Text style={[s.currency, {color: colors.textSecondary}]}>﷼</Text>
+                  <RiyalIcon size={15} color={colors.textSecondary} />
                   <TextInput
                     style={[s.priceInputTxt, {color: colors.textPrimary}]}
                     placeholder="0"

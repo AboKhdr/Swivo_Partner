@@ -12,8 +12,9 @@ import {useI18n} from '../../../shared/i18n/I18nContext';
 import useAuthStore from '../../../store/authStore';
 import {logout} from '../../../services/auth';
 import {getBikerProfile} from '../../../services/biker';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
-function NavRow({Icon, iconColor, iconBg, label, sub, subLoader, onPress, danger, right, loading, colors}) {
+function NavRow({Icon, iconColor, iconBg, label, sub, subIcon, subLoader, onPress, danger, right, loading, colors}) {
   return (
     <TouchableOpacity style={s.navRow} onPress={onPress} activeOpacity={0.7} disabled={loading}>
       <View style={[s.navIcon, {backgroundColor: iconBg}]}>
@@ -23,7 +24,14 @@ function NavRow({Icon, iconColor, iconBg, label, sub, subLoader, onPress, danger
         <Text style={[s.navLabel, {color: danger ? '#EF4444' : colors.textPrimary}]}>{label}</Text>
         {subLoader
           ? <View style={[s.subSkeleton, {backgroundColor: colors.border}]} />
-          : sub ? <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text> : null
+          : sub ? (
+            subIcon ? (
+              <View style={s.subRow}>
+                <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text>
+                <RiyalIcon size={12} color={colors.textSecondary} />
+              </View>
+            ) : <Text style={[s.navSub, {color: colors.textSecondary}]}>{sub}</Text>
+          ) : null
         }
       </View>
       {loading ? (
@@ -83,7 +91,8 @@ export default function ProfileScreen({onNavigate}) {
           <NavRow
             Icon={Wallet} iconColor="#10B981" iconBg="#10B98118"
             label={t('profile.wallet')}
-            sub={balanceLoading ? null : `${t('wallet.balance')} ${(balance ?? 0).toFixed(0)} ﷼`}
+            sub={balanceLoading ? null : `${t('wallet.balance')} ${(balance ?? 0).toFixed(0)}`}
+            subIcon={!balanceLoading}
             subLoader={balanceLoading}
             onPress={() => onNavigate('wallet')}
             colors={colors}
@@ -154,5 +163,6 @@ const s = StyleSheet.create({
   navText: {flex: 1, gap: 2},
   navLabel:    {fontSize: 14, fontWeight: '600'},
   navSub:      {fontSize: 12},
+  subRow:      {flexDirection: 'row', alignItems: 'center', gap: 3},
   subSkeleton: {width: 80, height: 10, borderRadius: 5, marginTop: 3},
 });

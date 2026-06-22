@@ -12,6 +12,8 @@ import StatusTracker from '../../../shared/components/StatusTracker';
 import GalleryStrip from '../../../shared/components/GalleryStrip';
 import {updateOrderStatus, uploadOrderPhoto, skipOrderPhoto, getOrderById} from '../../../services/orders';
 import {SKIP_REASONS} from '../../../shared/constants/skipReasons';
+import {carColorHex} from '../../../shared/constants/carColor';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import useAppStore from '../../../store/appStore';
 
 
@@ -82,8 +84,17 @@ function resolveFields(d, lang) {
   const beforePhotos = d.proof?.beforePhotos ?? [];
   const afterPhotos  = d.proof?.afterPhotos  ?? [];
 
-  // Additional services (add-ons) — new shape: additionalService[]; fallback: additionalServicesSnapshot[]
+  // Additional services (add-ons) — new shape: additionalServices[] ({serviceId, name{ar,en}, price});
+  // legacy: additionalService[] / additionalServicesSnapshot[]
   const additionalServices = (() => {
+    if (d.additionalServices?.length) {
+      return d.additionalServices.map(a => ({
+        id:    a.serviceId ?? a._id,
+        name:  str(a.name, lang),
+        price: a.price ?? null,
+        image: a.image ?? null,
+      }));
+    }
     if (d.additionalService?.length) {
       return d.additionalService.map(a => ({
         id:    a._id,
@@ -378,7 +389,13 @@ export default function OrderDetailsScreen({order, onBack}) {
               {!!carColor && (
                 <View style={s.infoCell}>
                   <Text style={[s.infoLabel, {color: colors.textSecondary}]}>{t('orders.fields.carColor')}</Text>
-                  <Text style={[s.infoValue, {color: colors.textPrimary}]}>{carColor}</Text>
+                  {carColorHex(carColor) ? (
+                    <View
+                      style={[s.colorSwatch, {backgroundColor: carColorHex(carColor), borderColor: colors.border}]}
+                    />
+                  ) : (
+                    <Text style={[s.infoValue, {color: colors.textPrimary}]}>{carColor}</Text>
+                  )}
                 </View>
               )}
               {!!address && (
@@ -400,8 +417,8 @@ export default function OrderDetailsScreen({order, onBack}) {
               </>
             )}
 
-            {/* Extra services (additional items from the same services array) */}
-            {extraServices.length > 0 && (
+            {/* Extra services — legacy fallback only (new orders use additionalServices below) */}
+            {additionalServices.length === 0 && extraServices.length > 0 && (
               <>
                 <View style={[s.divider, {backgroundColor: colors.border}]} />
                 <Text style={[s.extrasTitle, {color: colors.textPrimary}]}>{t('orders.fields.extras')}</Text>
@@ -433,9 +450,6 @@ export default function OrderDetailsScreen({order, onBack}) {
                       )}
                       <View style={s.addonInfo}>
                         <Text style={[s.addonName, {color: colors.textPrimary}]} numberOfLines={2}>{item.name}</Text>
-                        {item.price != null && (
-                          <Text style={[s.addonPrice, {color: colors.primary}]}>﷼ {item.price}</Text>
-                        )}
                       </View>
                     </View>
                   ))}
@@ -444,7 +458,7 @@ export default function OrderDetailsScreen({order, onBack}) {
             )}
 
             {/* Proof photos (before/after if already uploaded) */}
-            {(beforePhotos.length > 0 || afterPhotos.length > 0) && currentStatus !== 'COMPLETED' && (
+            {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
               <>
                 <View style={[s.divider, {backgroundColor: colors.border}]} />
                 <PhotosRow label={t('orderDetails.summary.beforePhotos')} photos={beforePhotos} colors={colors} />
@@ -467,95 +481,6 @@ export default function OrderDetailsScreen({order, onBack}) {
                 : <Text style={s.actionBtnText}>{action.label}</Text>
               }
             </TouchableOpacity>
-          )}
-
-          {/* Completed summary */}
-          {currentStatus === 'COMPLETED' && (
-            <View style={[s.summaryCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
-              <View style={s.summaryHeader}>
-                <View style={{flex: 1, gap: 4}}>
-                  {!!clientName && (
-                    <Text style={[s.summaryClientName, {color: colors.textPrimary}]}>{clientName}</Text>
-                  )}
-                  {!!serviceName && (
-                    <View style={[s.svcBadge, {backgroundColor: colors.primary + '15'}]}>
-                      <Text style={[s.svcBadgeText, {color: colors.primary}]}>{serviceName}</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={[s.completedBadge, {backgroundColor: '#22C55E15'}]}>
-                  <Text style={[s.completedBadgeText, {color: '#22C55E'}]}>{t('orders.status.COMPLETED')}</Text>
-                </View>
-              </View>
-
-              <View style={[s.divider, {backgroundColor: colors.border}]} />
-
-              {(!!carBrand || !!carModel || !!carPlate) && (
-                <View style={s.summaryRow}>
-                  <Text style={[s.summaryRowLabel, {color: colors.textSecondary}]}>{t('orders.fields.carType')}</Text>
-                  <Text style={[s.summaryRowValue, {color: colors.textPrimary}]}>
-                    {[carBrand, carModel, carColor].filter(Boolean).join(' ')}{carPlate ? ` · ${carPlate}` : ''}
-                  </Text>
-                </View>
-              )}
-
-              {!!address && (
-                <View style={s.summaryRow}>
-                  <Text style={[s.summaryRowLabel, {color: colors.textSecondary}]}>{t('orders.fields.location')}</Text>
-                  <Text style={[s.summaryRowValue, {color: colors.textPrimary}]}>{address}</Text>
-                </View>
-              )}
-
-              {services.length > 1 && (
-                <View style={s.summaryRow}>
-                  <Text style={[s.summaryRowLabel, {color: colors.textSecondary}]}>{t('orders.fields.extras')}</Text>
-                  <View style={s.servicesWrap}>
-                    {services.slice(1).map((svc, i) => (
-                      <View key={i} style={[s.svcChip, {borderColor: colors.border, backgroundColor: colors.bg}]}>
-                        <Text style={[s.svcChipText, {color: colors.textPrimary}]}>
-                          {svc.name?.ar ?? svc.name?.en ?? ''}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
-                <View style={s.photosGrid}>
-                  {beforePhotos.length > 0 && (
-                    <View style={s.photoCol}>
-                      <Text style={[s.photoColLabel, {color: colors.textSecondary}]}>{t('orderDetails.summary.beforePhotos')}</Text>
-                      <View style={s.photoThumbRow}>
-                        {beforePhotos.slice(0, 4).map((item, i) => (
-                          <Image
-                            key={`b${i}`}
-                            source={{uri: typeof item === 'string' ? item : item.url ?? item.uri}}
-                            style={[s.photoThumb, beforePhotos.length === 1 && s.photoThumbFull]}
-                            resizeMode="cover"
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                  {afterPhotos.length > 0 && (
-                    <View style={s.photoCol}>
-                      <Text style={[s.photoColLabel, {color: colors.textSecondary}]}>{t('orderDetails.summary.afterPhotos')}</Text>
-                      <View style={s.photoThumbRow}>
-                        {afterPhotos.slice(0, 4).map((item, i) => (
-                          <Image
-                            key={`a${i}`}
-                            source={{uri: typeof item === 'string' ? item : item.url ?? item.uri}}
-                            style={[s.photoThumb, afterPhotos.length === 1 && s.photoThumbFull]}
-                            resizeMode="cover"
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
           )}
 
           <View style={{height: currentStatus === 'COMPLETED' ? 88 : 24}} />
@@ -738,7 +663,10 @@ function CompletedOverlay({visible, earning, onDismiss, colors, t}) {
           {earning != null && (
             <View style={[done.earningBox, {backgroundColor: colors.primary + '15', borderColor: colors.primary + '30'}]}>
               <Text style={[done.earningLabel, {color: colors.textSecondary}]}>{t('orderDetails.completed.earned') || 'أرباحك من هذا الطلب'}</Text>
-              <Text style={[done.earningValue, {color: colors.primary}]}>﷼ {earning}</Text>
+              <View style={done.earningRow}>
+                <RiyalIcon size={24} color={colors.primary} />
+                <Text style={[done.earningValue, {color: colors.primary}]}>{earning}</Text>
+              </View>
             </View>
           )}
 
@@ -795,6 +723,7 @@ const s = StyleSheet.create({
   infoCell:         {width: '47%', gap: 4},
   infoLabel:        {fontSize: 11},
   infoValue:        {fontSize: 13, fontWeight: '700'},
+  colorSwatch:      {width: 24, height: 24, borderRadius: 12, borderWidth: 1, marginTop: 2},
   locationRow:      {flexDirection: 'row', alignItems: 'flex-start', gap: 5},
   locationDot:      {width: 8, height: 8, borderRadius: 4, marginTop: 4},
   divider:          {height: 1},
@@ -808,7 +737,6 @@ const s = StyleSheet.create({
   addonImg:         {width: 44, height: 44, borderRadius: 10},
   addonInfo:        {flex: 1, gap: 3},
   addonName:        {fontSize: 13, fontWeight: '700'},
-  addonPrice:       {fontSize: 13, fontWeight: '800'},
   actionBtn:        {marginHorizontal: 16, marginBottom: 12, paddingVertical: 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center'},
   actionBtnText:    {color: '#fff', fontSize: 16, fontWeight: '800'},
   guideCard:        {borderRadius: 20, padding: 20, alignItems: 'center', marginBottom: 14, borderWidth: 1, gap: 10},
@@ -821,21 +749,6 @@ const s = StyleSheet.create({
   bottomPrimaryText:{color: '#fff', fontSize: 16, fontWeight: '700'},
   bottomCancelBtn:  {paddingVertical: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1.5},
   bottomCancelText: {fontSize: 15, fontWeight: '700'},
-  summaryCard:      {borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, gap: 14},
-  summaryHeader:    {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
-  summaryClientName:{fontSize: 16, fontWeight: '800'},
-  summaryRow:       {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8},
-  summaryRowLabel:  {fontSize: 12, flex: 1},
-  summaryRowValue:  {fontSize: 13, fontWeight: '700', flex: 2},
-  svcBadge:         {alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8},
-  svcBadgeText:     {fontSize: 12, fontWeight: '700'},
-  completedBadge:   {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8},
-  completedBadgeText:{fontSize: 12, fontWeight: '700'},
-  servicesWrap:     {flexDirection: 'row', flexWrap: 'wrap', gap: 8, flex: 2},
-  svcChip:          {borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8},
-  svcChipText:      {fontSize: 13, fontWeight: '700'},
-  photosGrid:       {flexDirection: 'row', gap: 12},
-  photoCol:         {flex: 1, gap: 6},
   photoColLabel:    {fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5},
   photoThumbRow:    {flexDirection: 'row', flexWrap: 'wrap', gap: 6},
   photoThumb:       {width: 70, height: 70, borderRadius: 10},
@@ -881,6 +794,7 @@ const done = StyleSheet.create({
   earningBox:   {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                  width: '100%', borderRadius: 16, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 14, marginTop: 4},
   earningLabel: {fontSize: 13, fontWeight: '600'},
+  earningRow: {flexDirection: 'row', alignItems: 'center', gap: 4},
   earningValue: {fontSize: 26, fontWeight: '900'},
   btn:          {width: '100%', paddingVertical: 18, borderRadius: 16, alignItems: 'center', marginTop: 8},
   btnText:      {color: '#fff', fontSize: 17, fontWeight: '800'},

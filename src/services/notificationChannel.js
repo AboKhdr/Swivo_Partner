@@ -129,7 +129,7 @@ export async function displayNotification({title, body, notificationType, data =
     data,
     android: {
       channelId,
-      smallIcon:   'ic_notification',
+      smallIcon:   'ic_launcher',
       importance:  AndroidImportance.HIGH,
       pressAction: {id: 'default'},
     },
@@ -159,7 +159,7 @@ export async function showNewOrderAlert(order) {
     },
     android: {
       channelId:        CHANNEL_NEW_ORDER,
-      smallIcon:        'ic_notification',
+      smallIcon:        'ic_launcher',
       importance:       AndroidImportance.HIGH,
       visibility:       AndroidVisibility.PUBLIC,
       sound:            'new_order_alert',
@@ -280,7 +280,7 @@ export async function convertToMissedNotification(order) {
     },
     android: {
       channelId:   CHANNEL_GENERAL,
-      smallIcon:   'ic_notification',
+      smallIcon:   'ic_launcher',
       importance:  AndroidImportance.DEFAULT,
       autoCancel:  true,
       pressAction: {id: 'default', launchActivity: 'default'},

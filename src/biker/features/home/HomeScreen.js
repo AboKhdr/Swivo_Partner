@@ -12,6 +12,7 @@ import useAppStore from '../../../store/appStore';
 import {getBikerProfile, setDutyStatus, getHomeStats, getBranches, getNotifications} from '../../../services/biker';
 import {getOrders} from '../../../services/orders';
 import NotificationsScreen from './NotificationsScreen';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 // ─── Service Circle Button ────────────────────────────────────────────────────
 function ServiceButton({active, onToggle, loading, colors, t}) {
@@ -79,7 +80,7 @@ function ServiceButton({active, onToggle, loading, colors, t}) {
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatItem({IconComponent, iconBg, iconColor, label, value, unit, delay, colors}) {
+function StatItem({IconComponent, iconBg, iconColor, label, value, unit, riyalUnit, delay, colors}) {
   const translateY = useRef(new Animated.Value(20)).current;
   const opacity    = useRef(new Animated.Value(0)).current;
 
@@ -96,6 +97,7 @@ function StatItem({IconComponent, iconBg, iconColor, label, value, unit, delay, 
         <IconComponent size={18} color={iconColor} strokeWidth={2} />
       </View>
       <View style={st.valueRow}>
+        {riyalUnit ? <RiyalIcon size={18} color={colors.textPrimary} style={st.unitIcon} /> : null}
         {unit ? <Text style={[st.unit, {color: colors.textPrimary}]}>{unit} </Text> : null}
         <Text style={[st.value, {color: colors.textPrimary}]}>{value}</Text>
       </View>
@@ -426,7 +428,7 @@ export default function HomeScreen() {
           <StatItem
             IconComponent={DollarSign}
             iconBg={colors.success + '20'} iconColor={colors.success}
-            label={t('home.earnings')} value={`${weeklyEarnings}`} unit="﷼"
+            label={t('home.earnings')} value={`${weeklyEarnings}`} riyalUnit
             delay={200} colors={colors}
           />
           <StatItem
@@ -551,6 +553,7 @@ const st = StyleSheet.create({
   iconBox:  {width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 2},
   valueRow: {flexDirection: 'row', alignItems: 'flex-end'},
   unit:     {fontSize: 12, fontWeight: '700', marginBottom: 2},
+  unitIcon: {marginBottom: 2, marginRight: 2},
   value:    {fontSize: 20, fontWeight: '900'},
   label:    {fontSize: 11, fontWeight: '500'},
 });

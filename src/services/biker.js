@@ -86,9 +86,15 @@ export async function getReasons(type) {
 
 // ── Client Transactions ───────────────────────────────────────────────────────
 
-export async function getClientTransactions() {
-  return api.get('/biker/transactions');
-  // Response: { user_id, balance, transactions: [{ _id, amount, entryType, type, description, reference, createdAt }] }
+export async function getClientTransactions(params = {}) {
+  const qs = new URLSearchParams({page: 1, limit: 20, ...params}).toString();
+  return api.get(`/biker/transactions?${qs}`);
+  // Response: {
+  //   success,
+  //   wallet: { _id, balance, currency, isLocked, lockedReason, updatedAt },
+  //   data: [{ _id, entryType, amount, currency, type, status, reference, description, order, createdAt }],
+  //   pagination: { page, limit, total, totalPages, hasNextPage, hasPrevPage }
+  // }
 }
 
 // ── Tenant Gallery (client-side view) ────────────────────────────────────────

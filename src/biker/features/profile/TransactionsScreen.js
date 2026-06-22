@@ -1,14 +1,23 @@
 import React, {useEffect, useState} from 'react';
 import {
-  ActivityIndicator, Platform, ScrollView, StatusBar, StyleSheet,
+  ActivityIndicator, Modal, Platform, ScrollView, StatusBar, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
 import {
-  ChevronLeft, ArrowDownLeft, ArrowUpRight, Wallet, RefreshCcw, Gift,
+  ChevronLeft, ArrowDownLeft, ArrowUpRight, Wallet, RefreshCcw, Gift, X,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getClientTransactions} from '../../../services/biker';
+import {STATUS_COLORS} from '../../../shared/constants/status';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
+
+// Normalise the transaction amount (handles Decimal128 `{$numberDecimal}` shape).
+function txAmount(item) {
+  return typeof item.amount === 'object'
+    ? Number(item.amount?.$numberDecimal ?? item.amount)
+    : Number(item.amount ?? 0);
+}
 
 // Icon per transaction type
 const TX_CONFIG = {
@@ -32,36 +41,168 @@ const si = StyleSheet.create({
   wrap: {width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center'},
 });
 
-function TxRow({item, colors, t, lang}) {
-  const isCredit = item.entryType === 'credit';
-  const amount   = typeof item.amount === 'object'
-    ? Number(item.amount?.$numberDecimal ?? item.amount)
-    : Number(item.amount ?? 0);
-
-  // Prefer the backend description; otherwise fall back to a translated type label.
+// Resolve a translated label for a transaction, preferring the backend description.
+function txLabel(item, t) {
   const typeLabel = t(`transactions.types.${item.type}`);
   const fallback  = typeLabel === `transactions.types.${item.type}`
     ? t('transactions.types.default')
     : typeLabel;
-  const label = item.description || fallback;
-  const time  = item.createdAt
+  return item.description || fallback;
+}
+
+function txTime(item, lang) {
+  return item.createdAt
     ? new Date(item.createdAt).toLocaleTimeString(
         lang === 'ar' ? 'ar-SA' : lang === 'hi' ? 'hi-IN' : 'en-US',
         {hour: '2-digit', minute: '2-digit'},
       )
     : '';
+}
+
+function TxRow({item, colors, t, lang, currencySymbol = '﷼', showRiyalIcon = true, onPress}) {
+  const isCredit = item.entryType === 'credit';
+  const amount   = txAmount(item);
+  const label    = txLabel(item, t);
+  const time     = txTime(item, lang);
 
   return (
-    <View style={s.txRow}>
+    <TouchableOpacity style={s.txRow} onPress={() => onPress?.(item)} activeOpacity={0.6}>
       <TxIcon type={item.type} />
       <View style={s.txMiddle}>
         <Text style={[s.txLabel, {color: colors.textPrimary}]} numberOfLines={1}>{label}</Text>
         {!!time && <Text style={[s.txTime, {color: colors.textSecondary}]}>{time}</Text>}
       </View>
-      <Text style={[s.txAmount, {color: isCredit ? '#22C55E' : '#EF4444'}]}>
-        {isCredit ? '+' : '-'}{amount.toFixed(2)} ﷼
+      <View style={s.txAmountRow}>
+        <Text style={[s.txAmount, {color: isCredit ? '#22C55E' : '#EF4444'}]}>
+          {isCredit ? '+' : '-'}{amount.toFixed(2)}
+        </Text>
+        {showRiyalIcon ? (
+          <RiyalIcon size={14} color={isCredit ? '#22C55E' : '#EF4444'} />
+        ) : (
+          <Text style={[s.txAmount, {color: isCredit ? '#22C55E' : '#EF4444'}]}>{' '}{currencySymbol}</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function DetailRow({label, value, colors, valueColor}) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <View style={[s.dRow, {borderBottomColor: colors.border}]}>
+      <Text style={[s.dLabel, {color: colors.textSecondary}]}>{label}</Text>
+      <Text style={[s.dValue, {color: valueColor ?? colors.textPrimary}]} numberOfLines={2}>
+        {value}
       </Text>
     </View>
+  );
+}
+
+function TxDetailsModal({item, colors, t, lang, currencySymbol, isRiyal, onClose}) {
+  if (!item) return null;
+
+  const isCredit = item.entryType === 'credit';
+  const amount   = txAmount(item);
+  const fullDate = item.createdAt
+    ? new Date(item.createdAt).toLocaleString(
+        lang === 'ar' ? 'ar-SA' : lang === 'hi' ? 'hi-IN' : 'en-US',
+        {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'},
+      )
+    : '';
+
+  const statusLabel = t(`transactions.status.${item.status}`) === `transactions.status.${item.status}`
+    ? t('transactions.status.default')
+    : t(`transactions.status.${item.status}`);
+
+  const order      = item.order;
+  const orderColor = order?.status ? STATUS_COLORS[order.status]?.text : undefined;
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <View style={[s.modalCard, {backgroundColor: colors.bg}]}>
+          {/* Modal header */}
+          <View style={[s.modalHeader, {borderBottomColor: colors.border}]}>
+            <Text style={[s.modalTitle, {color: colors.textPrimary}]}>
+              {t('transactions.details.title')}
+            </Text>
+            <TouchableOpacity
+              style={[s.modalClose, {backgroundColor: colors.card}]}
+              onPress={onClose}
+              hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+              <X size={20} color={colors.textPrimary} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={s.modalContent} showsVerticalScrollIndicator={false}>
+            {/* Amount hero */}
+            <View style={s.modalAmountWrap}>
+              <View style={[si.wrap, {backgroundColor: (TX_CONFIG[item.type] ?? TX_CONFIG.default).bg, width: 56, height: 56, borderRadius: 28}]}>
+                {React.createElement((TX_CONFIG[item.type] ?? TX_CONFIG.default).Icon, {
+                  size: 24, color: (TX_CONFIG[item.type] ?? TX_CONFIG.default).color, strokeWidth: 2,
+                })}
+              </View>
+              <View style={s.modalAmountRow}>
+                <Text style={[s.modalAmount, {color: isCredit ? '#22C55E' : '#EF4444'}]}>
+                  {isCredit ? '+' : '-'}{amount.toFixed(2)}
+                </Text>
+                {isRiyal ? (
+                  <RiyalIcon size={30} color={isCredit ? '#22C55E' : '#EF4444'} />
+                ) : (
+                  <Text style={[s.modalAmount, {color: isCredit ? '#22C55E' : '#EF4444'}]}>{' '}{currencySymbol}</Text>
+                )}
+              </View>
+              <Text style={[s.modalAmountSub, {color: colors.textSecondary}]}>
+                {txLabel(item, t)}
+              </Text>
+            </View>
+
+            {/* Detail rows */}
+            <View style={[s.detailCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+              <DetailRow
+                label={t('transactions.details.type')}
+                value={isCredit ? t('transactions.details.credit') : t('transactions.details.debit')}
+                colors={colors}
+                valueColor={isCredit ? '#22C55E' : '#EF4444'}
+              />
+              <DetailRow label={t('transactions.details.status')} value={statusLabel} colors={colors} />
+              <DetailRow label={t('transactions.details.reference')} value={item.reference} colors={colors} />
+              <DetailRow label={t('transactions.details.date')} value={fullDate} colors={colors} />
+              {!!item.paymentMethod && (
+                <DetailRow label={t('transactions.details.paymentMethod')} value={item.paymentMethod} colors={colors} />
+              )}
+              {!!item.description && (
+                <DetailRow label={t('transactions.details.description')} value={item.description} colors={colors} />
+              )}
+            </View>
+
+            {/* Linked order */}
+            {order && (
+              <View style={[s.detailCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
+                <DetailRow
+                  label={t('transactions.details.orderNumber')}
+                  value={order.orderNumber ? `#${order.orderNumber}` : null}
+                  colors={colors}
+                />
+                <DetailRow
+                  label={t('transactions.details.orderTotal')}
+                  value={order.totalAmount != null ? `${Number(order.totalAmount).toFixed(2)} ${currencySymbol}` : null}
+                  colors={colors}
+                />
+                <DetailRow
+                  label={t('transactions.details.orderStatus')}
+                  value={order.status}
+                  colors={colors}
+                  valueColor={orderColor}
+                />
+              </View>
+            )}
+
+            <View style={{height: 12}} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -97,8 +238,10 @@ export default function TransactionsScreen({onBack}) {
 
   const [loading,  setLoading]  = useState(true);
   const [balance,  setBalance]  = useState(0);
+  const [currency, setCurrency] = useState('SAR');
   const [groups,   setGroups]   = useState([]);
   const [error,    setError]    = useState(null);
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -106,8 +249,13 @@ export default function TransactionsScreen({onBack}) {
       .then(res => {
         if (res.success !== false) {
           const data = res.data ?? res;
-          setBalance(Number(data.balance ?? 0));
-          setGroups(groupByDate(data.transactions ?? []));
+          // Spec shape: { wallet: { balance, currency }, data: [...] }
+          // Legacy fallback: { balance, transactions: [...] }
+          const wallet = data.wallet ?? data;
+          const list   = data.data ?? data.transactions ?? [];
+          setBalance(Number(wallet.balance ?? 0));
+          setCurrency(wallet.currency ?? 'SAR');
+          setGroups(groupByDate(Array.isArray(list) ? list : []));
         } else {
           setError(t('transactions.error'));
         }
@@ -115,6 +263,9 @@ export default function TransactionsScreen({onBack}) {
       .catch(() => setError(t('transactions.error')))
       .finally(() => setLoading(false));
   }, [t]);
+
+  const isRiyal = currency === 'SAR';
+  const currencySymbol = isRiyal ? '﷼' : currency;
 
   return (
     <View style={[s.root, {backgroundColor: colors.bg}]}>
@@ -160,7 +311,11 @@ export default function TransactionsScreen({onBack}) {
                 </Text>
                 <View style={s.balanceAmountRow}>
                   <Text style={s.balanceAmount}>{balance.toFixed(2)}</Text>
-                  <Text style={s.balanceCurrency}>﷼</Text>
+                  {isRiyal ? (
+                    <RiyalIcon size={32} color="#fff" style={s.balanceCurrencyIcon} />
+                  ) : (
+                    <Text style={s.balanceCurrency}>{currencySymbol}</Text>
+                  )}
                 </View>
               </View>
               <View style={s.walletIconWrap}>
@@ -178,7 +333,7 @@ export default function TransactionsScreen({onBack}) {
               <View style={[s.groupCard, {backgroundColor: colors.card, borderColor: colors.border}]}>
                 {group.items.map((item, i) => (
                   <View key={item._id ?? i}>
-                    <TxRow item={item} colors={colors} t={t} lang={lang} />
+                    <TxRow item={item} colors={colors} t={t} lang={lang} currencySymbol={currencySymbol} showRiyalIcon={isRiyal} onPress={setSelected} />
                     {i < group.items.length - 1 && (
                       <View style={[s.divider, {backgroundColor: colors.border}]} />
                     )}
@@ -197,6 +352,16 @@ export default function TransactionsScreen({onBack}) {
           <View style={{height: 24}} />
         </ScrollView>
       )}
+
+      <TxDetailsModal
+        item={selected}
+        colors={colors}
+        t={t}
+        lang={lang}
+        currencySymbol={currencySymbol}
+        isRiyal={isRiyal}
+        onClose={() => setSelected(null)}
+      />
     </View>
   );
 }
@@ -225,6 +390,7 @@ const s = StyleSheet.create({
   balanceAmountRow:{flexDirection: 'row', alignItems: 'flex-end', gap: 6},
   balanceAmount:   {fontSize: 36, fontWeight: '900', color: '#fff', lineHeight: 40},
   balanceCurrency: {fontSize: 17, fontWeight: '700', color: '#fff', marginBottom: 3},
+  balanceCurrencyIcon: {marginBottom: 3},
   walletIconWrap:  {
     width: 50, height: 50, borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -240,8 +406,27 @@ const s = StyleSheet.create({
   txLabel:  {fontSize: 13, fontWeight: '600'},
   txTime:   {fontSize: 11},
   txAmount: {fontSize: 14, fontWeight: '800'},
+  txAmountRow: {flexDirection: 'row', alignItems: 'center', gap: 3},
 
   divider:   {height: 1, marginHorizontal: 16},
   empty:     {textAlign: 'center', marginTop: 48, fontSize: 14},
   errorText: {fontSize: 14, textAlign: 'center'},
+
+  // Details modal
+  modalOverlay: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)'},
+  modalCard:    {borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '85%', paddingBottom: Platform.OS === 'ios' ? 24 : 12},
+  modalHeader:  {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1},
+  modalTitle:   {fontSize: 17, fontWeight: '800'},
+  modalClose:   {width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center'},
+  modalContent: {padding: 20, gap: 16},
+
+  modalAmountWrap: {alignItems: 'center', gap: 10, paddingVertical: 8},
+  modalAmount:     {fontSize: 32, fontWeight: '900'},
+  modalAmountRow:  {flexDirection: 'row', alignItems: 'center', gap: 4},
+  modalAmountSub:  {fontSize: 13, fontWeight: '600', textAlign: 'center'},
+
+  detailCard: {borderRadius: 16, borderWidth: 1, overflow: 'hidden'},
+  dRow:       {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1},
+  dLabel:     {fontSize: 13, fontWeight: '500'},
+  dValue:     {fontSize: 13, fontWeight: '700', flexShrink: 1},
 });

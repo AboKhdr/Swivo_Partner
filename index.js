@@ -113,7 +113,7 @@ async function displayOrderNotification(order) {
       data:  {orderId: String(order?.id || ''), notificationType: 'order_updates', missed: '1'},
       android: {
         channelId:   CHANNEL_GENERAL,
-        smallIcon:   'ic_notification',
+        smallIcon:   'ic_launcher',
         importance:  AndroidImportance.DEFAULT,
         autoCancel:  true,
         pressAction: {id: 'default', launchActivity: 'default'},
@@ -169,7 +169,7 @@ async function displayGenericNotification(remoteMessage) {
     data:  data ?? {},
     android: {
       channelId,
-      smallIcon:   'ic_notification',
+      smallIcon:   'ic_launcher',
       importance:  AndroidImportance.HIGH,
       visibility:  AndroidVisibility.PUBLIC,
       pressAction: {id: 'default'},
@@ -240,11 +240,11 @@ async function displayPartnerNewOrderNotification(order) {
     },
     android: {
       channelId:        CHANNEL_NEW_ORDER,
-      smallIcon:        'ic_notification',
+      smallIcon:        'ic_launcher',
       importance:       AndroidImportance.HIGH,
       visibility:       AndroidVisibility.PUBLIC,
       sound:            'new_order_alert',
-      vibrationPattern: [400, 200, 400, 200, 400],
+      vibrationPattern: [400, 200, 400, 200],
       autoCancel:       true,
       pressAction:      {id: 'default', launchActivity: 'default'},
     },

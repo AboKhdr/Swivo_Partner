@@ -6,6 +6,7 @@ import {
 import {ArrowRight, Wallet, TrendingUp, Send, X} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {getBikerPayouts, createPayout} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 function money(n) {
   return Number(n ?? 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -54,9 +55,11 @@ function PayoutModal({biker, colors, onClose, onConfirm, submitting}) {
             </TouchableOpacity>
           </View>
 
-          <Text style={[m.available, {color: colors.textSecondary}]}>
-            الرصيد المتاح: <Text style={{color: colors.success, fontWeight: '800'}}>{money(available)} ﷼</Text>
-          </Text>
+          <View style={m.availableRow}>
+            <Text style={[m.available, {color: colors.textSecondary}]}>الرصيد المتاح:</Text>
+            <Text style={[m.available, {color: colors.success, fontWeight: '800'}]}>{money(available)}</Text>
+            <RiyalIcon size={13} color={colors.success} />
+          </View>
 
           <Text style={[m.label, {color: colors.textSecondary}]}>المبلغ</Text>
           <TextInput
@@ -100,7 +103,8 @@ const m = StyleSheet.create({
   card:       {borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32, gap: 8},
   head:       {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4},
   title:      {fontSize: 17, fontWeight: '800', flex: 1},
-  available:  {fontSize: 13, marginBottom: 8},
+  available:  {fontSize: 13},
+  availableRow: {flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8},
   label:      {fontSize: 12, fontWeight: '600', marginTop: 6},
   input:      {borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15},
   notes:      {minHeight: 70, textAlignVertical: 'top'},
@@ -123,7 +127,10 @@ function PayoutCard({item, colors, onPay}) {
         <View style={s.cardInfo}>
           <Text style={[s.name, {color: colors.textPrimary}]}>{bikerName(item)}</Text>
           <Text style={[s.availLabel, {color: colors.textSecondary}]}>الرصيد المتاح</Text>
-          <Text style={[s.availVal, {color: colors.success}]}>{money(available)} ﷼</Text>
+          <View style={s.valueRow}>
+            <Text style={[s.availVal, {color: colors.success}]}>{money(available)}</Text>
+            <RiyalIcon size={16} color={colors.success} />
+          </View>
         </View>
         <TouchableOpacity
           style={[s.payBtn, {backgroundColor: available > 0 ? colors.primary : colors.border}]}
@@ -138,11 +145,13 @@ function PayoutCard({item, colors, onPay}) {
       <View style={[s.metaRow, {borderTopColor: colors.border}]}>
         <View style={s.metaCell}>
           <TrendingUp size={13} color={colors.textSecondary} />
-          <Text style={[s.metaTxt, {color: colors.textSecondary}]}>كسب {money(earned)} ﷼</Text>
+          <Text style={[s.metaTxt, {color: colors.textSecondary}]}>كسب {money(earned)}</Text>
+          <RiyalIcon size={12} color={colors.textSecondary} />
         </View>
         <View style={s.metaCell}>
           <Wallet size={13} color={colors.textSecondary} />
-          <Text style={[s.metaTxt, {color: colors.textSecondary}]}>صُرف {money(paid)} ﷼</Text>
+          <Text style={[s.metaTxt, {color: colors.textSecondary}]}>صُرف {money(paid)}</Text>
+          <RiyalIcon size={12} color={colors.textSecondary} />
         </View>
       </View>
     </View>
@@ -210,9 +219,12 @@ export default function PayoutsScreen({onBack}) {
         ) : <View style={s.backBtn} />}
         <View style={s.headerText}>
           <Text style={[s.headerTitle, {color: colors.textPrimary}]}>دفعات البايكرز</Text>
-          <Text style={[s.headerSub, {color: colors.textSecondary}]}>
-            إجمالي متاح للصرف: {money(totalAvailable)} ﷼
-          </Text>
+          <View style={s.headerSubRow}>
+            <Text style={[s.headerSub, {color: colors.textSecondary}]}>
+              إجمالي متاح للصرف: {money(totalAvailable)}
+            </Text>
+            <RiyalIcon size={12} color={colors.textSecondary} />
+          </View>
         </View>
         <View style={s.backBtn} />
       </View>
@@ -267,6 +279,7 @@ const s = StyleSheet.create({
   headerText: {flex: 1, gap: 2, paddingHorizontal: 8, alignItems: 'center'},
   headerTitle:{fontSize: 22, fontWeight: '900'},
   headerSub:  {fontSize: 12},
+  headerSubRow:{flexDirection: 'row', alignItems: 'center', gap: 3},
 
   list:       {paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 12},
 
@@ -277,6 +290,7 @@ const s = StyleSheet.create({
   cardInfo:   {flex: 1, gap: 2},
   name:       {fontSize: 15, fontWeight: '800'},
   availLabel: {fontSize: 11},
+  valueRow:   {flexDirection: 'row', alignItems: 'center', gap: 3},
   availVal:   {fontSize: 16, fontWeight: '900'},
   payBtn:     {flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12},
   payTxt:     {color: '#FFF', fontSize: 13, fontWeight: '800'},

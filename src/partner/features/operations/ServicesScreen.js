@@ -4,6 +4,7 @@ import {ArrowRight, Pencil, Plus, ChevronDown, ChevronUp} from 'lucide-react-nat
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {getCategoryServices, toggleService} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import AddServiceScreen from './AddServiceScreen';
 
 function ServiceCard({item, colors, t, onEdit, onToggle}) {
@@ -32,9 +33,14 @@ function ServiceCard({item, colors, t, onEdit, onToggle}) {
       <View style={s.pricesRow}>
         {['large', 'medium', 'small'].map(size => (
           <View key={size} style={[s.priceBox, {backgroundColor: colors.card}]}>
-            <Text style={[s.priceVal, {color: colors.primary}]}>
-              ﷼ {prices[size] ?? '—'}
-            </Text>
+            {prices[size] != null ? (
+              <View style={s.priceRow}>
+                <RiyalIcon size={14} color={colors.primary} />
+                <Text style={[s.priceVal, {color: colors.primary}]}>{prices[size]}</Text>
+              </View>
+            ) : (
+              <Text style={[s.priceVal, {color: colors.primary}]}>—</Text>
+            )}
             <Text style={[s.priceLbl, {color: colors.textSecondary}]}>
               {t(`partner.services.${size}`)}
             </Text>
@@ -222,6 +228,7 @@ const s = StyleSheet.create({
 
   pricesRow:       {flexDirection: 'row', gap: 8},
   priceBox:        {flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center', gap: 4},
+  priceRow:        {flexDirection: 'row', alignItems: 'center', gap: 3},
   priceVal:        {fontSize: 14, fontWeight: '800'},
   priceLbl:        {fontSize: 10},
 });

@@ -4,6 +4,7 @@ import {Search} from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import SelectField from '../../../shared/components/SelectField';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import {getOrders, getPartnerProfile} from '../../../services/partner';
 
 const STATUS_COLORS = {
@@ -96,7 +97,14 @@ function OrderCard({item, colors, t, onPress}) {
           ) : (
             <>
               <Text style={[s.priceLabel, {color: colors.textSecondary}]}>{t('partner.orders.fullAmount')}</Text>
-              <Text style={[s.priceValue, {color: colors.textPrimary}]}>{price} {price ? '﷼' : '—'}</Text>
+              {price ? (
+                <View style={s.priceRow}>
+                  <Text style={[s.priceValue, {color: colors.textPrimary}]}>{price}</Text>
+                  <RiyalIcon size={22} color={colors.textPrimary} />
+                </View>
+              ) : (
+                <Text style={[s.priceValue, {color: colors.textPrimary}]}>—</Text>
+              )}
             </>
           )}
         </View>
@@ -335,6 +343,7 @@ const s = StyleSheet.create({
   detailsBtnText:{fontSize: 13, fontWeight: '700'},
   footer:       {paddingVertical: 16},
   priceCol:     {gap: 2},
+  priceRow:     {flexDirection: 'row', alignItems: 'center', gap: 3},
   priceLabel:   {fontSize: 11},
   priceValue:   {fontSize: 24, fontWeight: '800'},
   pkgPill:      {paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start'},

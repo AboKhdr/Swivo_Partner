@@ -29,48 +29,41 @@ import {
   XCircle,
 } from 'lucide-react-native';
 import {useTheme} from '../../../shared/context/ThemeContext';
+import {useI18n} from '../../../shared/i18n/I18nContext';
 import {approveSkipRequest, getSkipRequests, rejectSkipRequest} from '../../../services/partner';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 import useAppStore from '../../../store/appStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const REASON_LABELS = {
-  FORGOT_CAMERA:    'نسي الكاميرا',
-  CAMERA_BROKEN:    'الكاميرا معطلة',
-  CUSTOMER_REFUSED: 'العميل رفض التصوير',
-  DARK_ENVIRONMENT: 'الإضاءة سيئة',
-  TECHNICAL_ISSUE:  'مشكلة تقنية',
-  OTHER:            'أخرى',
-};
-
 const STATUS_CFG = {
-  PENDING:  {label: 'معلق',       colorKey: 'warning', Icon: Clock},
-  APPROVED: {label: 'موافق عليه', colorKey: 'success', Icon: CheckCircle},
-  REJECTED: {label: 'مرفوض',      colorKey: 'danger',  Icon: XCircle},
+  PENDING:  {labelKey: 'pending',  colorKey: 'warning', Icon: Clock},
+  APPROVED: {labelKey: 'approved', colorKey: 'success', Icon: CheckCircle},
+  REJECTED: {labelKey: 'rejected', colorKey: 'danger',  Icon: XCircle},
 };
 
 const FILTERS = [
-  {key: 'ALL',      label: 'الكل'},
-  {key: 'PENDING',  label: 'معلق'},
-  {key: 'APPROVED', label: 'موافق'},
-  {key: 'REJECTED', label: 'مرفوض'},
+  {key: 'ALL',      labelKey: 'filterAll'},
+  {key: 'PENDING',  labelKey: 'filterPending'},
+  {key: 'APPROVED', labelKey: 'filterApproved'},
+  {key: 'REJECTED', labelKey: 'filterRejected'},
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // StatsBar — counts per status
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StatsBar({requests, colors}) {
+function StatsBar({requests, colors, t}) {
   const pending  = requests.filter(r => r.status === 'PENDING').length;
   const approved = requests.filter(r => r.status === 'APPROVED').length;
   const rejected = requests.filter(r => r.status === 'REJECTED').length;
 
   const items = [
-    {label: 'معلق',       count: pending,  colorKey: 'warning'},
-    {label: 'موافق عليه', count: approved, colorKey: 'success'},
-    {label: 'مرفوض',      count: rejected, colorKey: 'danger'},
+    {label: t('partner.skipReview.pending'),  count: pending,  colorKey: 'warning'},
+    {label: t('partner.skipReview.approved'), count: approved, colorKey: 'success'},
+    {label: t('partner.skipReview.rejected'), count: rejected, colorKey: 'danger'},
   ];
 
   return (
@@ -91,7 +84,7 @@ function StatsBar({requests, colors}) {
 // FilterTabs
 // ─────────────────────────────────────────────────────────────────────────────
 
-function FilterTabs({filter, onChange, counts, colors}) {
+function FilterTabs({filter, onChange, counts, colors, t}) {
   return (
     <View style={[st.tabsRow, {borderBottomColor: colors.border}]}>
       {FILTERS.map(f => {
@@ -109,7 +102,7 @@ function FilterTabs({filter, onChange, counts, colors}) {
                 : {backgroundColor: 'transparent', borderBottomColor: 'transparent'},
             ]}>
             <Text style={[st.tabLabel, {color: active ? colors.primary : colors.textSecondary}]}>
-              {f.label}
+              {t(`partner.skipReview.${f.labelKey}`)}
             </Text>
             {count > 0 && (
               <View style={[
@@ -143,7 +136,7 @@ function InfoRow({Icon, label, value, colors}) {
   );
 }
 
-function SkipCard({item, colors, onApprove, onReject, loadingId}) {
+function SkipCard({item, colors, onApprove, onReject, loadingId, t, lang}) {
   const scaleAnim  = useRef(new Animated.Value(1)).current;
   const cfg        = STATUS_CFG[item.status] ?? STATUS_CFG.PENDING;
   const badgeColor = colors[cfg.colorKey];
@@ -151,55 +144,67 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
   const itemId     = item._id ?? item.id;
   const isLoading  = loadingId === itemId;
 
+  const pick = obj => obj?.[lang] ?? obj?.ar ?? obj?.en ?? '';
+
   // ── Biker ──────────────────────────────────────────────────────────────────
-  const biker     = item.requestedBy ?? {};
-  const bikerName = [biker.firstName, biker.lastName].filter(Boolean).join(' ') || item.bikerName || '—';
+  const biker     = item.biker ?? item.requestedBy ?? {};
+  const bikerName = item.bikerName
+    || [biker.firstName, biker.lastName].filter(Boolean).join(' ')
+    || '—';
   const bikerPhone = biker.phoneNumber ?? biker.phone ?? '';
 
   // ── Order ──────────────────────────────────────────────────────────────────
   const order      = (typeof item.orderId === 'object' && item.orderId !== null) ? item.orderId : {};
-  const orderNum   = order.orderNumber ?? item.orderNumber ?? order._id ?? '';
+  const orderNum   = item.orderNumber ?? order.orderNumber ?? order._id ?? '';
 
   const serviceName =
-    order.itemsSnapshot?.[0]?.nameSnapshot?.ar
-    ?? order.itemsSnapshot?.[0]?.nameSnapshot?.en
-    ?? order.items?.[0]?.service?.name?.ar
-    ?? order.items?.[0]?.service?.name?.en
-    ?? order.service?.name?.ar
-    ?? order.service?.name?.en
-    ?? '';
+    pick(item.service?.name)
+    || pick(order.itemsSnapshot?.[0]?.nameSnapshot)
+    || pick(order.items?.[0]?.service?.name)
+    || pick(order.service?.name)
+    || '';
 
   const clientName  = order.client
     ? [order.client.firstName, order.client.lastName].filter(Boolean).join(' ')
     : '';
 
   const carDesc = [
-    order.userCar?.brand?.name?.ar ?? order.userCar?.brand?.name?.en ?? '',
-    order.userCar?.model?.name?.ar ?? order.userCar?.model?.name?.en ?? '',
+    pick(order.userCar?.brand?.name),
+    pick(order.userCar?.model?.name),
   ].filter(Boolean).join(' ');
   const plate    = order.userCar?.plate ?? order.plate ?? '';
   const carLabel = [carDesc, plate].filter(Boolean).join(' · ');
 
   const location = order.addressSnapshot?.addressText
     ?? order.addressSnapshot?.district
-    ?? order.branch?.name?.ar
-    ?? order.branch?.name?.en
+    ?? pick(order.branch?.name)
     ?? '';
 
   const price    = order.tenantNetSnapshot ?? order.totalAmount ?? '';
-  const priceStr = price ? `${price} ﷼` : '';
 
-  const scheduledAt = order.scheduledAt
-    ? new Date(order.scheduledAt).toLocaleString('ar-SA', {
+  const dateLocale = lang === 'ar' ? 'ar-SA' : lang === 'hi' ? 'hi-IN' : 'en-US';
+
+  const scheduledMs = item.scheduledAt ?? order.scheduledAt;
+  const scheduledAt = scheduledMs
+    ? new Date(scheduledMs).toLocaleString(dateLocale, {
         day: '2-digit', month: '2-digit',
         hour: '2-digit', minute: '2-digit',
       })
     : '';
 
   // ── Request meta ───────────────────────────────────────────────────────────
-  const reasonText = REASON_LABELS[item.reason] ?? item.reason ?? '—';
+  // Prefer the localized label from the API; fall back to a known reason key,
+  // then the raw reason code. `t` returns the key path when missing, so only
+  // use its result when it actually resolved to a translation.
+  const reasonKey   = item.reason ? `partner.skipReview.reasons.${item.reason}` : '';
+  const reasonTrans = reasonKey ? t(reasonKey) : '';
+  const reasonText =
+    pick(item.reasonLabel)
+    || (reasonTrans && reasonTrans !== reasonKey ? reasonTrans : '')
+    || item.reason
+    || '—';
   const dateStr    = item.requestedAt
-    ? new Date(item.requestedAt).toLocaleString('ar-SA', {
+    ? new Date(item.requestedAt).toLocaleString(dateLocale, {
         day: '2-digit', month: '2-digit', year: '2-digit',
         hour: '2-digit', minute: '2-digit',
       })
@@ -221,7 +226,9 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
           <View style={st.badgeRow}>
             <View style={[st.badge, {backgroundColor: badgeColor + '15', borderColor: badgeColor + '30'}]}>
               <cfg.Icon size={11} color={badgeColor} />
-              <Text style={[st.badgeText, {color: badgeColor}]}>{cfg.label}</Text>
+              <Text style={[st.badgeText, {color: badgeColor}]}>
+                {t(`partner.skipReview.${cfg.labelKey}`)}
+              </Text>
             </View>
             {!!dateStr && (
               <View style={st.dateRow}>
@@ -237,11 +244,13 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
               <View style={[st.sectionIconWrap, {backgroundColor: colors.primary + '15'}]}>
                 <Bike size={14} color={colors.primary} />
               </View>
-              <Text style={[st.sectionTitle, {color: colors.textPrimary}]}>البايكر</Text>
+              <Text style={[st.sectionTitle, {color: colors.textPrimary}]}>
+                {t('partner.skipReview.bikerSection')}
+              </Text>
             </View>
             <View style={st.sectionBody}>
-              <InfoRow Icon={User}  label="الاسم"  value={bikerName}  colors={colors} />
-              <InfoRow Icon={Phone} label="الهاتف" value={bikerPhone} colors={colors} />
+              <InfoRow Icon={User}  label={t('partner.skipReview.name')}  value={bikerName}  colors={colors} />
+              <InfoRow Icon={Phone} label={t('partner.skipReview.phone')} value={bikerPhone} colors={colors} />
             </View>
           </View>
 
@@ -252,19 +261,24 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
                 <ShoppingBag size={14} color={colors.purple} />
               </View>
               <Text style={[st.sectionTitle, {color: colors.textPrimary}]}>
-                الطلب {orderNum ? `#${orderNum}` : ''}
+                {t('partner.skipReview.orderSection')} {orderNum ? `#${orderNum}` : ''}
               </Text>
             </View>
             <View style={st.sectionBody}>
-              <InfoRow Icon={ShoppingBag} label="الخدمة"   value={serviceName} colors={colors} />
-              <InfoRow Icon={User}        label="العميل"   value={clientName}  colors={colors} />
-              <InfoRow Icon={Car}         label="السيارة"  value={carLabel}    colors={colors} />
-              <InfoRow Icon={MapPin}      label="الموقع"   value={location}    colors={colors} />
-              <InfoRow Icon={Clock}       label="الموعد"   value={scheduledAt} colors={colors} />
-              {!!priceStr && (
+              <InfoRow Icon={ShoppingBag} label={t('partner.skipReview.service')}  value={serviceName} colors={colors} />
+              <InfoRow Icon={User}        label={t('partner.skipReview.client')}   value={clientName}  colors={colors} />
+              <InfoRow Icon={Car}         label={t('partner.skipReview.car')}      value={carLabel}    colors={colors} />
+              <InfoRow Icon={MapPin}      label={t('partner.skipReview.location')} value={location}    colors={colors} />
+              <InfoRow Icon={Clock}       label={t('partner.skipReview.schedule')} value={scheduledAt} colors={colors} />
+              {!!price && (
                 <View style={st.infoRow}>
-                  <Text style={[st.infoLabel, {color: colors.textSecondary, marginRight: 18}]}>المبلغ</Text>
-                  <Text style={[st.priceVal, {color: colors.primary}]}>{priceStr}</Text>
+                  <Text style={[st.infoLabel, {color: colors.textSecondary, marginRight: 18}]}>
+                    {t('partner.skipReview.amount')}
+                  </Text>
+                  <View style={st.priceRow}>
+                    <Text style={[st.priceVal, {color: colors.primary}]}>{price}</Text>
+                    <RiyalIcon size={15} color={colors.primary} />
+                  </View>
                 </View>
               )}
             </View>
@@ -276,7 +290,9 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
               <View style={[st.sectionIconWrap, {backgroundColor: colors.warning + '20'}]}>
                 <AlertCircle size={14} color={colors.warning} />
               </View>
-              <Text style={[st.sectionTitle, {color: colors.textPrimary}]}>سبب التخطي</Text>
+              <Text style={[st.sectionTitle, {color: colors.textPrimary}]}>
+                {t('partner.skipReview.reasonSection')}
+              </Text>
             </View>
             <View style={st.sectionBody}>
               <Text style={[st.reasonVal, {color: colors.textPrimary}]}>{reasonText}</Text>
@@ -304,7 +320,9 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
                 {isLoading
                   ? <ActivityIndicator size="small" color={colors.danger} />
                   : <X size={15} color={colors.danger} />}
-                <Text style={[st.rejectText, {color: colors.danger}]}>رفض</Text>
+                <Text style={[st.rejectText, {color: colors.danger}]}>
+                  {t('partner.skipReview.reject')}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[st.approveBtn, {backgroundColor: colors.success}]}
@@ -316,7 +334,7 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
                 {isLoading
                   ? <ActivityIndicator size="small" color="#FFF" />
                   : <Check size={15} color="#FFF" />}
-                <Text style={st.approveText}>موافقة</Text>
+                <Text style={st.approveText}>{t('partner.skipReview.approve')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -331,18 +349,22 @@ function SkipCard({item, colors, onApprove, onReject, loadingId}) {
 // RejectModal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RejectModal({visible, item, onConfirm, onCancel, colors}) {
+function RejectModal({visible, item, onConfirm, onCancel, colors, t, isRTL}) {
   const [note, setNote] = useState('');
 
   // reset note each time modal opens
   useEffect(() => { if (visible) setNote(''); }, [visible]);
 
-  const bikerName = item?.requestedBy
-    ? `${item.requestedBy.firstName ?? ''} ${item.requestedBy.lastName ?? ''}`.trim()
-    : item?.bikerName ?? '';
+  const biker = item?.biker ?? item?.requestedBy;
+  const bikerName = item?.bikerName
+    || (biker ? `${biker.firstName ?? ''} ${biker.lastName ?? ''}`.trim() : '');
 
   const phase = item?.phase ?? '';
-  const phaseLabel = phase === 'before' ? 'قبل الغسيل' : phase === 'after' ? 'بعد الغسيل' : '';
+  const phaseLabel = phase === 'before'
+    ? t('partner.skipReview.phaseBefore')
+    : phase === 'after'
+      ? t('partner.skipReview.phaseAfter')
+      : '';
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -354,7 +376,9 @@ function RejectModal({visible, item, onConfirm, onCancel, colors}) {
             <X size={30} color={colors.danger} />
           </View>
 
-          <Text style={[st.modalTitle, {color: colors.textPrimary}]}>تأكيد الرفض</Text>
+          <Text style={[st.modalTitle, {color: colors.textPrimary}]}>
+            {t('partner.skipReview.confirmRejectTitle')}
+          </Text>
 
           {/* Phase + biker info */}
           <View style={[st.modalInfo, {backgroundColor: colors.bg, borderColor: colors.border}]}>
@@ -362,12 +386,14 @@ function RejectModal({visible, item, onConfirm, onCancel, colors}) {
             <View style={{flex: 1, gap: 2}}>
               {!!bikerName && (
                 <Text style={[st.modalInfoText, {color: colors.textSecondary}]}>
-                  البايكر: <Text style={{color: colors.textPrimary, fontWeight: '700'}}>{bikerName}</Text>
+                  {t('partner.skipReview.bikerLabel')}{' '}
+                  <Text style={{color: colors.textPrimary, fontWeight: '700'}}>{bikerName}</Text>
                 </Text>
               )}
               {!!phaseLabel && (
                 <Text style={[st.modalInfoText, {color: colors.textSecondary}]}>
-                  المرحلة: <Text style={{color: colors.warning, fontWeight: '700'}}>{phaseLabel}</Text>
+                  {t('partner.skipReview.phaseLabel')}{' '}
+                  <Text style={{color: colors.warning, fontWeight: '700'}}>{phaseLabel}</Text>
                 </Text>
               )}
             </View>
@@ -377,14 +403,14 @@ function RejectModal({visible, item, onConfirm, onCancel, colors}) {
           <View style={[st.noteInputWrap, {borderColor: colors.border, backgroundColor: colors.bg}]}>
             <TextInput
               style={[st.noteInput, {color: colors.textPrimary}]}
-              placeholder="سبب الرفض (اختياري)"
+              placeholder={t('partner.skipReview.rejectReasonPlaceholder')}
               placeholderTextColor={colors.textSecondary}
               value={note}
               onChangeText={setNote}
               multiline
               numberOfLines={3}
               textAlignVertical="top"
-              textAlign="right"
+              textAlign={isRTL ? 'right' : 'left'}
             />
           </View>
 
@@ -393,14 +419,16 @@ function RejectModal({visible, item, onConfirm, onCancel, colors}) {
               style={[st.modalCancelBtn, {borderColor: colors.border}]}
               onPress={onCancel}
               activeOpacity={0.8}>
-              <Text style={[st.modalCancelText, {color: colors.textPrimary}]}>إلغاء</Text>
+              <Text style={[st.modalCancelText, {color: colors.textPrimary}]}>
+                {t('partner.skipReview.cancel')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[st.modalConfirmBtn, {backgroundColor: colors.danger}]}
               onPress={() => onConfirm(note.trim())}
               activeOpacity={0.8}>
               <X size={15} color="#FFF" />
-              <Text style={st.modalConfirmText}>رفض</Text>
+              <Text style={st.modalConfirmText}>{t('partner.skipReview.reject')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -414,12 +442,12 @@ function RejectModal({visible, item, onConfirm, onCancel, colors}) {
 // EmptyState
 // ─────────────────────────────────────────────────────────────────────────────
 
-function EmptyState({filter, colors}) {
+function EmptyState({filter, colors, t}) {
   const msgs = {
-    ALL:      {title: 'لا توجد طلبات',        sub: 'لم يُرسل أي بايكر طلب تخطي للصورة بعد'},
-    PENDING:  {title: 'لا توجد طلبات معلقة',  sub: 'جميع الطلبات تمت معالجتها'},
-    APPROVED: {title: 'لا توجد موافقات',       sub: 'لم تتم الموافقة على أي طلب حتى الآن'},
-    REJECTED: {title: 'لا توجد مرفوضات',       sub: 'لم يُرفض أي طلب حتى الآن'},
+    ALL:      {title: t('partner.skipReview.empty'),               sub: t('partner.skipReview.emptyAllSub')},
+    PENDING:  {title: t('partner.skipReview.emptyPendingTitle'),   sub: t('partner.skipReview.emptyPendingSub')},
+    APPROVED: {title: t('partner.skipReview.emptyApprovedTitle'),  sub: t('partner.skipReview.emptyApprovedSub')},
+    REJECTED: {title: t('partner.skipReview.emptyRejectedTitle'),  sub: t('partner.skipReview.emptyRejectedSub')},
   };
   const {title, sub} = msgs[filter] ?? msgs.ALL;
 
@@ -440,6 +468,7 @@ function EmptyState({filter, colors}) {
 
 export default function SkipReviewScreen({onBack}) {
   const {colors} = useTheme();
+  const {t, lang, isRTL} = useI18n();
 
   const [requests,   setRequests]   = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -538,8 +567,10 @@ export default function SkipReviewScreen({onBack}) {
       onApprove={handleApprove}
       onReject={handleRejectPress}
       loadingId={loadingId}
+      t={t}
+      lang={lang}
     />
-  ), [colors, handleApprove, handleRejectPress, loadingId]);
+  ), [colors, handleApprove, handleRejectPress, loadingId, t, lang]);
 
   const keyExtractor = useCallback(
     item => item._id ?? item.id ?? String(Math.random()),
@@ -554,12 +585,16 @@ export default function SkipReviewScreen({onBack}) {
       <View style={[st.header, {backgroundColor: colors.card, borderBottomColor: colors.border}]}>
         {onBack && (
           <TouchableOpacity onPress={onBack} style={st.backBtn} activeOpacity={0.7}>
-            <ArrowRight size={22} color={colors.textPrimary} />
+            <ArrowRight
+              size={22}
+              color={colors.textPrimary}
+              style={!isRTL && {transform: [{scaleX: -1}]}}
+            />
           </TouchableOpacity>
         )}
         <View style={st.headerCenter}>
           <Text style={[st.headerTitle, {color: colors.textPrimary}]}>
-            طلبات تخطي الصور
+            {t('partner.skipReview.title')}
           </Text>
           {pendingCount > 0 && (
             <View style={[st.headerBadge, {backgroundColor: colors.warning}]}>
@@ -573,7 +608,7 @@ export default function SkipReviewScreen({onBack}) {
 
       {/* ── Stats bar ── */}
       {!loading && requests.length > 0 && (
-        <StatsBar requests={requests} colors={colors} />
+        <StatsBar requests={requests} colors={colors} t={t} />
       )}
 
       {/* ── Filter tabs ── */}
@@ -582,13 +617,16 @@ export default function SkipReviewScreen({onBack}) {
         onChange={setFilter}
         counts={counts}
         colors={colors}
+        t={t}
       />
 
       {/* ── List ── */}
       {loading ? (
         <View style={st.center}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[st.loadingText, {color: colors.textSecondary}]}>جاري التحميل...</Text>
+          <Text style={[st.loadingText, {color: colors.textSecondary}]}>
+            {t('partner.skipReview.loading')}
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -608,7 +646,7 @@ export default function SkipReviewScreen({onBack}) {
               tintColor={colors.primary}
             />
           }
-          ListEmptyComponent={<EmptyState filter={filter} colors={colors} />}
+          ListEmptyComponent={<EmptyState filter={filter} colors={colors} t={t} />}
         />
       )}
 
@@ -619,6 +657,8 @@ export default function SkipReviewScreen({onBack}) {
         onConfirm={handleRejectConfirm}
         onCancel={handleRejectCancel}
         colors={colors}
+        t={t}
+        isRTL={isRTL}
       />
 
     </View>
@@ -690,6 +730,7 @@ const st = StyleSheet.create({
   infoLabel: {fontSize: 12, fontWeight: '500', width: 52},
   infoValue: {flex: 1, fontSize: 13, fontWeight: '600'},
   priceVal:  {fontSize: 15, fontWeight: '800'},
+  priceRow:  {flexDirection: 'row', alignItems: 'center', gap: 3},
 
   // Reason section
   reasonVal: {fontSize: 14, fontWeight: '700', paddingHorizontal: 2},

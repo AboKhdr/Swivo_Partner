@@ -13,6 +13,7 @@ import {Zap, X, User, MapPin, DollarSign, Droplets, Car, Hash, Phone} from 'luci
 import {useTheme} from '../../../shared/context/ThemeContext';
 import {useI18n} from '../../../shared/i18n/I18nContext';
 import {cancelIncomingOrderNotification, RING_MAX_MS} from '../../../services/notificationChannel';
+import RiyalIcon from '../../../shared/components/RiyalIcon';
 
 const TIMEOUT_SECONDS = Math.floor(RING_MAX_MS / 1000);
 
@@ -265,7 +266,10 @@ export default function BikerIncomingOrderScreen({visible, order, onAccept, onRe
               <View style={[c.earningCard, {backgroundColor: colors.primary + '12', borderColor: colors.primary + '30'}]}>
                 <DollarSign size={22} color={colors.primary} strokeWidth={2} />
                 <Text style={[c.earningLabel, {color: colors.textSecondary}]}>أرباحك من هذا الطلب</Text>
-                <Text style={[c.earningValue, {color: colors.primary}]}>﷼ {earning}</Text>
+                <View style={c.earningRow}>
+                  <RiyalIcon size={20} color={colors.primary} />
+                  <Text style={[c.earningValue, {color: colors.primary}]}>{earning}</Text>
+                </View>
               </View>
             )}
 
@@ -339,6 +343,7 @@ const c = StyleSheet.create({
   // Earning highlight
   earningCard:  {flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, borderRadius: 16, borderWidth: 1},
   earningLabel: {flex: 1, fontSize: 13},
+  earningRow: {flexDirection: 'row', alignItems: 'center', gap: 4},
   earningValue: {fontSize: 22, fontWeight: '900'},
 
   // Footer

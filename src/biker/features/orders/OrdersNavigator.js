@@ -32,6 +32,8 @@ export default function OrdersNavigator() {
   const goBack = useCallback(() => {
     setScreen(null);
     setSelectedOrder(null);
+    // Refresh the orders list — status may have changed inside detail/map.
+    useAppStore.getState().triggerOrderRefresh();
   }, []);
 
   const pendingOrderNav      = useAppStore(s => s.pendingOrderNav);
