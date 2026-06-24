@@ -107,11 +107,32 @@ export default function AddPackageScreen({onBack, onSaved, initialData}) {
   const [nameAr,           setNameAr]           = useState(initialData?.name?.ar ?? '');
   const [nameEn,           setNameEn]           = useState(initialData?.name?.en ?? '');
   const [selectedServices, setSelectedServices]  = useState(() => {
-    if (initialData?.services) return initialData.services.map(s => s._id ?? s.id ?? s);
-    if (initialData?.serviceIds) return initialData.serviceIds;
+    if (initialData?.services?.length) return initialData.services.map(s => s._id ?? s.id ?? s);
+    if (initialData?.serviceIds?.length) return initialData.serviceIds;
     return [];
   });
-  const [counts,           setCounts]           = useState({});
+  const [counts,           setCounts]           = useState(() => {
+    if (initialData?.services?.length) {
+      return initialData.services.reduce((acc, s) => {
+        const id = s._id ?? s.id;
+        acc[id]  = s.quantity ?? 1;
+        return acc;
+      }, {});
+    }
+    return {};
+  });
+  const [numberOfUse,      setNumberOfUse]      = useState(
+    initialData?.numberOfUse != null ? String(initialData.numberOfUse) : '',
+  );
+  const [priceSmall,       setPriceSmall]       = useState(
+    initialData?.price?.small != null ? String(initialData.price.small) : '',
+  );
+  const [priceMedium,      setPriceMedium]      = useState(
+    initialData?.price?.medium != null ? String(initialData.price.medium) : '',
+  );
+  const [priceLarge,       setPriceLarge]       = useState(
+    initialData?.price?.large != null ? String(initialData.price.large) : '',
+  );
   const [showServices,     setShowServices]     = useState(false);
   const [allServices,      setAllServices]      = useState([]);
   const [loadingSvcs,      setLoadingSvcs]      = useState(true);
@@ -149,14 +170,26 @@ export default function AddPackageScreen({onBack, onSaved, initialData}) {
     ? selectedServiceObjs.map(s => `${counts[s._id ?? s.id] ?? 1}× ${s.name?.ar ?? ''}`).join(' ، ')
     : '—';
 
-  const canSave = nameAr.trim() && selectedServices.length > 0;
+  const canSave =
+    nameAr.trim() &&
+    selectedServices.length > 0 &&
+    numberOfUse.trim() !== '' &&
+    priceSmall.trim() !== '' &&
+    priceMedium.trim() !== '' &&
+    priceLarge.trim() !== '';
 
   const handleSave = async () => {
     if (!canSave || saving) return;
     setSaving(true);
     const payload = {
-      name:       {ar: nameAr.trim(), en: nameEn.trim() || nameAr.trim()},
-      serviceIds: selectedServices,
+      name:        {ar: nameAr.trim(), en: nameEn.trim() || nameAr.trim()},
+      services:    selectedServices.map(id => ({serviceId: id, quantity: counts[id] ?? 1})),
+      numberOfUse: parseInt(numberOfUse, 10),
+      price:       {
+        small:  parseFloat(priceSmall),
+        medium: parseFloat(priceMedium),
+        large:  parseFloat(priceLarge),
+      },
     };
     if (isEdit) {
       await updatePackage(initialData._id, payload);
@@ -241,6 +274,57 @@ export default function AddPackageScreen({onBack, onSaved, initialData}) {
           </View>
         )}
 
+        <Text style={[s.label, {color: colors.textPrimary}]}>عدد مرات الاستخدام</Text>
+        <View style={[s.inputBox, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <TextInput
+            style={[s.input, {color: colors.textPrimary}]}
+            placeholder="مثال: 3"
+            placeholderTextColor={colors.textSecondary}
+            value={numberOfUse}
+            onChangeText={setNumberOfUse}
+            keyboardType="numeric"
+          />
+        </View>
+
+        <Text style={[s.label, {color: colors.textPrimary}]}>السعر</Text>
+        <View style={[s.priceRow, {backgroundColor: colors.card, borderColor: colors.border}]}>
+          <View style={s.priceField}>
+            <Text style={[s.priceSize, {color: colors.textSecondary}]}>صغير</Text>
+            <TextInput
+              style={[s.priceInput, {color: colors.textPrimary}]}
+              placeholder="0"
+              placeholderTextColor={colors.textSecondary}
+              value={priceSmall}
+              onChangeText={setPriceSmall}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={[s.priceDivider, {backgroundColor: colors.border}]} />
+          <View style={s.priceField}>
+            <Text style={[s.priceSize, {color: colors.textSecondary}]}>وسط</Text>
+            <TextInput
+              style={[s.priceInput, {color: colors.textPrimary}]}
+              placeholder="0"
+              placeholderTextColor={colors.textSecondary}
+              value={priceMedium}
+              onChangeText={setPriceMedium}
+              keyboardType="numeric"
+            />
+          </View>
+          <View style={[s.priceDivider, {backgroundColor: colors.border}]} />
+          <View style={s.priceField}>
+            <Text style={[s.priceSize, {color: colors.textSecondary}]}>كبير</Text>
+            <TextInput
+              style={[s.priceInput, {color: colors.textPrimary}]}
+              placeholder="0"
+              placeholderTextColor={colors.textSecondary}
+              value={priceLarge}
+              onChangeText={setPriceLarge}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+
         <TouchableOpacity
           style={[s.saveBtn, {backgroundColor: canSave && !saving ? colors.primary : colors.border}]}
           onPress={handleSave}
@@ -285,6 +369,12 @@ const s = StyleSheet.create({
   triggerTxt:   {fontSize: 14},
 
   steppersWrap: {gap: 10},
+
+  priceRow:     {flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, overflow: 'hidden'},
+  priceField:   {flex: 1, alignItems: 'center', paddingVertical: 14, gap: 4},
+  priceSize:    {fontSize: 11, fontWeight: '600'},
+  priceInput:   {fontSize: 16, fontWeight: '700', padding: 0, textAlign: 'center', minWidth: 50},
+  priceDivider: {width: 1, height: '70%'},
 
   saveBtn:      {paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 8},
   saveTxt:      {color: '#FFF', fontSize: 16, fontWeight: '800'},
