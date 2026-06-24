@@ -107,11 +107,20 @@ export default function AddPackageScreen({onBack, onSaved, initialData}) {
   const [nameAr,           setNameAr]           = useState(initialData?.name?.ar ?? '');
   const [nameEn,           setNameEn]           = useState(initialData?.name?.en ?? '');
   const [selectedServices, setSelectedServices]  = useState(() => {
-    if (initialData?.services) return initialData.services.map(s => s._id ?? s.id ?? s);
-    if (initialData?.serviceIds) return initialData.serviceIds;
+    if (initialData?.services?.length) return initialData.services.map(s => s._id ?? s.id ?? s);
+    if (initialData?.serviceIds?.length) return initialData.serviceIds;
     return [];
   });
-  const [counts,           setCounts]           = useState({});
+  const [counts,           setCounts]           = useState(() => {
+    if (initialData?.services?.length) {
+      return initialData.services.reduce((acc, s) => {
+        const id = s._id ?? s.id;
+        acc[id]  = s.quantity ?? 1;
+        return acc;
+      }, {});
+    }
+    return {};
+  });
   const [numberOfUse,      setNumberOfUse]      = useState(
     initialData?.numberOfUse != null ? String(initialData.numberOfUse) : '',
   );
@@ -174,7 +183,7 @@ export default function AddPackageScreen({onBack, onSaved, initialData}) {
     setSaving(true);
     const payload = {
       name:        {ar: nameAr.trim(), en: nameEn.trim() || nameAr.trim()},
-      services:    selectedServices.map(id => ({serviceId: id})),
+      services:    selectedServices.map(id => ({serviceId: id, quantity: counts[id] ?? 1})),
       numberOfUse: parseInt(numberOfUse, 10),
       price:       {
         small:  parseFloat(priceSmall),

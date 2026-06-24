@@ -8,7 +8,11 @@ import AddPackageScreen from './AddPackageScreen';
 
 function PackageCard({item, colors, onEdit, onToggle}) {
   const nameAr   = item.name?.ar ?? item.name?.en ?? item.nameAr ?? '';
-  const services = item.services?.map(sv => sv.name?.ar ?? sv.name?.en ?? sv) ?? [];
+  const services = item.services?.map(sv => {
+    const name = sv.name?.ar ?? sv.name?.en ?? '';
+    const qty  = sv.quantity ?? 1;
+    return qty > 1 ? `${qty}× ${name}` : name;
+  }) ?? [];
 
   return (
     <View style={[s.card, {backgroundColor: colors.card}]}>
@@ -27,7 +31,7 @@ function PackageCard({item, colors, onEdit, onToggle}) {
         </View>
         {services.length > 0 && (
           <Text style={[s.servicesTxt, {color: colors.primary}]}>
-            {services.join(' , ')}
+            {services.join(' ، ')}
           </Text>
         )}
       </View>
